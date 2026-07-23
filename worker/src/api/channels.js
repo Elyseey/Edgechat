@@ -1,30 +1,16 @@
 import {
-  canManageChannel,
-  getChannelById,
-  getChannelMembership,
+  listAdminChannels,
   listChannelMembers,
-  requireAccessibleRoom
-} from '../db.js';
+  listVisibleChannels
+} from '../data/channels.js';
+import {
+  authorizeRoom,
+  authorizeChannelManagement,
+  getChannelById,
+  getChannelMembership
+} from '../room-access.js';
 import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
-
-function mapChannelRow(row) {
-  return {
-    id: Number(row.id),
-    name: row.name,
-    description: row.description,
-    avatarKey: row.avatar_key || '',
-    avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
-    kind: row.kind,
-    ownerDisplayName: row.owner_display_name || '',
-    isMember: Boolean(Number(row.is_member)),
-    myRole: row.my_role || '',
-    canManage: Boolean(Number(row.can_manage)),
-    memberCount: Number(row.member_count || 0),
-    lastMessageAt: row.last_message_at || null,
-    unreadCount: Number(row.unread_count || 0)
-  };
-}
 
 function normalizeMemberIds(payload) {
   const source = Array.isArray(payload.memberUserIds)
@@ -59,82 +45,7 @@ async function ensureValidInvitees(db, userIds) {
 export function registerChannelRoutes(app) {
   app.get('/api/channels', async (c) => {
     const session = c.get('session');
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         c.id,
-         c.name,
-         c.description,
-         c.avatar_key,
-         c.kind,
-         owner.display_name AS owner_display_name,
-         EXISTS (
-           SELECT 1 FROM channel_members cm
-           WHERE cm.channel_id = c.id AND cm.user_id = ?
-         ) AS is_member,
-         COALESCE((
-           SELECT cm.role
-           FROM channel_members cm
-           WHERE cm.channel_id = c.id AND cm.user_id = ?
-           LIMIT 1
-         ), '') AS my_role,
-         EXISTS (
-           SELECT 1 FROM channel_members cm
-           WHERE cm.channel_id = c.id AND cm.user_id = ? AND cm.role = 'owner'
-         ) AS can_manage,
-         (
-           SELECT COUNT(*)
-           FROM channel_members cm
-           WHERE cm.channel_id = c.id
-         ) AS member_count,
-         (
-           SELECT MAX(m.created_at)
-           FROM messages m
-           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-         ) AS last_message_at,
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM channel_members cm
-             WHERE cm.channel_id = c.id AND cm.user_id = ?
-           ) THEN (
-             SELECT COUNT(*)
-             FROM messages m
-             WHERE m.channel_id = c.id
-               AND m.deleted_at IS NULL
-               AND m.sender_id != ?
-               AND m.id > COALESCE((
-                 SELECT mr.last_read_message_id
-                 FROM message_reads mr
-                 WHERE mr.channel_id = c.id
-                   AND mr.user_id = ?
-               ), 0)
-           )
-           ELSE 0
-         END AS unread_count
-       FROM channels c
-       LEFT JOIN users owner ON owner.id = c.created_by
-       WHERE c.kind IN ('public', 'private')
-         AND c.deleted_at IS NULL
-         AND (
-           c.kind = 'public'
-           OR EXISTS (
-             SELECT 1 FROM channel_members cm
-             WHERE cm.channel_id = c.id AND cm.user_id = ?
-           )
-         )
-       ORDER BY CASE c.kind WHEN 'public' THEN 0 ELSE 1 END, c.name ASC`
-    )
-      .bind(
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId
-      )
-      .all();
-
-    const channels = results.map(mapChannelRow);
+    const channels = await listVisibleChannels(c.env.DB, session.userId);
     return c.json({
       channels,
       publicChannels: channels.filter((channel) => channel.kind === 'public'),
@@ -241,14 +152,8 @@ export function registerChannelRoutes(app) {
       return errorResponse('群组不存在', 404);
     }
 
-    const room = await requireAccessibleRoom(
-      c.env.DB,
-      session.userId,
-      channel.kind,
-      channelId,
-      session.isAdmin
-    );
-    if (!room) {
+    const access = await authorizeRoom(c.env.DB, session, channel.kind, channelId);
+    if (!access.ok) {
       return errorResponse('无权查看群组成员', 403);
     }
 
@@ -290,8 +195,8 @@ export function registerChannelRoutes(app) {
       return errorResponse('群组名称不能为空');
     }
 
-    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
-    if (!management) {
+    const management = await authorizeChannelManagement(c.env.DB, session, channelId);
+    if (!management.ok) {
       return errorResponse('只有群主或管理员可以编辑群组', 403);
     }
 
@@ -342,8 +247,8 @@ export function registerChannelRoutes(app) {
     const session = c.get('session');
     const channelId = Number(c.req.param('channelId'));
     const payload = await parseJsonRequest(c.req.raw);
-    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
-    if (!management) {
+    const management = await authorizeChannelManagement(c.env.DB, session, channelId);
+    if (!management.ok) {
       return errorResponse('只有群主或管理员可以邀请成员', 403);
     }
 
@@ -373,8 +278,8 @@ export function registerChannelRoutes(app) {
     const session = c.get('session');
     const channelId = Number(c.req.param('channelId'));
     const userId = Number(c.req.param('userId'));
-    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
-    if (!management) {
+    const management = await authorizeChannelManagement(c.env.DB, session, channelId);
+    if (!management.ok) {
       return errorResponse('只有群主或管理员可以移除成员', 403);
     }
 
@@ -404,8 +309,8 @@ export function registerChannelRoutes(app) {
   app.delete('/api/channels/:channelId', async (c) => {
     const session = c.get('session');
     const channelId = Number(c.req.param('channelId'));
-    const management = await canManageChannel(c.env.DB, channelId, session.userId, session.isAdmin);
-    if (!management) {
+    const management = await authorizeChannelManagement(c.env.DB, session, channelId);
+    if (!management.ok) {
       return errorResponse('只有群主或管理员可以删除群组', 403);
     }
 
@@ -423,46 +328,8 @@ export function registerChannelRoutes(app) {
   });
 
   app.get('/api/admin/channels', async (c) => {
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         c.id,
-         c.name,
-         c.description,
-         c.avatar_key,
-         c.kind,
-         c.created_at,
-         owner.display_name AS owner_display_name,
-         (
-           SELECT COUNT(*)
-           FROM channel_members cm
-           WHERE cm.channel_id = c.id
-         ) AS member_count,
-         (
-           SELECT COUNT(*)
-           FROM messages m
-           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-         ) AS message_count
-       FROM channels c
-       LEFT JOIN users owner ON owner.id = c.created_by
-       WHERE c.deleted_at IS NULL
-         AND c.kind IN ('public', 'private')
-       ORDER BY c.created_at DESC`
-    ).all();
-
-    return c.json({
-      channels: results.map((row) => ({
-        id: Number(row.id),
-        name: row.name,
-        description: row.description,
-        avatarKey: row.avatar_key || '',
-        avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
-        kind: row.kind,
-        createdAt: row.created_at,
-        ownerDisplayName: row.owner_display_name || '未知',
-        memberCount: Number(row.member_count),
-        messageCount: Number(row.message_count)
-      }))
-    });
+    const channels = await listAdminChannels(c.env.DB);
+    return c.json({ channels });
   });
 
   app.delete('/api/admin/channels/:channelId', async (c) => {

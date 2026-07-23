@@ -1,67 +1,41 @@
-import api from './api.js';
+import api from "./api.js";
+
+function openSocket(url, { onMessage, onStatus }) {
+	const socket = new WebSocket(url);
+
+	socket.addEventListener("open", () => {
+		onStatus?.({ status: "open", socket });
+	});
+
+	socket.addEventListener("close", (event) => {
+		onStatus?.({
+			status: "closed",
+			socket,
+			code: event.code,
+			reason: event.reason,
+			wasClean: event.wasClean,
+		});
+	});
+
+	socket.addEventListener("error", () => {
+		onStatus?.({ status: "error", socket });
+	});
+
+	socket.addEventListener("message", (event) => {
+		// transport 只转交原始 frame；协议解析由 realtime session 统一拥有，避免 room/inbox adapter 漂移。
+		onMessage?.(event.data, socket);
+	});
+
+	return socket;
+}
 
 export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
-  const socket = new WebSocket(api.getRoomWebSocketUrl(kind, roomId));
-
-  socket.addEventListener('open', () => {
-    onStatus?.({ status: 'open', socket });
-  });
-
-  socket.addEventListener('close', (event) => {
-    onStatus?.({
-      status: 'closed',
-      socket,
-      code: event.code,
-      reason: event.reason,
-      wasClean: event.wasClean
-    });
-  });
-
-  socket.addEventListener('error', () => {
-    onStatus?.({ status: 'error', socket });
-  });
-
-  socket.addEventListener('message', (event) => {
-    try {
-      const payload = JSON.parse(event.data);
-      onMessage?.(payload, socket);
-    } catch {
-      onMessage?.({ type: 'system', message: event.data }, socket);
-    }
-  });
-
-  return socket;
+	return openSocket(api.getRoomWebSocketUrl(kind, roomId), {
+		onMessage,
+		onStatus,
+	});
 }
 
 export function connectInboxSocket({ onMessage, onStatus }) {
-  const socket = new WebSocket(api.getInboxWebSocketUrl());
-
-  socket.addEventListener('open', () => {
-    onStatus?.({ status: 'open', socket });
-  });
-
-  socket.addEventListener('close', (event) => {
-    onStatus?.({
-      status: 'closed',
-      socket,
-      code: event.code,
-      reason: event.reason,
-      wasClean: event.wasClean
-    });
-  });
-
-  socket.addEventListener('error', () => {
-    onStatus?.({ status: 'error', socket });
-  });
-
-  socket.addEventListener('message', (event) => {
-    try {
-      const payload = JSON.parse(event.data);
-      onMessage?.(payload, socket);
-    } catch {
-      onMessage?.({ type: 'system', message: event.data }, socket);
-    }
-  });
-
-  return socket;
+	return openSocket(api.getInboxWebSocketUrl(), { onMessage, onStatus });
 }

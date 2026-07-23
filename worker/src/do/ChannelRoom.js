@@ -1,11 +1,9 @@
-import { countUnreadMessages, insertMessage, listRoomMemberIds, requireAccessibleRoom } from '../db.js';
+import { MessageSubmissionError, submitRoomMessage } from '../message-submission.js';
+import { authorizeRoom } from '../room-access.js';
 import { validateSession } from '../session.js';
-import { pickAttachment } from '../utils.js';
+import { projectUnreadMessage } from '../unread-projection.js';
+import { parseVerifiedPrincipal } from '../verified-identity.js';
 
-const INTERNAL_AUTH_HEADER = 'x-cfchat-internal-auth';
-const VERIFIED_USER_ID_HEADER = 'x-cfchat-verified-user-id';
-const VERIFIED_IS_ADMIN_HEADER = 'x-cfchat-verified-is-admin';
-const VERIFIED_AT_HEADER = 'x-cfchat-verified-at';
 const MESSAGE_SIZE_LIMIT = 10 * 1024;
 
 function socketMeta(token, principal, room) {
@@ -52,23 +50,6 @@ function normalizeWebSocketMessage(message) {
   return '';
 }
 
-function parseVerifiedPrincipal(request) {
-  if (request.headers.get(INTERNAL_AUTH_HEADER) !== 'worker-verified') {
-    return null;
-  }
-
-  const userId = Number(request.headers.get(VERIFIED_USER_ID_HEADER) || '');
-  const verifiedAt = Number(request.headers.get(VERIFIED_AT_HEADER) || '');
-  if (!Number.isFinite(userId) || !Number.isFinite(verifiedAt)) {
-    return null;
-  }
-
-  return {
-    userId,
-    isAdmin: request.headers.get(VERIFIED_IS_ADMIN_HEADER) === '1'
-  };
-}
-
 export class ChannelRoom {
   constructor(state, env) {
     this.state = state;
@@ -103,17 +84,18 @@ export class ChannelRoom {
       return null;
     }
 
-    const room = await requireAccessibleRoom(
+    const access = await authorizeRoom(
       this.env.DB,
-      auth.session.userId,
+      auth.session,
       meta.room.kind,
-      meta.room.id,
-      auth.session.isAdmin
+      meta.room.id
     );
-    if (!room) {
+    if (!access.ok) {
       this.closeUnauthorizedSocket(ws);
       return null;
     }
+
+    const { room } = access;
 
     const nextMeta = socketMeta(
       meta.token,
@@ -138,12 +120,16 @@ export class ChannelRoom {
   }
 
   async broadcast(packet) {
-    for (const [socket, meta] of this.connections) {
-      const currentMeta = await this.revalidateConnection(socket, meta);
-      if (!currentMeta) {
-        continue;
-      }
+    const connections = [...this.connections.entries()];
+    const validated = await Promise.all(
+      connections.map(async ([socket, meta]) => ({
+        socket,
+        meta: await this.revalidateConnection(socket, meta)
+      }))
+    );
 
+    for (const { socket, meta } of validated) {
+      if (!meta) continue;
       try {
         socket.send(packet);
       } catch {
@@ -176,17 +162,12 @@ export class ChannelRoom {
       };
     }
 
-    const room = await requireAccessibleRoom(
-      this.env.DB,
-      principal.userId,
-      kind,
-      roomId,
-      principal.isAdmin
-    );
+    const access = await authorizeRoom(this.env.DB, principal, kind, roomId);
 
-    if (!room) {
+    if (!access.ok) {
       return new Response('Forbidden', { status: 403 });
     }
+    const { room } = access;
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -235,59 +216,33 @@ export class ChannelRoom {
         return;
       }
 
-      const saved = await insertMessage(this.env.DB, {
-        channelId: currentMeta.room.id,
-        senderId: currentMeta.principal.userId,
-        content: payload.content,
-        attachment: pickAttachment(payload.attachment)
-      });
-      const packet = JSON.stringify({
-        type: 'message',
-        message: saved
-      });
-
+      const { message: saved, packet } = await submitRoomMessage(
+        this.env.DB,
+        currentMeta,
+        payload
+      );
       await this.broadcast(packet);
-      await this.notifyUnreadRecipients(currentMeta, saved);
+
+      // 未读投影不影响消息提交结果，交给 DO 生命周期继续完成，缩短发送链路。
+      this.state.waitUntil(
+        projectUnreadMessage(this.env, {
+          room: currentMeta.room,
+          senderId: currentMeta.principal.userId,
+          message: saved
+        })
+      );
     } catch (error) {
-      sendSocketError(ws, error.message || 'Send failed');
+      if (error instanceof MessageSubmissionError) {
+        sendSocketError(ws, error.message);
+        return;
+      }
+      console.error(JSON.stringify({
+        message: 'room message submission failed',
+        roomId: Number(meta.room?.id || 0),
+        error: error instanceof Error ? error.message : String(error)
+      }));
+      sendSocketError(ws, '消息发送失败');
     }
-  }
-
-  async notifyUnreadRecipients(meta, message) {
-    const memberIds = await listRoomMemberIds(this.env.DB, meta.room.id);
-    const recipientIds = memberIds.filter((userId) => userId !== meta.principal.userId);
-    await Promise.all(
-      recipientIds.map(async (userId) => {
-        try {
-          const unreadCount = await countUnreadMessages(this.env.DB, {
-            channelId: meta.room.id,
-            userId
-          });
-          const stub = this.env.USER_INBOX.get(this.env.USER_INBOX.idFromName(`user:${userId}`));
-
-          await stub.fetch('https://cfchat.internal/notify', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              [INTERNAL_AUTH_HEADER]: 'worker-verified'
-            },
-            body: JSON.stringify({
-              type: 'room_message',
-              room: {
-                id: Number(meta.room.id),
-                kind: meta.room.kind,
-                name: meta.room.name
-              },
-              messageId: Number(message.id),
-              createdAt: message.createdAt,
-              unreadCount
-            })
-          });
-        } catch (error) {
-          console.warn('Failed to notify unread recipient', error);
-        }
-      })
-    );
   }
 
   webSocketClose(ws) {

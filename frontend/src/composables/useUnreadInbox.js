@@ -1,27 +1,12 @@
-import api from '../api.js';
-import { connectInboxSocket } from '../ws.js';
+import api from "../api.js";
+import { createRealtimeSession } from "../realtime-session.js";
+import { connectInboxSocket } from "../ws.js";
 
 export function useUnreadInbox({
   activeRoom,
   applyConversationActivity,
   markConversationRead
 }) {
-  let inboxSocket = null;
-
-  function closeInboxSocket() {
-    if (!inboxSocket) {
-      return;
-    }
-
-    try {
-      inboxSocket.close();
-    } catch {
-      // WebSocket 已经断开时忽略关闭错误，避免卸载页面时打断正常清理。
-    } finally {
-      inboxSocket = null;
-    }
-  }
-
   function isActiveRoom(room) {
     return (
       activeRoom.value &&
@@ -30,10 +15,11 @@ export function useUnreadInbox({
     );
   }
 
-  function connectUnreadInbox() {
-    closeInboxSocket();
-    inboxSocket = connectInboxSocket({
-      onMessage(payload) {
+	const inboxSession = createRealtimeSession({
+		openConnection(_params, handlers) {
+			return connectInboxSocket(handlers);
+		},
+		onMessage(payload) {
         if (payload.type !== 'room_message' || !payload.room) {
           return;
         }
@@ -52,17 +38,15 @@ export function useUnreadInbox({
           lastMessageAt: payload.createdAt,
           unreadCount: payload.unreadCount
         });
-      },
-      onStatus(event) {
-        if (event.status === 'closed' && inboxSocket === event.socket) {
-          inboxSocket = null;
-        }
-      }
-    });
-  }
+		},
+	});
+
+	function connectUnreadInbox() {
+		inboxSession.connect("inbox");
+	}
 
   return {
     connectUnreadInbox,
-    disconnectUnreadInbox: closeInboxSocket
+		disconnectUnreadInbox: inboxSession.disconnect,
   };
 }

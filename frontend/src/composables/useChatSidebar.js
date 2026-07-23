@@ -1,32 +1,11 @@
-import { computed, reactive, ref } from "vue";
+import { computed, ref } from "vue";
 import api from "../api.js";
 
-export function useChatSidebar({ error, applyActiveChannel, selectDm }) {
+export function useChatSidebar({ applyActiveChannel, selectDm }) {
 	const channels = ref([]);
 	const dms = ref([]);
 	const users = ref([]);
 	const sidebarLoading = ref(false);
-	const showQuickActions = ref(false);
-	const quickActionMode = ref("");
-	const groupSubmitting = ref(false);
-	const createGroupForm = reactive({
-		name: "",
-		description: "",
-		kind: "public",
-		memberUserIds: [],
-	});
-
-	const groupVisibilityOptions = [
-		{ label: "公开群组", value: "public", description: "所有成员可见" },
-		{ label: "私有群组", value: "private", description: "仅受邀成员可见" },
-	];
-
-	const usersWithoutDm = computed(() => {
-		const dmUserIds = new Set(
-			dms.value.map((item) => Number(item.otherUser.id)),
-		);
-		return users.value.filter((user) => !dmUserIds.has(Number(user.id)));
-	});
 
 	const conversationItems = computed(() => {
 		const dmItems = dms.value.map((dm) => ({
@@ -119,26 +98,6 @@ export function useChatSidebar({ error, applyActiveChannel, selectDm }) {
 		}
 	}
 
-	function resetQuickActions() {
-		showQuickActions.value = false;
-		quickActionMode.value = "";
-		createGroupForm.name = "";
-		createGroupForm.description = "";
-		createGroupForm.kind = "public";
-		createGroupForm.memberUserIds = [];
-	}
-
-	function toggleQuickActions() {
-		showQuickActions.value = !showQuickActions.value;
-		if (!showQuickActions.value) {
-			quickActionMode.value = "";
-		}
-	}
-
-	function setQuickActionMode(mode) {
-		quickActionMode.value = quickActionMode.value === mode ? "" : mode;
-	}
-
 	async function refreshSidebar() {
 		sidebarLoading.value = true;
 		try {
@@ -174,53 +133,16 @@ export function useChatSidebar({ error, applyActiveChannel, selectDm }) {
 		void api.markRoomRead(item.kind, item.id).catch(() => {});
 	}
 
-	async function openDmWithUser(user) {
-		const payload = await api.openDm(user.id);
-		await refreshSidebar();
-		selectDm(payload.dm);
-		resetQuickActions();
-	}
-
-	async function createGroup() {
-		if (!createGroupForm.name.trim()) {
-			error.value = "请填写群组名称。";
-			return;
-		}
-
-		groupSubmitting.value = true;
-		error.value = "";
-		try {
-			const payload = await api.createGroup(createGroupForm);
-			await refreshSidebar();
-			await selectChannel(payload.channel);
-			resetQuickActions();
-		} catch (currentError) {
-			error.value = currentError.message;
-		} finally {
-			groupSubmitting.value = false;
-		}
-	}
-
 	return {
 		channels,
 		dms,
 		users,
 		sidebarLoading,
-		showQuickActions,
-		quickActionMode,
-		groupSubmitting,
-		createGroupForm,
-		groupVisibilityOptions,
-		usersWithoutDm,
 		conversationItems,
 		formatListTime,
 		markConversationRead,
 		applyConversationActivity,
-		toggleQuickActions,
-		setQuickActionMode,
 		refreshSidebar,
 		openConversation,
-		openDmWithUser,
-		createGroup,
 	};
 }

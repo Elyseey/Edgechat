@@ -1,14 +1,19 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import AddConversationDialog from '../components/chat/AddConversationDialog.vue';
+import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
+import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
+import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import PendingAttachmentPreview from '../components/chat/PendingAttachmentPreview.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import UiTextarea from '../components/ui/Textarea.vue';
-import api from '../api.js';
 import { useActiveRoom } from '../composables/useActiveRoom.js';
 import { useChatRoom } from '../composables/useChatRoom.js';
 import { useChatSidebar } from '../composables/useChatSidebar.js';
+import { useConversationCreation } from '../composables/useConversationCreation.js';
+import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
 import store from '../store.js';
 
@@ -19,23 +24,43 @@ const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
 
 const { activeRoomKey, canManageActiveRoom, applyActiveChannel, selectDm, roomLabel } =
-  useActiveRoom({ activeRoom, groupSettingsForm: reactive({ name: '', avatarUrl: '', avatarKey: '' }) });
+  useActiveRoom({ activeRoom });
 
 const {
-  channels, users, sidebarLoading, conversationItems, formatListTime,
+  channels, dms, users, sidebarLoading, conversationItems, formatListTime,
   refreshSidebar, openConversation, markConversationRead, applyConversationActivity
-} = useChatSidebar({ error, applyActiveChannel, selectDm });
+} = useChatSidebar({ applyActiveChannel, selectDm });
+
+function handleRoomActivity({ room, message }) {
+  applyConversationActivity({
+    kind: room.kind,
+    roomId: room.id,
+    lastMessageAt: message.createdAt,
+    unreadCount: 0
+  });
+  markConversationRead(room.kind, room.id);
+}
+
+function handleRoomAccessRevoked(room) {
+  const roomName = room.name || 'this private room';
+  error.value = room.kind === 'private'
+    ? `You no longer have access to "${roomName}".`
+    : 'You no longer have access to this room.';
+  activeRoom.value = null;
+  void refreshSidebar();
+}
 
 const {
   messages, loading, wsStatus, composerText, pendingAttachment, sending,
-  messagesEl, fileInputEl, formatTime, isOwnMessage, bubbleRowClass, bubbleClass,
+  messagesEl, fileInputEl, isOwnMessage,
   loadMessages, connectSocket, disconnectSocket, sendMessage, handleComposerKeydown,
   openFilePicker, uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
-  activeRoom, channels, users, session, error, refreshSidebar,
-  markConversationRead, applyConversationActivity, canManageActiveRoom,
-  syncGroupSettingsForm: () => {}, groupSettingsForm: { name: '', avatarUrl: '', avatarKey: '' },
-  returnToConversationList: () => {}
+  activeRoom,
+  session,
+  error,
+  onRoomActivity: handleRoomActivity,
+  onRoomAccessRevoked: handleRoomAccessRevoked
 });
 
 const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
@@ -46,44 +71,62 @@ const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
 
 const wsConnected = computed(() => wsStatus.value === 'open');
 
-const showCreateGroup = ref(false);
-const createGroupForm = reactive({ name: '', memberIds: [] });
-const creatingGroup = ref(false);
-
-function openCreateGroup() { showCreateGroup.value = true; }
-function closeCreateGroup() {
-  showCreateGroup.value = false;
-  createGroupForm.name = '';
-  createGroupForm.memberIds = [];
-}
-
-function toggleMember(userId) {
-  const idx = createGroupForm.memberIds.indexOf(userId);
-  if (idx >= 0) createGroupForm.memberIds.splice(idx, 1);
-  else createGroupForm.memberIds.push(userId);
-}
-
-async function createGroup() {
-  if (!createGroupForm.name.trim()) return;
-  creatingGroup.value = true;
-  error.value = '';
-  try {
-    const payload = await api.createGroup({
-      name: createGroupForm.name.trim(),
-      kind: 'private',
-      memberUserIds: createGroupForm.memberIds
-    });
-    await refreshSidebar();
-    const newChannel = payload.channel;
-    const item = conversationItems.value.find(c => c.id === newChannel.id);
-    if (item) await selectConversation(item);
-    closeCreateGroup();
-  } catch (e) {
-    error.value = e.message;
-  } finally {
-    creatingGroup.value = false;
+const roomManagement = useRoomManagement({
+  activeRoom, channels, users, error, refreshSidebar, conversationItems,
+  openConversation, canManageActiveRoom,
+  onRoomDeleted: () => {
+    disconnectSocket();
+    messages.value = [];
   }
-}
+});
+const { creation, members: memberManagement, settings: groupSettings, deleteGroup } = roomManagement;
+const {
+  show: showCreateGroup,
+  form: createGroupForm,
+  submitting: creatingGroup,
+  open: openCreateGroup,
+  close: closeCreateGroup,
+  toggleMember: toggleCreateGroupMember,
+  submit: createGroup
+} = creation;
+const {
+  show: showAddConversation,
+  usersWithoutDm,
+  openingDmUserId,
+  open: openAddConversation,
+  close: closeAddConversation,
+  startGroupCreation,
+  openDm
+} = useConversationCreation({
+  users,
+  dms,
+  error,
+  refreshSidebar,
+  conversationItems,
+  openConversation,
+  openGroupDialog: openCreateGroup
+});
+const {
+  show: showMemberPanel,
+  items: groupMembers,
+  loading: memberLoading,
+  inviteUserId,
+  availableUsers: availableInviteUsers,
+  inviteSubmitting,
+  toggle: toggleMemberPanel,
+  invite: inviteMember,
+  remove: removeMember
+} = memberManagement;
+const {
+  show: showGroupEditor,
+  form: groupSettingsForm,
+  saving: groupSettingsSaving,
+  avatarUploading: groupAvatarUploading,
+  open: openGroupEditor,
+  close: closeGroupEditor,
+  uploadAvatar: uploadGroupAvatar,
+  save: saveGroupSettings
+} = groupSettings;
 
 async function selectConversation(item) {
   await openConversation(item);
@@ -160,9 +203,17 @@ onBeforeUnmount(() => {
       <div class="sidebar-inner">
         <div class="sidebar-header">
           <h1 class="brand-title">EdgeChat</h1>
-          <button type="button" class="header-action" @click="openCreateGroup" title="创建群聊">
+          <button
+            type="button"
+            class="header-action"
+            title="添加人员"
+            aria-label="添加人员"
+            aria-haspopup="dialog"
+            :aria-expanded="showAddConversation"
+            @click="openAddConversation"
+          >
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <title>创建群聊</title>
+              <title>添加人员</title>
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
               <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
             </svg>
@@ -203,7 +254,15 @@ onBeforeUnmount(() => {
       <template v-if="activeRoom">
         <header class="chat-header">
           <h2>{{ roomLabel(activeRoom) }}</h2>
-          <div class="chat-header__status" :class="wsConnected ? 'online' : 'offline'"></div>
+          <div class="chat-header__actions">
+            <div class="chat-header__status" :class="wsConnected ? 'online' : 'offline'"></div>
+            <button v-if="activeRoom.kind !== 'dm'" type="button" class="chat-header__button" @click="toggleMemberPanel">
+              {{ showMemberPanel ? '收起成员' : '成员' }}
+            </button>
+            <button v-if="canManageActiveRoom" type="button" class="chat-header__button" @click="openGroupEditor">
+              群设置
+            </button>
+          </div>
         </header>
 
         <section ref="messagesEl" class="chat-messages">
@@ -215,7 +274,7 @@ onBeforeUnmount(() => {
             v-for="msg in messages" :key="msg.id"
             class="message-row" :class="{ 'message-row--own': isOwnMessage(msg) }"
           >
-            <div class="message-bubble" :class="bubbleClass(msg, 0)">
+            <div class="message-bubble">
               <div v-if="activeRoom.kind !== 'dm' && !isOwnMessage(msg)" class="message-sender-name">
                 {{ msg.sender.displayName }}
               </div>
@@ -263,44 +322,52 @@ onBeforeUnmount(() => {
       </div>
     </main>
 
-    <Transition name="modal-fade">
-      <div v-if="showCreateGroup" class="modal-overlay" @click.self="closeCreateGroup">
-        <div class="modal-card">
-          <h3>创建群聊</h3>
-          <input
-            v-model="createGroupForm.name"
-            type="text"
-            class="modal-input"
-            placeholder="群聊名称"
-          />
-          <div class="modal-members">
-            <label>选择成员</label>
-            <div class="member-list">
-              <button
-                v-for="user in users" :key="user.id" type="button"
-                class="member-chip"
-                :class="{ 'member-chip--selected': createGroupForm.memberIds.includes(user.id) }"
-                @click="toggleMember(user.id)"
-              >
-                <UiAvatar :src="user.avatarUrl" :fallback="user.displayName?.[0] || '?'" size="sm" />
-                <span>{{ user.displayName }}</span>
-              </button>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary" @click="closeCreateGroup">取消</button>
-            <button
-              type="button"
-              class="btn-primary"
-              :disabled="!createGroupForm.name.trim() || creatingGroup"
-              @click="createGroup"
-            >
-              {{ creatingGroup ? '创建中...' : '创建' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
+    <aside v-if="showMemberPanel" class="room-management-sidebar">
+      <MemberPanel
+        :room="activeRoom"
+        :members="groupMembers"
+        :loading="memberLoading"
+        :can-manage="canManageActiveRoom"
+        :invite-user-id="inviteUserId"
+        :available-invite-users="availableInviteUsers"
+        :invite-submitting="inviteSubmitting"
+        @update:invite-user-id="inviteUserId = $event"
+        @invite="inviteMember"
+        @remove-member="removeMember"
+        @delete-group="deleteGroup"
+      />
+    </aside>
+
+    <AddConversationDialog
+      :show="showAddConversation"
+      :users="usersWithoutDm"
+      :opening-dm-user-id="openingDmUserId"
+      :error="error"
+      @close="closeAddConversation"
+      @create-group="startGroupCreation"
+      @open-dm="openDm"
+    />
+
+    <CreateGroupDialog
+      :show="showCreateGroup"
+      :users="users"
+      :form="createGroupForm"
+      :submitting="creatingGroup"
+      @close="closeCreateGroup"
+      @toggle-member="toggleCreateGroupMember"
+      @submit="createGroup"
+    />
+
+    <GroupSettingsDialog
+      :show="showGroupEditor"
+      :room="activeRoom"
+      :form="groupSettingsForm"
+      :saving="groupSettingsSaving"
+      :avatar-uploading="groupAvatarUploading"
+      @close="closeGroupEditor"
+      @upload-avatar="uploadGroupAvatar"
+      @save="saveGroupSettings"
+    />
   </div>
 </template>
 
@@ -589,11 +656,34 @@ onBeforeUnmount(() => {
 .chat-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
   background: #f0f2f5;
   border-bottom: 1px solid #e9edef;
+}
+
+.chat-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-header__button {
+  padding: 6px 10px;
+  border: 1px solid #d8dee2;
+  border-radius: 8px;
+  background: #fff;
+  color: #54656f;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+
+.chat-header__button:hover {
+  background: #f5f7fa;
+  border-color: #c7d0d6;
+  color: #111b21;
 }
 
 .chat-header h2 {
@@ -844,152 +934,13 @@ onBeforeUnmount(() => {
   color: #111b21;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 100;
-}
-
-.modal-card {
-  width: 100%;
-  max-width: 420px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
-
-.modal-card h3 {
-  margin: 0 0 20px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111b21;
-}
-
-.modal-input {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #e8ecf0;
-  border-radius: 10px;
-  background: #f9fafb;
-  color: #111b21;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 150ms, box-shadow 150ms;
-  margin-bottom: 16px;
-}
-
-.modal-input:focus {
-  border-color: #008069;
-  box-shadow: 0 0 0 3px rgba(0, 128, 105, 0.1);
-  background: #fff;
-}
-
-.modal-input::placeholder {
-  color: #8696a0;
-}
-
-.modal-members {
-  margin-bottom: 20px;
-}
-
-.modal-members label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #6b7c93;
-}
-
-.member-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 160px;
+.room-management-sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  height: 100vh;
   overflow-y: auto;
-  padding: 4px;
-}
-
-.member-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid #e8ecf0;
-  border-radius: 20px;
-  background: #fff;
-  color: #111b21;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 150ms, border-color 150ms;
-}
-
-.member-chip:hover {
-  background: #f5f7fa;
-}
-
-.member-chip--selected {
-  background: #e8f0fe;
-  border-color: #008069;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.btn-secondary {
-  padding: 10px 20px;
-  border: 1px solid #e8ecf0;
-  border-radius: 10px;
-  background: #fff;
-  color: #6b7c93;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 150ms, color 150ms;
-}
-
-.btn-secondary:hover {
-  background: #f5f7fa;
-  color: #111b21;
-}
-
-.btn-primary {
-  padding: 10px 24px;
-  border: none;
-  border-radius: 10px;
-  background: #008069;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 150ms;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #006e5a;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.modal-fade-enter-active {
-  transition: opacity 200ms;
-}
-
-.modal-fade-leave-active {
-  transition: opacity 150ms;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
+  background: #f7f9fa;
+  border-left: 1px solid #e9edef;
 }
 
 @media (max-width: 768px) {
@@ -1007,6 +958,14 @@ onBeforeUnmount(() => {
   .right-sidebar-user {
     width: 36px;
     height: 36px;
+  }
+  .room-management-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 30;
+    width: min(340px, 92vw);
+    box-shadow: -12px 0 30px rgba(11, 20, 26, 0.16);
   }
 }
 </style>

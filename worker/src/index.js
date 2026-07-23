@@ -9,7 +9,10 @@ import {
   putSession,
   verifyPassword
 } from './auth.js';
-import { getSiteSettings, getUserByUsername } from './db.js';
+import { listVisibleChannels } from './data/channels.js';
+import { listUserDms } from './data/dm-queries.js';
+import { getSiteSettings } from './data/site-settings.js';
+import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
@@ -20,19 +23,15 @@ import { registerUploadRoutes } from './api/upload.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
 import { UserInbox } from './do/UserInbox.js';
+import { forwardInboxConnection, forwardRoomConnection } from './do-bridge.js';
 import { runScheduledGc } from './gc.js';
 import {
   errorResponse,
   parseJsonRequest,
-  publicFileUrl,
   requestBodyTooLarge
 } from './utils.js';
 
 const app = new Hono();
-const INTERNAL_AUTH_HEADER = 'x-cfchat-internal-auth';
-const VERIFIED_USER_ID_HEADER = 'x-cfchat-verified-user-id';
-const VERIFIED_IS_ADMIN_HEADER = 'x-cfchat-verified-is-admin';
-const VERIFIED_AT_HEADER = 'x-cfchat-verified-at';
 
 app.use('/api/*', async (c, next) => {
   if (requestBodyTooLarge(c.req.raw)) {
@@ -297,189 +296,19 @@ app.patch('/api/me/profile', async (c) => {
 
 app.get('/api/users', async (c) => {
   const session = c.get('session');
-  const { results } = await c.env.DB.prepare(
-    `SELECT id, username, display_name, avatar_key
-     FROM users
-     WHERE deleted_at IS NULL
-       AND is_disabled = 0
-       AND id != ?
-     ORDER BY display_name ASC`
-  )
-    .bind(session.userId)
-    .all();
-
-  return c.json({
-    users: results.map((row) => ({
-      id: Number(row.id),
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_key ? `/files/${encodeURIComponent(row.avatar_key)}` : ''
-    }))
-  });
+  const users = await listActiveUsers(c.env.DB, session.userId);
+  return c.json({ users });
 });
 
 app.get('/api/bootstrap', async (c) => {
   const session = c.get('session');
-  const [usersResult, channelsResult, dmsResult] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT id, username, display_name, avatar_key
-       FROM users
-       WHERE deleted_at IS NULL
-         AND is_disabled = 0
-         AND id != ?
-       ORDER BY display_name ASC`
-    )
-      .bind(session.userId)
-      .all(),
-    c.env.DB.prepare(
-      `SELECT
-         c.id,
-         c.name,
-         c.description,
-         c.avatar_key,
-         c.kind,
-         owner.display_name AS owner_display_name,
-         EXISTS (
-           SELECT 1 FROM channel_members cm
-           WHERE cm.channel_id = c.id AND cm.user_id = ?
-         ) AS is_member,
-         COALESCE((
-           SELECT cm.role
-           FROM channel_members cm
-           WHERE cm.channel_id = c.id AND cm.user_id = ?
-           LIMIT 1
-         ), '') AS my_role,
-         EXISTS (
-           SELECT 1 FROM channel_members cm
-           WHERE cm.channel_id = c.id AND cm.user_id = ? AND cm.role = 'owner'
-         ) AS can_manage,
-         (
-           SELECT COUNT(*)
-           FROM channel_members cm
-           WHERE cm.channel_id = c.id
-         ) AS member_count,
-         (
-           SELECT MAX(m.created_at)
-           FROM messages m
-           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-         ) AS last_message_at,
-         CASE
-           WHEN EXISTS (
-             SELECT 1 FROM channel_members cm
-             WHERE cm.channel_id = c.id AND cm.user_id = ?
-           ) THEN (
-             SELECT COUNT(*)
-             FROM messages m
-             WHERE m.channel_id = c.id
-               AND m.deleted_at IS NULL
-               AND m.sender_id != ?
-               AND m.id > COALESCE((
-                 SELECT mr.last_read_message_id
-                 FROM message_reads mr
-                 WHERE mr.channel_id = c.id
-                   AND mr.user_id = ?
-               ), 0)
-           )
-           ELSE 0
-         END AS unread_count
-       FROM channels c
-       LEFT JOIN users owner ON owner.id = c.created_by
-       WHERE c.kind IN ('public', 'private')
-         AND c.deleted_at IS NULL
-         AND (
-           c.kind = 'public'
-           OR EXISTS (
-             SELECT 1 FROM channel_members cm
-             WHERE cm.channel_id = c.id AND cm.user_id = ?
-           )
-         )
-       ORDER BY CASE c.kind WHEN 'public' THEN 0 ELSE 1 END, c.name ASC`
-    )
-      .bind(
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId
-      )
-      .all(),
-    c.env.DB.prepare(
-      `SELECT
-         c.id,
-         c.dm_key,
-         other.id AS other_user_id,
-         other.username AS other_username,
-         other.display_name AS other_display_name,
-         other.avatar_key AS other_avatar_key,
-         (
-           SELECT MAX(m.created_at)
-           FROM messages m
-           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-         ) AS last_message_at,
-         (
-           SELECT COUNT(*)
-           FROM messages m
-           WHERE m.channel_id = c.id
-             AND m.deleted_at IS NULL
-             AND m.sender_id != ?
-             AND m.id > COALESCE((
-               SELECT mr.last_read_message_id
-               FROM message_reads mr
-               WHERE mr.channel_id = c.id
-                 AND mr.user_id = ?
-             ), 0)
-         ) AS unread_count
-       FROM channels c
-       JOIN channel_members me ON me.channel_id = c.id AND me.user_id = ?
-       JOIN channel_members peer ON peer.channel_id = c.id AND peer.user_id != ?
-       JOIN users other ON other.id = peer.user_id
-       WHERE c.kind = 'dm'
-         AND c.deleted_at IS NULL
-         AND other.deleted_at IS NULL
-       ORDER BY last_message_at DESC NULLS LAST, c.id DESC`
-    )
-      .bind(session.userId, session.userId, session.userId, session.userId)
-      .all()
+  const [users, channels, dms] = await Promise.all([
+    listActiveUsers(c.env.DB, session.userId),
+    listVisibleChannels(c.env.DB, session.userId),
+    listUserDms(c.env.DB, session.userId)
   ]);
 
-  return c.json({
-    users: usersResult.results.map((row) => ({
-      id: Number(row.id),
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_key ? `/files/${encodeURIComponent(row.avatar_key)}` : ''
-    })),
-    channels: channelsResult.results.map((row) => ({
-      id: Number(row.id),
-      name: row.name,
-      description: row.description,
-      avatarKey: row.avatar_key || '',
-      avatarUrl: row.avatar_key ? publicFileUrl(row.avatar_key) : '',
-      kind: row.kind,
-      ownerDisplayName: row.owner_display_name || '',
-      isMember: Boolean(Number(row.is_member)),
-      myRole: row.my_role || '',
-      canManage: Boolean(Number(row.can_manage)),
-      memberCount: Number(row.member_count || 0),
-      lastMessageAt: row.last_message_at || null,
-      unreadCount: Number(row.unread_count || 0)
-    })),
-    dms: dmsResult.results.map((row) => ({
-      id: Number(row.id),
-      kind: 'dm',
-      name: row.dm_key,
-      lastMessageAt: row.last_message_at || null,
-      unreadCount: Number(row.unread_count || 0),
-      otherUser: {
-        id: Number(row.other_user_id),
-        username: row.other_username,
-        displayName: row.other_display_name,
-        avatarUrl: row.other_avatar_key ? `/files/${encodeURIComponent(row.other_avatar_key)}` : ''
-      }
-    }))
-  });
+  return c.json({ users, channels, dms });
 });
 
 app.use('/api/admin/*', adminMiddleware);
@@ -498,45 +327,22 @@ app.get('/api/ws/:kind/:id', async (c) => {
     return errorResponse('无效的会话类型');
   }
 
-  const stub = c.env.CHANNEL_ROOM.get(c.env.CHANNEL_ROOM.idFromName(`${kind}:${id}`));
-  const url = new URL(c.req.url);
-  url.pathname = '/connect';
-  url.searchParams.set('kind', kind);
-  url.searchParams.set('id', id);
-  url.searchParams.set('token', session.token);
-
-  const headers = new Headers(c.req.raw.headers);
-  headers.set(INTERNAL_AUTH_HEADER, 'worker-verified');
-  headers.set(VERIFIED_USER_ID_HEADER, String(session.userId));
-  headers.set(VERIFIED_IS_ADMIN_HEADER, session.isAdmin ? '1' : '0');
-  headers.set(VERIFIED_AT_HEADER, String(Date.now()));
-
-  const request = new Request(url.toString(), {
-    method: c.req.raw.method,
-    headers
+  return forwardRoomConnection({
+    env: c.env,
+    request: c.req.raw,
+    kind,
+    roomId: id,
+    principal: session
   });
-
-  return stub.fetch(request);
 });
 
 app.get('/api/inbox/ws', async (c) => {
   const session = c.get('session');
-  const stub = c.env.USER_INBOX.get(c.env.USER_INBOX.idFromName(`user:${session.userId}`));
-  const url = new URL(c.req.url);
-  url.pathname = '/connect';
-
-  const headers = new Headers(c.req.raw.headers);
-  headers.set(INTERNAL_AUTH_HEADER, 'worker-verified');
-  headers.set(VERIFIED_USER_ID_HEADER, String(session.userId));
-  headers.set(VERIFIED_IS_ADMIN_HEADER, session.isAdmin ? '1' : '0');
-  headers.set(VERIFIED_AT_HEADER, String(Date.now()));
-
-  const request = new Request(url.toString(), {
-    method: c.req.raw.method,
-    headers
+  return forwardInboxConnection({
+    env: c.env,
+    request: c.req.raw,
+    principal: session
   });
-
-  return stub.fetch(request);
 });
 
 app.notFound(async (c) => {

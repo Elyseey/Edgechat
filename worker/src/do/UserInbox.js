@@ -1,14 +1,4 @@
-const INTERNAL_AUTH_HEADER = 'x-cfchat-internal-auth';
-const VERIFIED_USER_ID_HEADER = 'x-cfchat-verified-user-id';
-
-function parseVerifiedUserId(request) {
-  if (request.headers.get(INTERNAL_AUTH_HEADER) !== 'worker-verified') {
-    return null;
-  }
-
-  const userId = Number(request.headers.get(VERIFIED_USER_ID_HEADER) || '');
-  return Number.isFinite(userId) ? userId : null;
-}
+import { isVerifiedInternalRequest, parseVerifiedUserId } from '../verified-identity.js';
 
 export class UserInbox {
   constructor(state) {
@@ -53,7 +43,7 @@ export class UserInbox {
     }
 
     if (url.pathname === '/notify' && request.method === 'POST') {
-      if (request.headers.get(INTERNAL_AUTH_HEADER) !== 'worker-verified') {
+      if (!isVerifiedInternalRequest(request)) {
         return new Response('Unauthorized', { status: 401 });
       }
 

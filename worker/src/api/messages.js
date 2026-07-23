@@ -1,4 +1,6 @@
-import { listMessages, markRoomRead, requireAccessibleRoom } from '../db.js';
+import { listMessages } from '../data/messages.js';
+import { markRoomRead } from '../data/unread.js';
+import { authorizeRoom, isRoomKind } from '../room-access.js';
 import { errorResponse, parseJsonRequest, sanitizeLimit } from '../utils.js';
 
 export function registerMessageRoutes(app) {
@@ -9,19 +11,13 @@ export function registerMessageRoutes(app) {
     const before = c.req.query('before');
     const limit = sanitizeLimit(c.req.query('limit'));
 
-    if (!['public', 'private', 'dm'].includes(kind) || !Number.isFinite(roomId)) {
+    if (!isRoomKind(kind) || !Number.isInteger(roomId) || roomId <= 0) {
       return errorResponse('参数无效');
     }
 
-    const room = await requireAccessibleRoom(
-      c.env.DB,
-      session.userId,
-      kind,
-      roomId,
-      session.isAdmin
-    );
+    const access = await authorizeRoom(c.env.DB, session, kind, roomId);
 
-    if (!room) {
+    if (!access.ok) {
       return errorResponse('无权访问该会话', 403);
     }
 
@@ -33,10 +29,10 @@ export function registerMessageRoutes(app) {
 
     return c.json({
       room: {
-        id: Number(room.id),
-        kind: room.kind,
-        name: room.name,
-        description: room.description
+        id: Number(access.room.id),
+        kind: access.room.kind,
+        name: access.room.name,
+        description: access.room.description
       },
       messages
     });
@@ -50,22 +46,17 @@ export function registerMessageRoutes(app) {
     const messageId = payload.messageId === undefined ? null : Number(payload.messageId);
 
     if (
-      !['public', 'private', 'dm'].includes(kind) ||
-      !Number.isFinite(roomId) ||
-      (messageId !== null && !Number.isFinite(messageId))
+      !isRoomKind(kind) ||
+      !Number.isInteger(roomId) ||
+      roomId <= 0 ||
+      (messageId !== null && (!Number.isInteger(messageId) || messageId <= 0))
     ) {
       return errorResponse('参数无效');
     }
 
-    const room = await requireAccessibleRoom(
-      c.env.DB,
-      session.userId,
-      kind,
-      roomId,
-      session.isAdmin
-    );
+    const access = await authorizeRoom(c.env.DB, session, kind, roomId);
 
-    if (!room) {
+    if (!access.ok) {
       return errorResponse('无权访问该会话', 403);
     }
 

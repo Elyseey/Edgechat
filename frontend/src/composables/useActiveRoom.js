@@ -1,6 +1,6 @@
 import { computed } from "vue";
 
-export function useActiveRoom({ activeRoom, groupSettingsForm }) {
+export function useActiveRoom({ activeRoom }) {
 	const activeRoomKey = computed(() =>
 		activeRoom.value?.kind && activeRoom.value?.id
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
@@ -52,7 +52,6 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 			memberCount: Number(channel.memberCount || 0),
 		};
 
-		syncGroupSettingsForm();
 	}
 
 	function selectChannel(channel) {
@@ -66,12 +65,6 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 			name: dm.name,
 			otherUser: dm.otherUser,
 		};
-	}
-
-	function syncGroupSettingsForm() {
-		groupSettingsForm.name = activeRoom.value?.name || "";
-		groupSettingsForm.avatarUrl = activeRoom.value?.avatarUrl || "";
-		groupSettingsForm.avatarKey = activeRoom.value?.avatarKey || "";
 	}
 
 	function roomLabel(room) {
@@ -94,7 +87,6 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 		applyActiveChannel,
 		selectChannel,
 		selectDm,
-		syncGroupSettingsForm,
-		roomLabel,
+			roomLabel,
 	};
 }
