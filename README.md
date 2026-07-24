@@ -2,7 +2,7 @@
   <img src="Edgechat.png" alt="Edgechat 标志" />
 </div>
 
-[GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://doc.chsm666.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
+[GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://echat.azora.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
 
 EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系、公开群组、私有群组、私信、实时消息、文件上传和管理员后台，目标是在 Cloudflare 生态中以较低运维成本实现一套可直接落地的站内 IM。
 
@@ -35,8 +35,8 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 
 推荐优先使用 GitHub Actions 部署，适合长期维护和生产环境更新。
 
-- 快速开始：<https://doc.chsm666.top/guide/getting-started.html>
-- 详细教程：<https://doc.chsm666.top/guide/actions-deploy.html>
+- 快速开始：<https://echat.azora.top/guide/getting-started.html>
+- 详细教程：<https://echat.azora.top/guide/actions-deploy.html>
 
 仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
 
@@ -44,8 +44,8 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 
 如果你希望本地手动部署，完整步骤、资源准备和注意事项请查看文档站教程：
 
-- 手动部署教程：<https://doc.chsm666.top/guide/getting-started.html>
-- 文档首页：<https://doc.chsm666.top/>
+- 手动部署教程：<https://echat.azora.top/guide/getting-started.html>
+- 文档首页：<https://echat.azora.top/>
 - Docker 本地部署：[DOCKER.md](DOCKER.md)
 
 ## 快速开始
@@ -114,7 +114,7 @@ edgechat/
 └─ LICENSE
 ```
 
-更多实现说明可查看 [TECHNICAL.md](TECHNICAL.md) 和文档站：<https://doc.chsm666.top/>
+更多实现说明可查看 [TECHNICAL.md](TECHNICAL.md) 和文档站：<https://echat.azora.top/>
 
 ## 贡献
 
