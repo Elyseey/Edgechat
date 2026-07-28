@@ -1,5 +1,20 @@
 import { nextTick, onMounted, watch } from 'vue';
 
+export function calculateCursorLeft({
+  textWidth,
+  scrollLeft,
+  paddingLeft,
+  paddingRight,
+  viewportWidth,
+  cursorWidth
+}) {
+  const visibleLeft = paddingLeft;
+  const visibleRight = Math.max(visibleLeft, viewportWidth - paddingRight - cursorWidth);
+  const textPosition = paddingLeft + textWidth - scrollLeft;
+
+  return Math.min(visibleRight, Math.max(visibleLeft, textPosition));
+}
+
 function updateCursor(input, cursor) {
   if (!input || !cursor) return;
 
@@ -9,18 +24,27 @@ function updateCursor(input, cursor) {
     displayText = '\u2022'.repeat(selectionStart);
   }
 
+  const inputStyle = getComputedStyle(input);
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  ctx.font = getComputedStyle(input).font;
+  ctx.font = inputStyle.font;
   const textWidth = ctx.measureText(displayText).width;
 
   const inputRect = input.getBoundingClientRect();
-  const paddingLeft = parseFloat(getComputedStyle(input).paddingLeft);
+  const paddingLeft = parseFloat(inputStyle.paddingLeft);
+  const paddingRight = parseFloat(inputStyle.paddingRight);
 
   const cursorHeight = 24;
   const cursorTop = (inputRect.height - cursorHeight) / 2;
 
-  cursor.style.left = `${paddingLeft + textWidth}px`;
+  cursor.style.left = `${calculateCursorLeft({
+    textWidth,
+    scrollLeft: input.scrollLeft,
+    paddingLeft,
+    paddingRight,
+    viewportWidth: input.clientWidth,
+    cursorWidth: cursor.offsetWidth
+  })}px`;
   cursor.style.top = `${cursorTop}px`;
   cursor.style.height = `${cursorHeight}px`;
 }
@@ -45,6 +69,7 @@ function setupCursorPair(inputRef, cursorRef) {
   input.addEventListener('click', update);
   input.addEventListener('keyup', update);
   input.addEventListener('select', update);
+  input.addEventListener('scroll', update);
 }
 
 export function useCursor(pairs, when) {

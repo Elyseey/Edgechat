@@ -274,7 +274,10 @@ onBeforeUnmount(() => {
             v-for="msg in messages" :key="msg.id"
             class="message-row" :class="{ 'message-row--own': isOwnMessage(msg) }"
           >
-            <div class="message-bubble">
+            <div
+              class="message-bubble"
+              :class="{ 'message-bubble--with-attachment': msg.attachment }"
+            >
               <div v-if="activeRoom.kind !== 'dm' && !isOwnMessage(msg)" class="message-sender-name">
                 {{ msg.sender.displayName }}
               </div>
@@ -756,13 +759,17 @@ onBeforeUnmount(() => {
 
 .message-bubble {
   max-width: 65%;
-  padding: 6px 10px 20px 10px;
+  padding: 6px 10px 7px;
   border-radius: 8px;
   background: #ffffff;
   border: none;
   position: relative;
   word-break: break-word;
   box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
+}
+
+.message-bubble--with-attachment {
+  padding-bottom: 20px;
 }
 
 .message-row--own .message-bubble {
@@ -778,10 +785,12 @@ onBeforeUnmount(() => {
 
 .message-time {
   position: absolute;
-  bottom: 3px;
-  right: 7px;
+  right: 8px;
+  bottom: 6px;
   font-size: 11px;
+  line-height: 1;
   color: #667781;
+  white-space: nowrap;
   user-select: none;
 }
 
@@ -792,6 +801,14 @@ onBeforeUnmount(() => {
   color: #111b21;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 短消息在末行预留时间戳宽度，避免气泡收缩后正文与右下角时间重叠。 */
+.message-bubble:not(.message-bubble--with-attachment) p::after {
+  content: '';
+  display: inline-block;
+  width: 3.5em;
+  height: 0;
 }
 
 .chat-composer {
