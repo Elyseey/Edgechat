@@ -11,6 +11,7 @@ import {
 } from './auth.js';
 import { listVisibleChannels } from './data/channels.js';
 import { listUserDms } from './data/dm-queries.js';
+import { ensureGeneralChannelMembership } from './data/general-channel.js';
 import { getSiteSettings } from './data/site-settings.js';
 import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
@@ -134,6 +135,8 @@ app.post('/api/register-links/:token/register', async (c) => {
       }
       throw error;
     });
+
+  await ensureGeneralChannelMembership(c.env.DB, result.meta.last_row_id);
 
   await c.env.DB.prepare(
     `UPDATE registration_invites
@@ -302,6 +305,7 @@ app.get('/api/users', async (c) => {
 
 app.get('/api/bootstrap', async (c) => {
   const session = c.get('session');
+  await ensureGeneralChannelMembership(c.env.DB, session.userId);
   const [users, channels, dms] = await Promise.all([
     listActiveUsers(c.env.DB, session.userId),
     listVisibleChannels(c.env.DB, session.userId),

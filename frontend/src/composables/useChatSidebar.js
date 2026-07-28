@@ -21,15 +21,17 @@ export function useChatSidebar({ applyActiveChannel, selectDm }) {
 			source: dm,
 		}));
 
-		const channelItems = channels.value.map((channel) => ({
-			key: `${channel.kind}:${channel.id}`,
-			id: channel.id,
-			kind: channel.kind,
-			title: channel.name,
-			subtitle:
-				channel.kind === "public" && !channel.isMember
-					? "公开群组 · 点击加入"
-					: `群主 ${channel.ownerDisplayName || "未知"}`,
+			const channelItems = channels.value.map((channel) => ({
+				key: `${channel.kind}:${channel.id}`,
+				id: channel.id,
+				kind: channel.kind,
+				isGeneral: Boolean(channel.isGeneral),
+				title: channel.name,
+				subtitle: channel.isGeneral
+					? "全员群组"
+					: channel.kind === "public" && !channel.isMember
+						? "公开群组 · 点击加入"
+						: `群主 ${channel.ownerDisplayName || "未知"}`,
 			avatarUrl: channel.avatarUrl || "",
 			fallback: channel.name ? channel.name.slice(0, 1) : "群",
 			lastMessageAt: channel.lastMessageAt || "",
@@ -37,8 +39,12 @@ export function useChatSidebar({ applyActiveChannel, selectDm }) {
 			source: channel,
 		}));
 
-		return [...dmItems, ...channelItems].sort((left, right) => {
-			const leftTime = left.lastMessageAt
+			return [...dmItems, ...channelItems].sort((left, right) => {
+				if (left.isGeneral !== right.isGeneral) {
+					return left.isGeneral ? -1 : 1;
+				}
+
+				const leftTime = left.lastMessageAt
 				? new Date(left.lastMessageAt).getTime()
 				: 0;
 			const rightTime = right.lastMessageAt

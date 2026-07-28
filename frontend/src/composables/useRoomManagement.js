@@ -106,8 +106,9 @@ export function useRoomManagement({
 			groupMembers.value = payload.members;
 			activeRoom.value.canManage = payload.room.canManage;
 			activeRoom.value.myRole = payload.room.myRole;
-			activeRoom.value.memberCount = payload.members.length;
-			activeRoom.value.name = payload.room.name || activeRoom.value.name;
+				activeRoom.value.memberCount = payload.members.length;
+				activeRoom.value.name = payload.room.name || activeRoom.value.name;
+				activeRoom.value.isGeneral = Boolean(payload.room.isGeneral);
 			activeRoom.value.avatarUrl = payload.room.avatarUrl || "";
 			activeRoom.value.avatarKey = payload.room.avatarKey || "";
 			syncGroupSettingsForm();
@@ -163,8 +164,12 @@ export function useRoomManagement({
 		}
 	}
 
-	async function removeMember(member) {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
+		async function removeMember(member) {
+			if (
+				!activeRoom.value ||
+				activeRoom.value.kind === "dm" ||
+				activeRoom.value.isGeneral
+			) {
 			return;
 		}
 		if (!confirmAction(`Remove ${member.displayName} from this group?`)) {
@@ -181,8 +186,12 @@ export function useRoomManagement({
 		}
 	}
 
-	async function deleteGroup() {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
+		async function deleteGroup() {
+			if (
+				!activeRoom.value ||
+				activeRoom.value.kind === "dm" ||
+				activeRoom.value.isGeneral
+			) {
 			return;
 		}
 		if (!confirmAction(`Delete group ${activeRoom.value.name}?`)) {

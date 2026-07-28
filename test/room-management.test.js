@@ -146,3 +146,14 @@ test("删除群组统一清理管理状态并通知页面 adapter", async () => 
 		["refreshSidebar"],
 	]);
 });
+
+test("general 管理动作不会发出移除成员或删除群组请求", async () => {
+	const { management, activeRoom, calls } = createHarness();
+	activeRoom.value.isGeneral = true;
+
+	await management.members.remove({ id: 2, displayName: "Bob" });
+	await management.deleteGroup();
+
+	assert.equal(calls.length, 0);
+	assert.notEqual(activeRoom.value, null);
+});

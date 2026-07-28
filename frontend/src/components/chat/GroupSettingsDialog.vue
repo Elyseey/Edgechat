@@ -34,7 +34,7 @@ function openAvatarPicker() {
 
         <label class="room-dialog__field">
           <span>群组名称</span>
-          <input v-model="form.name" type="text" class="room-dialog__input" />
+          <input v-model="form.name" type="text" class="room-dialog__input" :disabled="room?.isGeneral" />
         </label>
 
         <div class="room-dialog__actions">

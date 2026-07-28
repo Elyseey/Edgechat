@@ -23,9 +23,16 @@ export function useActiveRoom({ activeRoom }) {
 			return "从左侧会话列表中选择联系人或群组开始聊天。";
 		}
 
-		if (activeRoom.value.kind === "dm") {
-			return `与 @${activeRoom.value.otherUser?.username || activeRoom.value.name} 的私信`;
-		}
+			if (activeRoom.value.kind === "dm") {
+				return `与 @${activeRoom.value.otherUser?.username || activeRoom.value.name} 的私信`;
+			}
+
+			if (activeRoom.value.isGeneral) {
+				const memberCount = activeRoom.value.memberCount
+					? ` · ${activeRoom.value.memberCount} 位成员`
+					: "";
+				return `全员群组${memberCount}`;
+			}
 
 		const visibility =
 			activeRoom.value.kind === "private" ? "私有群组" : "公开群组";
@@ -39,10 +46,11 @@ export function useActiveRoom({ activeRoom }) {
 	});
 
 	function applyActiveChannel(channel) {
-		activeRoom.value = {
-			id: channel.id,
-			kind: channel.kind,
-			name: channel.name,
+			activeRoom.value = {
+				id: channel.id,
+				kind: channel.kind,
+				name: channel.name,
+				isGeneral: Boolean(channel.isGeneral),
 			description: channel.description,
 			avatarUrl: channel.avatarUrl || "",
 			avatarKey: channel.avatarKey || "",

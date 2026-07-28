@@ -48,7 +48,7 @@ const emit = defineEmits(['update:inviteUserId', 'invite', 'remove-member', 'del
 
       <div class="chat-member-panel__actions">
         <UiBadge variant="secondary">{{ room.myRole || 'member' }}</UiBadge>
-        <UiButton v-if="canManage" variant="destructive" size="sm" @click="emit('delete-group')">
+        <UiButton v-if="canManage && !room.isGeneral" variant="destructive" size="sm" @click="emit('delete-group')">
           删除群组
         </UiButton>
       </div>
@@ -66,7 +66,7 @@ const emit = defineEmits(['update:inviteUserId', 'invite', 'remove-member', 'del
             {{ member.role === 'owner' ? '群主' : '成员' }}
           </UiBadge>
           <UiButton
-            v-if="canManage && member.role !== 'owner'"
+			v-if="canManage && !room.isGeneral && member.role !== 'owner'"
             variant="secondary"
             size="sm"
             @click="emit('remove-member', member)"
@@ -77,7 +77,7 @@ const emit = defineEmits(['update:inviteUserId', 'invite', 'remove-member', 'del
       </div>
     </div>
 
-    <div v-if="canManage" class="chat-member-panel__actions">
+    <div v-if="canManage && !room.isGeneral" class="chat-member-panel__actions">
       <select
         class="ui-input"
         :value="inviteUserId"
