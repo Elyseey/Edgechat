@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -72,6 +73,31 @@ test("部分迁移状态会阻断部署，避免继续发布不兼容代码", as
 			}),
 		/数据库结构只完成了一部分/,
 	);
+});
+
+test("Windows CRLF 迁移校验值会在 Linux Actions 中自动归一化", async () => {
+	const sql = "CREATE TABLE example (id INTEGER);\n";
+	const legacyChecksum = createHash("sha256")
+		.update(sql.replaceAll("\n", "\r\n"))
+		.digest("hex");
+	const plan = await buildD1MigrationPlan({
+		migrations: [
+			{
+				id: "cross-platform",
+				file: "cross-platform.sql",
+				artifacts: ["table:example"],
+			},
+		],
+		appliedMigrations: new Map([["cross-platform", legacyChecksum]]),
+		artifacts: new Set(["table:example"]),
+		readSql() {
+			return sql;
+		},
+	});
+
+	assert.deepEqual(plan.decisions, [{ id: "cross-platform", action: "normalize" }]);
+	assert.match(plan.sql, /统一 cross-platform 的跨平台换行符校验值/);
+	assert.match(plan.sql, /UPDATE edgechat_schema_migrations/);
 });
 
 test("部署工作流每次发布都在 Worker 之前准备并执行 D1 迁移", () => {

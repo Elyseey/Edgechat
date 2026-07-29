@@ -6,8 +6,20 @@ function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function migrationChecksum(sql) {
-  return createHash("sha256").update(sql).digest("hex");
+function checksum(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function normalizedMigrationSql(sql) {
+  return sql.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+}
+
+function migrationChecksums(sql) {
+  const normalizedSql = normalizedMigrationSql(sql);
+  return {
+    current: checksum(normalizedSql),
+    compatible: new Set([checksum(sql), checksum(normalizedSql.replaceAll("\n", "\r\n"))]),
+  };
 }
 
 function ledgerInsert(migration, checksum) {
@@ -27,15 +39,25 @@ export async function buildD1MigrationPlan({ migrations, appliedMigrations, arti
 
   for (const migration of migrations) {
     const sql = await readSql(migration.file);
-    const checksum = migrationChecksum(sql);
+    const checksums = migrationChecksums(sql);
     const recordedChecksum = appliedMigrations.get(migration.id);
 
     if (recordedChecksum) {
-      if (recordedChecksum !== checksum) {
-        throw new Error(`迁移 ${migration.id} 已执行，但文件校验值发生变化`);
+      if (recordedChecksum === checksums.current) {
+        decisions.push({ id: migration.id, action: "skip" });
+        continue;
       }
-      decisions.push({ id: migration.id, action: "skip" });
-      continue;
+      if (checksums.compatible.has(recordedChecksum)) {
+        chunks.push(`-- 统一 ${migration.id} 的跨平台换行符校验值。`);
+        chunks.push(
+          `UPDATE ${D1_MIGRATION_LEDGER}
+SET checksum = ${sqlString(checksums.current)}
+WHERE migration_id = ${sqlString(migration.id)};`,
+        );
+        decisions.push({ id: migration.id, action: "normalize" });
+        continue;
+      }
+      throw new Error(`迁移 ${migration.id} 已执行，但文件校验值发生变化`);
     }
 
     const presentArtifacts = migration.artifacts.filter((artifact) => artifacts.has(artifact));
@@ -44,7 +66,7 @@ export async function buildD1MigrationPlan({ migrations, appliedMigrations, arti
 
     if (allPresent) {
       chunks.push(`-- 现有数据库已具备 ${migration.id} 的结构，仅登记迁移基线。`);
-      chunks.push(ledgerInsert(migration, checksum));
+      chunks.push(ledgerInsert(migration, checksums.current));
       decisions.push({ id: migration.id, action: "baseline" });
       continue;
     }
@@ -58,7 +80,7 @@ export async function buildD1MigrationPlan({ migrations, appliedMigrations, arti
 
     chunks.push(`-- 执行迁移 ${migration.id}。`);
     chunks.push(sql.trim());
-    chunks.push(ledgerInsert(migration, checksum));
+    chunks.push(ledgerInsert(migration, checksums.current));
     decisions.push({ id: migration.id, action: "apply" });
   }
 
