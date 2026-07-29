@@ -1,4 +1,5 @@
 import { hashPassword } from '../auth.js';
+import { searchAdminMessages } from '../data/admin-message-search.js';
 import { listAdminChannels } from '../data/channels.js';
 import { listAdminDms } from '../data/dm-queries.js';
 import { ensureGeneralChannelMembership } from '../data/general-channel.js';
@@ -9,9 +10,13 @@ import { authorizeRoom } from '../room-access.js';
 import { ApiError } from '../errors.js';
 import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
 
-function escapeSqlLike(value) {
-  // LIKE 的 %、_ 和转义符本身会改变匹配范围，转义后才能按用户输入字面量搜索。
-  return value.replace(/[\\%_]/g, '\\$&');
+function parseOptionalPositiveInteger(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
 export function registerAdminRoutes(app) {
@@ -237,74 +242,38 @@ export function registerAdminRoutes(app) {
 
   app.get('/api/admin/messages/search', async (c) => {
     const keyword = String(c.req.query('keyword') || '').trim();
-    const channelId = Number(c.req.query('channelId') || '');
-    const userId = Number(c.req.query('userId') || '');
+    const channelId = parseOptionalPositiveInteger(c.req.query('channelId'));
+    const userId = parseOptionalPositiveInteger(c.req.query('userId'));
+    const firstUserId = parseOptionalPositiveInteger(c.req.query('firstUserId'));
+    const secondUserId = parseOptionalPositiveInteger(c.req.query('secondUserId'));
     const kind = c.req.query('kind');
     const limit = sanitizeLimit(c.req.query('limit'), 50, 200);
-    const filters = ['m.deleted_at IS NULL', 'c.deleted_at IS NULL'];
-    const binds = [];
 
-    if (keyword) {
-      const escapedKeyword = escapeSqlLike(keyword);
-      filters.push("(m.content LIKE ? ESCAPE '\\' OR m.attachment_name LIKE ? ESCAPE '\\')");
-      binds.push(`%${escapedKeyword}%`, `%${escapedKeyword}%`);
+    if ([channelId, userId, firstUserId, secondUserId].some(Number.isNaN)) {
+      return errorResponse('搜索参数无效');
     }
 
-    if (Number.isFinite(channelId)) {
-      filters.push('c.id = ?');
-      binds.push(channelId);
+    const hasFirstUser = firstUserId !== null;
+    const hasSecondUser = secondUserId !== null;
+    if (hasFirstUser !== hasSecondUser) {
+      return errorResponse('请选择两名用户');
     }
 
-    if (Number.isFinite(userId)) {
-      filters.push('u.id = ?');
-      binds.push(userId);
+    if (hasFirstUser && firstUserId === secondUserId) {
+      return errorResponse('请选择两名不同的用户');
     }
 
-    if (kind === 'public' || kind === 'private' || kind === 'dm') {
-      filters.push('c.kind = ?');
-      binds.push(kind);
-    }
-
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         m.id,
-         m.content,
-         m.attachment_name,
-         m.created_at,
-         c.id AS channel_id,
-         c.name AS channel_name,
-         c.kind AS channel_kind,
-         u.id AS sender_id,
-         u.display_name AS sender_display_name,
-         u.username AS sender_username
-       FROM messages m
-        JOIN channels c ON c.id = m.channel_id
-        JOIN users u ON u.id = m.sender_id
-        WHERE ${filters.join(' AND ')}
-        ORDER BY m.id DESC
-        LIMIT ?`
-    )
-      .bind(...binds, limit)
-      .all();
-
-    return c.json({
-      messages: results.map((row) => ({
-        id: Number(row.id),
-        content: row.content,
-        attachmentName: row.attachment_name,
-        createdAt: row.created_at,
-        room: {
-          id: Number(row.channel_id),
-          name: row.channel_name,
-          kind: row.channel_kind
-        },
-        sender: {
-          id: Number(row.sender_id),
-          username: row.sender_username,
-          displayName: row.sender_display_name
-        }
-      }))
+    const dmUserIds = hasFirstUser ? [firstUserId, secondUserId] : null;
+    const messages = await searchAdminMessages(c.env.DB, {
+      keyword,
+      channelId,
+      userId,
+      kind,
+      dmUserIds,
+      limit
     });
+
+    return c.json({ messages });
   });
 
   app.get('/api/admin/rooms/:kind/:roomId/messages', async (c) => {
