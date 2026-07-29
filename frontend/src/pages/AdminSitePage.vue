@@ -21,8 +21,7 @@ const copiedInviteId = ref(0);
 
 const siteForm = reactive({
   siteName: 'Edgechat',
-  siteIconUrl: '',
-  allowPublicRegister: false
+  siteIconUrl: ''
 });
 const inviteForm = reactive({
   note: ''
@@ -45,7 +44,6 @@ async function loadOverview() {
     dms.value = payload.dms;
     siteForm.siteName = payload.site?.siteName || 'Edgechat';
     siteForm.siteIconUrl = payload.site?.siteIconUrl || '';
-    siteForm.allowPublicRegister = payload.site?.allowPublicRegister || false;
     const invitePayload = await api.listAdminRegisterLinks();
     invites.value = invitePayload.invites || [];
   } catch (currentError) {
@@ -85,7 +83,6 @@ async function saveSiteSettings() {
     const payload = await api.updateAdminSiteSettings(siteForm);
     siteForm.siteName = payload.site.siteName;
     siteForm.siteIconUrl = payload.site.siteIconUrl;
-    siteForm.allowPublicRegister = payload.site.allowPublicRegister || false;
     store.setSite(payload.site);
   } catch (currentError) {
     error.value = currentError.message;
@@ -185,10 +182,6 @@ onMounted(loadOverview);
           <label class="field">
             <span>站点图标 URL</span>
             <input v-model.trim="siteForm.siteIconUrl" placeholder="/files/... 或 https://..." />
-          </label>
-          <label class="field field--checkbox">
-            <input type="checkbox" v-model="siteForm.allowPublicRegister" />
-            <span>允许公开注册（用户可自行注册账号）</span>
           </label>
           <div class="inline-actions">
             <input
