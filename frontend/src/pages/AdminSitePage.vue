@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
 import store from '../store.js';
+import AdminUpdateStatus from '../components/admin/AdminUpdateStatus.vue';
 import UiButton from '../components/ui/Button.vue';
 import UiSurface from '../components/ui/Surface.vue';
 
@@ -173,6 +174,8 @@ onMounted(loadOverview);
       </section>
 
       <section class="admin-grid admin-grid--two">
+        <AdminUpdateStatus />
+
         <UiSurface class="panel">
           <h3 class="panel-title">站点外观</h3>
           <label class="field">
