@@ -12,6 +12,10 @@ import {
 import { listVisibleChannels } from './data/channels.js';
 import { listUserDms } from './data/dm-queries.js';
 import { ensureGeneralChannelMembership } from './data/general-channel.js';
+import {
+  createUserWithRegistrationInvite,
+  getAvailableRegistrationInvite
+} from './data/registration-invites.js';
 import { getSiteSettings } from './data/site-settings.js';
 import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
@@ -63,25 +67,17 @@ app.get('/api/register-links/:token', async (c) => {
   }
 
   const site = await getSiteSettings(c.env.DB);
-  const invite = await c.env.DB.prepare(
-    `SELECT id, note, created_at, consumed_at, deleted_at
-     FROM registration_invites
-     WHERE token = ?
-     LIMIT 1`
-  )
-    .bind(token)
-    .all();
-
-  const row = invite.results[0];
-  if (!row || row.deleted_at || row.consumed_at) {
+  const invite = await getAvailableRegistrationInvite(c.env.DB, token);
+  if (!invite) {
     return errorResponse('注册链接已失效', 404);
   }
 
   return c.json({
     site,
     invite: {
-      note: row.note || '',
-      createdAt: row.created_at
+      note: invite.note,
+      createdAt: invite.createdAt,
+      remainingUses: invite.remainingUses
     }
   });
 });
@@ -103,52 +99,21 @@ app.post('/api/register-links/:token/register', async (c) => {
     return errorResponse('该用户名不可用于邀请注册');
   }
 
-  const inviteQuery = await c.env.DB.prepare(
-    `SELECT id, consumed_at, deleted_at
-     FROM registration_invites
-     WHERE token = ?
-     LIMIT 1`
-  )
-    .bind(token)
-    .all();
-
-  const invite = inviteQuery.results[0];
-  if (!invite || invite.deleted_at || invite.consumed_at) {
+  const invite = await getAvailableRegistrationInvite(c.env.DB, token);
+  if (!invite) {
     return errorResponse('注册链接已失效', 400);
   }
 
   const hashed = await hashPassword(password);
-  const result = await c.env.DB.prepare(
-    `INSERT INTO users (
-       username,
-       display_name,
-       password_hash,
-       password_salt,
-       registration_invite_id
-     ) VALUES (?, ?, ?, ?, ?)`
-  )
-    .bind(username, displayName, hashed.hash, hashed.salt, Number(invite.id))
-    .run()
-    .catch((error) => {
-      if (String(error.message).includes('UNIQUE')) {
-        throw new ApiError('用户名已存在或注册链接已被使用');
-      }
-      throw error;
-    });
+  const userId = await createUserWithRegistrationInvite(c.env.DB, {
+    inviteId: invite.id,
+    username,
+    displayName,
+    passwordHash: hashed.hash,
+    passwordSalt: hashed.salt
+  });
 
-  await ensureGeneralChannelMembership(c.env.DB, result.meta.last_row_id);
-
-  await c.env.DB.prepare(
-    `UPDATE registration_invites
-     SET consumed_by_user_id = ?,
-         consumed_at = CURRENT_TIMESTAMP,
-         deleted_at = CURRENT_TIMESTAMP
-     WHERE id = ?
-       AND consumed_at IS NULL
-       AND deleted_at IS NULL`
-  )
-    .bind(Number(result.meta.last_row_id), Number(invite.id))
-    .run();
+  await ensureGeneralChannelMembership(c.env.DB, userId);
 
   return c.json({ ok: true });
 });

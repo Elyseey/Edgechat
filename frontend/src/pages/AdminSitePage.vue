@@ -25,7 +25,8 @@ const siteForm = reactive({
   siteIconUrl: ''
 });
 const inviteForm = reactive({
-  note: ''
+  note: '',
+  maxUses: 1
 });
 
 const publicGroupCount = computed(
@@ -33,6 +34,9 @@ const publicGroupCount = computed(
 );
 const privateGroupCount = computed(
   () => channels.value.filter((channel) => channel.kind === 'private').length
+);
+const inviteMaxUsesValid = computed(
+  () => Number.isInteger(inviteForm.maxUses) && inviteForm.maxUses >= 1 && inviteForm.maxUses <= 1000
 );
 
 async function loadOverview() {
@@ -103,6 +107,7 @@ async function createInvite() {
     const payload = await api.createAdminRegisterLink(inviteForm);
     invites.value = [payload.invite, ...invites.value];
     inviteForm.note = '';
+    inviteForm.maxUses = 1;
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -218,12 +223,18 @@ onMounted(loadOverview);
 
         <UiSurface class="panel">
           <h3 class="panel-title">注册链接</h3>
-          <label class="field">
-            <span>链接备注</span>
-            <input v-model.trim="inviteForm.note" placeholder="例如：四月新成员入口" />
-          </label>
-          <UiButton block :disabled="inviteSubmitting" @click="createInvite">
-            {{ inviteSubmitting ? '创建中...' : '创建一次性注册链接' }}
+          <div class="invite-form-grid">
+            <label class="field">
+              <span>链接备注</span>
+              <input v-model.trim="inviteForm.note" placeholder="例如：四月新成员入口" />
+            </label>
+            <label class="field">
+              <span>可使用次数</span>
+              <input v-model.number="inviteForm.maxUses" type="number" min="1" max="1000" step="1" />
+            </label>
+          </div>
+          <UiButton block :disabled="inviteSubmitting || !inviteMaxUsesValid" @click="createInvite">
+            {{ inviteSubmitting ? '创建中...' : '创建注册链接' }}
           </UiButton>
 
           <div class="invite-list">
@@ -238,7 +249,9 @@ onMounted(loadOverview);
                 <div>
                   <strong>{{ invite.note || '未命名注册链接' }}</strong>
                   <p>
-                    {{ invite.isAvailable ? '可用，限 1 人注册' : invite.deletedAt ? '已停用' : '已使用' }}
+                    {{ invite.isAvailable
+                      ? `可用，已使用 ${invite.usedCount} / ${invite.maxUses} 次`
+                      : invite.deletedAt ? '已停用' : '次数已用完' }}
                   </p>
                 </div>
                 <div class="inline-actions">
@@ -259,7 +272,8 @@ onMounted(loadOverview);
               <div class="admin-invite-card__meta">
                 <span>创建者：{{ invite.creatorDisplayName }}</span>
                 <span>创建时间：{{ new Date(invite.createdAt).toLocaleString() }}</span>
-                <span v-if="invite.consumerDisplayName">使用者：{{ invite.consumerDisplayName }}</span>
+                <span>剩余次数：{{ invite.remainingUses }}</span>
+                <span v-if="invite.consumerDisplayName">最近使用者：{{ invite.consumerDisplayName }}</span>
               </div>
             </UiSurface>
           </div>
@@ -465,6 +479,12 @@ onMounted(loadOverview);
 
 :deep(.inline-actions) {
   gap: 6px !important;
+}
+
+.invite-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 10px;
 }
 
 .invite-list {

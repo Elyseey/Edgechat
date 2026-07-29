@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS registration_invites (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token TEXT NOT NULL UNIQUE,
   note TEXT NOT NULL DEFAULT '',
+  max_uses INTEGER NOT NULL DEFAULT 1 CHECK (max_uses BETWEEN 1 AND 1000),
+  used_count INTEGER NOT NULL DEFAULT 0 CHECK (used_count >= 0),
   created_by INTEGER,
   consumed_by_user_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -136,6 +138,45 @@ CREATE TABLE IF NOT EXISTS registration_invites (
   FOREIGN KEY (created_by) REFERENCES users(id),
   FOREIGN KEY (consumed_by_user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS registration_invite_uses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invite_id INTEGER NOT NULL,
+  user_id INTEGER,
+  used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (invite_id, user_id),
+  FOREIGN KEY (invite_id) REFERENCES registration_invites(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 校验和计数必须留在数据库事务内，防止并发注册同时消耗最后一次额度。
+CREATE TRIGGER IF NOT EXISTS validate_registration_invite_use
+BEFORE INSERT ON registration_invite_uses
+BEGIN
+  SELECT CASE
+    WHEN NEW.user_id IS NULL THEN RAISE(ABORT, 'REGISTRATION_INVITE_USER_REQUIRED')
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM registration_invites
+      WHERE id = NEW.invite_id
+        AND deleted_at IS NULL
+        AND used_count < max_uses
+    ) THEN RAISE(ABORT, 'REGISTRATION_INVITE_UNAVAILABLE')
+  END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS consume_registration_invite_use
+AFTER INSERT ON registration_invite_uses
+BEGIN
+  UPDATE registration_invites
+  SET used_count = used_count + 1,
+      consumed_by_user_id = NEW.user_id,
+      consumed_at = CASE
+        WHEN used_count + 1 >= max_uses THEN CURRENT_TIMESTAMP
+        ELSE NULL
+      END
+  WHERE id = NEW.invite_id;
+END;
 
 CREATE TABLE IF NOT EXISTS pending_r2_delete (
   object_key TEXT PRIMARY KEY,
@@ -169,6 +210,12 @@ CREATE INDEX IF NOT EXISTS idx_users_username
 
 CREATE INDEX IF NOT EXISTS idx_registration_invites_active
   ON registration_invites(created_at DESC, deleted_at, consumed_at);
+
+CREATE INDEX IF NOT EXISTS idx_registration_invites_usage
+  ON registration_invites(deleted_at, used_count, max_uses, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_registration_invite_uses_invite
+  ON registration_invite_uses(invite_id, used_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_pending_r2_delete_next_retry
   ON pending_r2_delete(next_retry_at, retry_count);

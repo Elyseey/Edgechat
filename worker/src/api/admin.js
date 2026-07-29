@@ -4,6 +4,12 @@ import { listAdminChannels } from '../data/channels.js';
 import { listAdminDms } from '../data/dm-queries.js';
 import { ensureGeneralChannelMembership } from '../data/general-channel.js';
 import { listMessages } from '../data/messages.js';
+import {
+  createRegistrationInvite,
+  listActiveRegistrationInvites,
+  MAX_INVITE_USES,
+  revokeRegistrationInvite
+} from '../data/registration-invites.js';
 import { getSiteSettings, updateSiteSettings } from '../data/site-settings.js';
 import { listAdminUsers } from '../data/users.js';
 import { authorizeRoom } from '../room-access.js';
@@ -56,64 +62,31 @@ export function registerAdminRoutes(app) {
   });
 
   app.get('/api/admin/register-links', async (c) => {
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         ri.id,
-         ri.token,
-         ri.note,
-         ri.created_at,
-         ri.consumed_at,
-         ri.deleted_at,
-         creator.display_name AS creator_display_name,
-         consumer.display_name AS consumer_display_name
-       FROM registration_invites ri
-       LEFT JOIN users creator ON creator.id = ri.created_by
-       LEFT JOIN users consumer ON consumer.id = ri.consumed_by_user_id
-       WHERE ri.deleted_at IS NULL
-         AND ri.consumed_at IS NULL
-       ORDER BY ri.created_at DESC`
-    ).all();
-
-    return c.json({
-      invites: results.map((row) => ({
-        id: Number(row.id),
-        token: row.token,
-        note: row.note || '',
-        createdAt: row.created_at,
-        consumedAt: row.consumed_at || null,
-        deletedAt: row.deleted_at || null,
-        creatorDisplayName: row.creator_display_name || '管理员',
-        consumerDisplayName: row.consumer_display_name || '',
-        isAvailable: !row.deleted_at && !row.consumed_at
-      }))
-    });
+    const invites = await listActiveRegistrationInvites(c.env.DB);
+    return c.json({ invites });
   });
 
   app.post('/api/admin/register-links', async (c) => {
     const session = c.get('session');
     const payload = await parseJsonRequest(c.req.raw);
     const note = String(payload.note || '').trim();
-    const token = randomToken(24);
+    const maxUses = Number(payload.maxUses ?? 1);
 
-    const result = await c.env.DB.prepare(
-      `INSERT INTO registration_invites (token, note, created_by)
-       VALUES (?, ?, ?)`
-    )
-      .bind(token, note, session.userId)
-      .run();
+    if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > MAX_INVITE_USES) {
+      return errorResponse(`可使用次数必须是 1 到 ${MAX_INVITE_USES} 之间的整数`);
+    }
+
+    const token = randomToken(24);
+    const invite = await createRegistrationInvite(c.env.DB, {
+      token,
+      note,
+      maxUses,
+      createdBy: session.userId,
+      creatorDisplayName: session.displayName
+    });
 
     return c.json({
-      invite: {
-        id: Number(result.meta.last_row_id),
-        token,
-        note,
-        createdAt: new Date().toISOString(),
-        consumedAt: null,
-        deletedAt: null,
-        creatorDisplayName: session.displayName,
-        consumerDisplayName: '',
-        isAvailable: true
-      }
+      invite
     });
   });
 
@@ -123,14 +96,7 @@ export function registerAdminRoutes(app) {
       return errorResponse('注册链接不存在', 404);
     }
 
-    await c.env.DB.prepare(
-      `UPDATE registration_invites
-       SET deleted_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND deleted_at IS NULL`
-    )
-      .bind(inviteId)
-      .run();
+    await revokeRegistrationInvite(c.env.DB, inviteId);
 
     return c.json({ ok: true });
   });
