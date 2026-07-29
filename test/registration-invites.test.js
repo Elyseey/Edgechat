@@ -168,6 +168,14 @@ test("数据库与后台界面完整声明可使用次数能力", () => {
 		new URL("../worker/migrations/2026-07-29-registration-invite-usage.sql", import.meta.url),
 		"utf8",
 	);
+	const inviteManager = readFileSync(
+		new URL("../frontend/src/components/admin/RegistrationInviteManager.vue", import.meta.url),
+		"utf8",
+	);
+	const adminUsersPage = readFileSync(
+		new URL("../frontend/src/pages/AdminUsersPage.vue", import.meta.url),
+		"utf8",
+	);
 	const adminSitePage = readFileSync(
 		new URL("../frontend/src/pages/AdminSitePage.vue", import.meta.url),
 		"utf8",
@@ -180,8 +188,12 @@ test("数据库与后台界面完整声明可使用次数能力", () => {
 		assert.match(sql, /CREATE TRIGGER IF NOT EXISTS validate_registration_invite_use/);
 		assert.match(sql, /REGISTRATION_INVITE_UNAVAILABLE/);
 	}
-	assert.match(adminSitePage, /v-model\.number="inviteForm\.maxUses"/);
-	assert.match(adminSitePage, /min="1" max="1000" step="1"/);
-	assert.match(adminSitePage, /已使用 \$\{invite\.usedCount\} \/ \$\{invite\.maxUses\} 次/);
+	assert.match(inviteManager, /v-model\.number="inviteForm\.maxUses"/);
+	assert.match(inviteManager, /min="1" max="1000" step="1"/);
+	assert.match(inviteManager, /已使用 \$\{invite\.usedCount\} \/ \$\{invite\.maxUses\} 次/);
+	assert.match(adminUsersPage, /import RegistrationInviteManager/);
+	assert.match(adminUsersPage, /<RegistrationInviteManager \/>/);
+	assert.doesNotMatch(adminSitePage, /RegistrationInviteManager|注册链接/);
+	assert.doesNotMatch(adminUsersPage, /创建一次性注册链接|限 1 人注册/);
 	assert.match(adminApi, /可使用次数必须是 1 到 \$\{MAX_INVITE_USES\} 之间的整数/);
 });
