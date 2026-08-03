@@ -15,7 +15,7 @@ This project is licensed under `GPL-3.0-or-later`. See [LICENSE](LICENSE) for de
 - Group owner member management, plus admin access to any group or direct message history
 - Real-time messaging, paginated history, message search, and file messages
 - File uploads and avatar management
-- Admin dashboard with user management, message inspection, and site settings pages
+- Admin navigation for the dashboard, user management, registration invites, and site settings, with message inspection available from the dashboard
 - Browser-side update checks in site settings, comparing the current deployment with the source repository
 - Modern Liquid Glass-style interface, adapted for mobile and basic accessibility
 - Scheduled hard deletion for expired messages

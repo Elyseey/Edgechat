@@ -377,7 +377,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .chat-layout {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   background: #efeae2;
   width: 100%;
 }
@@ -385,7 +385,7 @@ onBeforeUnmount(() => {
 .left-sidebar {
   flex-shrink: 0;
   width: 350px;
-  height: 100vh;
+  height: 100%;
   position: relative;
   z-index: 10;
   overflow: hidden;
@@ -562,7 +562,7 @@ onBeforeUnmount(() => {
 .right-sidebar {
   flex-shrink: 0;
   width: 68px;
-  height: 100vh;
+  height: 100%;
   position: relative;
   z-index: 10;
   overflow: hidden;
@@ -954,7 +954,7 @@ onBeforeUnmount(() => {
 .room-management-sidebar {
   width: 340px;
   flex-shrink: 0;
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
   background: #f7f9fa;
   border-left: 1px solid #e9edef;

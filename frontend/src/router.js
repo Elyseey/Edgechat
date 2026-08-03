@@ -4,7 +4,9 @@ import LoginPage from './pages/LoginPage.vue';
 import RegisterPage from './pages/RegisterPage.vue';
 import ChatPage from './pages/ChatPage.vue';
 import AdminPage from './pages/AdminPage.vue';
+import AdminDashboardPage from './pages/AdminDashboardPage.vue';
 import AdminUsersPage from './pages/AdminUsersPage.vue';
+import AdminInvitesPage from './pages/AdminInvitesPage.vue';
 import AdminMessagesPage from './pages/AdminMessagesPage.vue';
 import AdminSitePage from './pages/AdminSitePage.vue';
 import AdminRoomPage from './pages/AdminRoomPage.vue';
@@ -39,25 +41,37 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: { name: 'admin-users' }
+          redirect: { name: 'admin-dashboard' }
+        },
+        {
+          path: 'dashboard',
+          name: 'admin-dashboard',
+          component: AdminDashboardPage,
+          meta: { admin: true, adminTitle: '仪表盘', adminIcon: 'dashboard', transition: 'page' }
         },
         {
           path: 'users',
           name: 'admin-users',
           component: AdminUsersPage,
-          meta: { admin: true, transition: 'page' }
+          meta: { admin: true, adminTitle: '用户管理', adminIcon: 'users', transition: 'page' }
+        },
+        {
+          path: 'invites',
+          name: 'admin-invites',
+          component: AdminInvitesPage,
+          meta: { admin: true, adminTitle: '注册邀请', adminIcon: 'invites', transition: 'page' }
         },
         {
           path: 'messages',
           name: 'admin-messages',
           component: AdminMessagesPage,
-          meta: { admin: true, transition: 'page' }
+          meta: { admin: true, adminTitle: '消息查看', adminIcon: 'messages', transition: 'page' }
         },
         {
           path: 'site',
           name: 'admin-site',
           component: AdminSitePage,
-          meta: { admin: true, transition: 'page' }
+          meta: { admin: true, adminTitle: '网站设置', adminIcon: 'site', transition: 'page' }
         }
       ]
     },

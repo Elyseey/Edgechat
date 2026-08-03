@@ -1,0 +1,5 @@
+.admin-user-creator__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--admin-space-sm);
+}

@@ -1,0 +1,78 @@
+.registration-invite-manager {
+  min-width: 0;
+}
+
+.invite-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: var(--admin-space-xs);
+}
+
+.invite-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.admin-invite-card.ui-surface {
+  display: grid;
+  gap: var(--admin-space-2xs);
+  padding: var(--admin-space-xs) 0;
+  border: 0;
+  border-block-start: 1px solid var(--admin-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.admin-invite-card__head {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--admin-space-xs);
+}
+
+.admin-invite-card__head > div:first-child {
+  min-width: 0;
+}
+
+.admin-invite-card__head strong {
+  color: var(--admin-text);
+  font-size: 0.78rem;
+}
+
+.admin-invite-card__head p {
+  margin: var(--admin-space-3xs) 0 0;
+  color: var(--admin-muted);
+  font-size: 0.7rem;
+}
+
+.admin-invite-card__url {
+  padding: var(--admin-space-2xs) var(--admin-space-xs);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-subtle);
+  color: var(--admin-green-hover);
+  font-family: var(--admin-font-mono);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.admin-invite-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-space-2xs) var(--admin-space-sm);
+  color: var(--admin-muted);
+  font-size: 0.68rem;
+}
+
+@media (max-width: 40rem) {
+  .invite-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-invite-card__head {
+    flex-direction: column;
+  }
+}

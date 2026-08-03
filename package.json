@@ -3,9 +3,9 @@
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",
-		"scripts": {
-			"test": "node --test",
-			"dev:frontend": "vite --config frontend/vite.config.js",
+	"scripts": {
+		"test": "node --test",
+		"dev:frontend": "vite --config frontend/vite.config.js",
 		"build:frontend": "vite build --config frontend/vite.config.js",
 		"build": "npm run build:frontend",
 		"biome:write": "biome check --write .",
@@ -16,6 +16,7 @@
 		"d1:apply": "wrangler d1 execute cfchat-db --file ./worker/schema.sql"
 	},
 	"dependencies": {
+		"@lucide/vue": "^1.28.0",
 		"hono": "^4.8.3",
 		"vue": "^3.5.13",
 		"vue-router": "^4.5.1"

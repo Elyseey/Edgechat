@@ -1,0 +1,54 @@
+.admin-page {
+  min-height: 100dvh;
+  display: flex;
+  background: var(--admin-workspace);
+}
+
+.admin-workspace {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-content {
+  min-width: 0;
+  flex: 1;
+  padding: var(--admin-space-sm);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.admin-content::-webkit-scrollbar,
+.admin-section__body::-webkit-scrollbar,
+.admin-table-wrap::-webkit-scrollbar,
+.invite-list::-webkit-scrollbar,
+.admin-room-shell__stream::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.admin-content::-webkit-scrollbar-thumb,
+.admin-section__body::-webkit-scrollbar-thumb,
+.admin-table-wrap::-webkit-scrollbar-thumb,
+.invite-list::-webkit-scrollbar-thumb,
+.admin-room-shell__stream::-webkit-scrollbar-thumb {
+  border-radius: var(--admin-radius-pill);
+  background: var(--admin-border-strong);
+}
+
+@media (max-width: 56rem) {
+  .admin-page {
+    flex-direction: column;
+  }
+
+  .admin-content {
+    padding: var(--admin-space-xs);
+  }
+}
+
+@media (max-width: 40rem) {
+  .admin-content {
+    padding: var(--admin-space-2xs);
+  }
+}
