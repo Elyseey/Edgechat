@@ -8,6 +8,19 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 
 本项目采用 `GPL-3.0-or-later` 协议，详见 [LICENSE](LICENSE)。
 
+## 界面预览
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>聊天界面</strong></td>
+    <td width="50%" align="center"><strong>管理后台</strong></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/previews/chat-home.png" alt="EdgeChat 聊天界面预览" width="100%" /></td>
+    <td width="50%"><img src="assets/previews/admin-dashboard.png" alt="EdgeChat 管理后台预览" width="100%" /></td>
+  </tr>
+</table>
+
 ## 功能特性
 
 - 管理员创建用户，不开放自助注册
@@ -90,6 +103,10 @@ npm run deploy
 
 ```text
 edgechat/
+├─ assets/
+│  └─ previews/
+│     ├─ chat-home.png
+│     └─ admin-dashboard.png
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ api.js
