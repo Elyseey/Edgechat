@@ -27,6 +27,13 @@ export const adminNavigation = [
     ]
   },
   {
+    id: 'messages',
+    label: '信息查看',
+    description: '检索群组与私信消息',
+    to: '/admin/messages',
+    icon: MessageSquare
+  },
+  {
     id: 'site',
     label: '网站设置',
     description: '维护站点外观与版本状态',

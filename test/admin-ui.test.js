@@ -33,16 +33,17 @@ test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
   assert.match(routerSource, /meta: \{ admin: true/);
 });
 
-test('侧栏只保留四个一级分类并折叠注册邀请与网站设置的二级项', () => {
+test('侧栏保留五个一级分类并折叠注册邀请与网站设置的二级项', () => {
   assert.match(sidebarSource, /Edgecht 管理后台/);
-  for (const id of ['dashboard', 'users', 'invites', 'site']) {
+  for (const id of ['dashboard', 'users', 'invites', 'messages', 'site']) {
     assert.match(navigationSource, new RegExp(`id: '${id}'`));
   }
   assert.match(navigationSource, /label: '创建用户'/);
   assert.match(navigationSource, /label: '注册链接'/);
   assert.match(navigationSource, /label: '站点外观'/);
   assert.match(navigationSource, /label: '版本更新'/);
-  assert.doesNotMatch(navigationSource, /label: '消息查看'/);
+  assert.match(navigationSource, /label: '信息查看'/);
+  assert.match(navigationSource, /to: '\/admin\/messages'/);
   assert.match(sidebarSource, /v-if="!item\.children"/);
   assert.match(sidebarSource, /:aria-expanded="isGroupOpen\(item\)"/);
   assert.match(sidebarSource, /v-show="isGroupOpen\(item\)"/);
