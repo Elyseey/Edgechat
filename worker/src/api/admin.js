@@ -1,144 +1,45 @@
 import { hashPassword } from '../auth.js';
-import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings } from '../db.js';
-import { decryptMessageContent } from '../encryption.js';
-import { ApiError } from '../errors.js';
+import { searchAdminMessages } from '../data/admin-message-search.js';
+import { listAdminChannels } from '../data/channels.js';
+import { listAdminDms } from '../data/dm-queries.js';
+import { ensureGeneralChannelMembership } from '../data/general-channel.js';
+import { listMessages } from '../data/messages.js';
 import {
-  canMutateAdminUser,
-  errorResponse,
-  parseJsonRequest,
-  randomToken,
-  sanitizeLimit
-} from '../utils.js';
+  createRegistrationInvite,
+  listActiveRegistrationInvites,
+  MAX_INVITE_USES,
+  revokeRegistrationInvite
+} from '../data/registration-invites.js';
+import { getSiteSettings, updateSiteSettings } from '../data/site-settings.js';
+import { listAdminUsers } from '../data/users.js';
+import { authorizeRoom } from '../room-access.js';
+import { ApiError } from '../errors.js';
+import { canMutateAdminUser, errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
 
-const ADMIN_MESSAGE_SEARCH_SCAN_LIMIT = 5000;
-const ADMIN_MESSAGE_DECRYPT_BATCH_SIZE = 50;
+function parseOptionalPositiveInteger(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
 
-
-async function getAdminMutationContext(db, targetUserId) {
-  const [targetResult, adminCountResult] = await Promise.all([
-    db
-      .prepare(
-        `SELECT id, is_admin, is_disabled, deleted_at
-         FROM users
-         WHERE id = ?
-         LIMIT 1`
-      )
-      .bind(Number(targetUserId))
-      .all(),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS active_admin_count
-         FROM users
-         WHERE is_admin = 1
-           AND is_disabled = 0
-           AND deleted_at IS NULL`
-      )
-      .all()
-  ]);
-
-  return {
-    target: targetResult.results[0] || null,
-    activeAdminCount: Number(adminCountResult.results[0]?.active_admin_count || 0)
-  };
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
 export function registerAdminRoutes(app) {
   app.get('/api/admin/overview', async (c) => {
-    const [usersResult, channelsResult, dmsResult, site] = await Promise.all([
-      c.env.DB.prepare(
-        `SELECT
-           id,
-           username,
-           display_name,
-           avatar_key,
-           is_disabled,
-           created_at
-         FROM users
-         WHERE deleted_at IS NULL
-         ORDER BY created_at DESC`
-      ).all(),
-      c.env.DB.prepare(
-        `SELECT
-           c.id,
-           c.name,
-           c.description,
-           c.kind,
-           c.created_at,
-           owner.display_name AS owner_display_name,
-           (
-             SELECT COUNT(*)
-             FROM channel_members cm
-             WHERE cm.channel_id = c.id
-           ) AS member_count,
-           (
-             SELECT COUNT(*)
-             FROM messages m
-             WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-           ) AS message_count
-         FROM channels c
-         LEFT JOIN users owner ON owner.id = c.created_by
-         WHERE c.deleted_at IS NULL
-           AND c.kind IN ('public', 'private')
-         ORDER BY c.created_at DESC`
-      ).all(),
-      c.env.DB.prepare(
-        `SELECT
-           c.id,
-           c.dm_key,
-           c.created_at,
-           (
-             SELECT GROUP_CONCAT(display_name, ' / ')
-             FROM (
-               SELECT u.display_name AS display_name
-               FROM channel_members cm
-               JOIN users u ON u.id = cm.user_id
-               WHERE cm.channel_id = c.id
-                 AND u.deleted_at IS NULL
-               ORDER BY u.id ASC
-             )
-           ) AS participants,
-           (
-             SELECT COUNT(*)
-             FROM messages m
-             WHERE m.channel_id = c.id
-               AND m.deleted_at IS NULL
-           ) AS message_count
-         FROM channels c
-         WHERE c.kind = 'dm'
-           AND c.deleted_at IS NULL
-         ORDER BY c.created_at DESC`
-      ).all()
-      ,
+    const [users, channels, dms, site] = await Promise.all([
+      listAdminUsers(c.env.DB),
+      // overview 没有头像字段，显式关闭 projection，避免悄然扩大既有响应 interface。
+      listAdminChannels(c.env.DB, { includeAvatar: false }),
+      listAdminDms(c.env.DB),
       getSiteSettings(c.env.DB)
     ]);
 
     return c.json({
       site,
-      users: usersResult.results.map((row) => ({
-        id: Number(row.id),
-        username: row.username,
-        displayName: row.display_name,
-        avatarUrl: row.avatar_key ? `/files/${encodeURIComponent(row.avatar_key)}` : '',
-        isDisabled: Boolean(Number(row.is_disabled)),
-        createdAt: row.created_at
-      })),
-      channels: channelsResult.results.map((row) => ({
-        id: Number(row.id),
-        name: row.name,
-        description: row.description,
-        kind: row.kind,
-        createdAt: row.created_at,
-        ownerDisplayName: row.owner_display_name || '未知',
-        memberCount: Number(row.member_count),
-        messageCount: Number(row.message_count)
-      })),
-      dms: dmsResult.results.map((row) => ({
-        id: Number(row.id),
-        name: row.dm_key,
-        participants: row.participants,
-        createdAt: row.created_at,
-        messageCount: Number(row.message_count)
-      }))
+      users,
+      channels,
+      dms
     });
   });
 
@@ -161,64 +62,31 @@ export function registerAdminRoutes(app) {
   });
 
   app.get('/api/admin/register-links', async (c) => {
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         ri.id,
-         ri.token,
-         ri.note,
-         ri.created_at,
-         ri.consumed_at,
-         ri.deleted_at,
-         creator.display_name AS creator_display_name,
-         consumer.display_name AS consumer_display_name
-       FROM registration_invites ri
-       LEFT JOIN users creator ON creator.id = ri.created_by
-       LEFT JOIN users consumer ON consumer.id = ri.consumed_by_user_id
-       WHERE ri.deleted_at IS NULL
-         AND ri.consumed_at IS NULL
-       ORDER BY ri.created_at DESC`
-    ).all();
-
-    return c.json({
-      invites: results.map((row) => ({
-        id: Number(row.id),
-        token: row.token,
-        note: row.note || '',
-        createdAt: row.created_at,
-        consumedAt: row.consumed_at || null,
-        deletedAt: row.deleted_at || null,
-        creatorDisplayName: row.creator_display_name || '管理员',
-        consumerDisplayName: row.consumer_display_name || '',
-        isAvailable: !row.deleted_at && !row.consumed_at
-      }))
-    });
+    const invites = await listActiveRegistrationInvites(c.env.DB);
+    return c.json({ invites });
   });
 
   app.post('/api/admin/register-links', async (c) => {
     const session = c.get('session');
     const payload = await parseJsonRequest(c.req.raw);
     const note = String(payload.note || '').trim();
-    const token = randomToken(24);
+    const maxUses = Number(payload.maxUses ?? 1);
 
-    const result = await c.env.DB.prepare(
-      `INSERT INTO registration_invites (token, note, created_by)
-       VALUES (?, ?, ?)`
-    )
-      .bind(token, note, session.userId)
-      .run();
+    if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > MAX_INVITE_USES) {
+      return errorResponse(`可使用次数必须是 1 到 ${MAX_INVITE_USES} 之间的整数`);
+    }
+
+    const token = randomToken(24);
+    const invite = await createRegistrationInvite(c.env.DB, {
+      token,
+      note,
+      maxUses,
+      createdBy: session.userId,
+      creatorDisplayName: session.displayName
+    });
 
     return c.json({
-      invite: {
-        id: Number(result.meta.last_row_id),
-        token,
-        note,
-        createdAt: new Date().toISOString(),
-        consumedAt: null,
-        deletedAt: null,
-        creatorDisplayName: session.displayName,
-        consumerDisplayName: '',
-        isAvailable: true
-      }
+      invite
     });
   });
 
@@ -228,42 +96,14 @@ export function registerAdminRoutes(app) {
       return errorResponse('注册链接不存在', 404);
     }
 
-    await c.env.DB.prepare(
-      `UPDATE registration_invites
-       SET deleted_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND deleted_at IS NULL`
-    )
-      .bind(inviteId)
-      .run();
+    await revokeRegistrationInvite(c.env.DB, inviteId);
 
     return c.json({ ok: true });
   });
 
   app.get('/api/admin/users', async (c) => {
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         id,
-         username,
-         display_name,
-         avatar_key,
-         is_disabled,
-         created_at
-       FROM users
-       WHERE deleted_at IS NULL
-       ORDER BY created_at DESC`
-    ).all();
-
-    return c.json({
-      users: results.map((row) => ({
-        id: Number(row.id),
-        username: row.username,
-        displayName: row.display_name,
-        avatarUrl: row.avatar_key ? `/files/${encodeURIComponent(row.avatar_key)}` : '',
-        isDisabled: Boolean(Number(row.is_disabled)),
-        createdAt: row.created_at
-      }))
-    });
+    const users = await listAdminUsers(c.env.DB);
+    return c.json({ users });
   });
 
   app.post('/api/admin/users', async (c) => {
@@ -294,6 +134,8 @@ export function registerAdminRoutes(app) {
         throw error;
       });
 
+    await ensureGeneralChannelMembership(c.env.DB, result.meta.last_row_id);
+
     return c.json({
       user: {
         id: result.meta.last_row_id,
@@ -305,27 +147,27 @@ export function registerAdminRoutes(app) {
   });
 
   app.patch('/api/admin/users/:userId', async (c) => {
-    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
     const payload = await parseJsonRequest(c.req.raw);
     const isDisabled = payload.isDisabled ? 1 : 0;
-    const { target, activeAdminCount } = await getAdminMutationContext(c.env.DB, userId);
-    if (!target || target.deleted_at) {
-      return errorResponse('用户不存在', 404);
-    }
-
+    const bumpVersion = isDisabled ? 1 : 0;
+    const session = c.get('session');
+    const target = await c.env.DB.prepare(
+      `SELECT is_admin FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`
+    ).bind(userId).first();
+    if (!target) return errorResponse('用户不存在', 404);
+    const adminCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM users
+       WHERE is_admin = 1 AND is_disabled = 0 AND deleted_at IS NULL`
+    ).first();
     const decision = canMutateAdminUser({
       actorUserId: session.userId,
       targetUserId: userId,
-      targetIsAdmin: Boolean(Number(target.is_admin)),
+      targetIsAdmin: Boolean(target.is_admin),
       targetWillBeActive: !isDisabled,
-      activeAdminCount
+      activeAdminCount: Number(adminCount?.count || 0)
     });
-    if (!decision.ok) {
-      return errorResponse(decision.message, 400);
-    }
-
-    const bumpVersion = isDisabled ? 1 : 0;
+    if (!decision.ok) return errorResponse(decision.message, 400);
     await c.env.DB.prepare(
       `UPDATE users
        SET is_disabled = ?,
@@ -366,24 +208,24 @@ export function registerAdminRoutes(app) {
   });
 
   app.delete('/api/admin/users/:userId', async (c) => {
-    const session = c.get('session');
     const userId = Number(c.req.param('userId'));
-    const { target, activeAdminCount } = await getAdminMutationContext(c.env.DB, userId);
-    if (!target || target.deleted_at) {
-      return errorResponse('用户不存在', 404);
-    }
-
+    const session = c.get('session');
+    const target = await c.env.DB.prepare(
+      `SELECT is_admin FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`
+    ).bind(userId).first();
+    if (!target) return errorResponse('用户不存在', 404);
+    const adminCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM users
+       WHERE is_admin = 1 AND is_disabled = 0 AND deleted_at IS NULL`
+    ).first();
     const decision = canMutateAdminUser({
       actorUserId: session.userId,
       targetUserId: userId,
-      targetIsAdmin: Boolean(Number(target.is_admin)),
+      targetIsAdmin: Boolean(target.is_admin),
       targetWillBeActive: false,
-      activeAdminCount
+      activeAdminCount: Number(adminCount?.count || 0)
     });
-    if (!decision.ok) {
-      return errorResponse(decision.message, 400);
-    }
-
+    if (!decision.ok) return errorResponse(decision.message, 400);
     await c.env.DB.prepare(
       `UPDATE users
        SET deleted_at = CURRENT_TIMESTAMP,
@@ -400,115 +242,50 @@ export function registerAdminRoutes(app) {
 
   app.get('/api/admin/messages/search', async (c) => {
     const keyword = String(c.req.query('keyword') || '').trim();
-    const normalizedKeyword = keyword.toLocaleLowerCase();
-    const channelIdQuery = c.req.query('channelId');
-    const userIdQuery = c.req.query('userId');
-    const channelId = channelIdQuery ? Number(channelIdQuery) : null;
-    const userId = userIdQuery ? Number(userIdQuery) : null;
+    const channelId = parseOptionalPositiveInteger(c.req.query('channelId'));
+    const userId = parseOptionalPositiveInteger(c.req.query('userId'));
+    const firstUserId = parseOptionalPositiveInteger(c.req.query('firstUserId'));
+    const secondUserId = parseOptionalPositiveInteger(c.req.query('secondUserId'));
     const kind = c.req.query('kind');
     const limit = sanitizeLimit(c.req.query('limit'), 50, 200);
-    const filters = ['m.deleted_at IS NULL', 'c.deleted_at IS NULL'];
-    const binds = [];
 
-    if (Number.isFinite(channelId)) {
-      filters.push('c.id = ?');
-      binds.push(channelId);
+    if ([channelId, userId, firstUserId, secondUserId].some(Number.isNaN)) {
+      return errorResponse('搜索参数无效');
     }
 
-    if (Number.isFinite(userId)) {
-      filters.push('u.id = ?');
-      binds.push(userId);
+    const hasFirstUser = firstUserId !== null;
+    const hasSecondUser = secondUserId !== null;
+    if (hasFirstUser !== hasSecondUser) {
+      return errorResponse('请选择两名用户');
     }
 
-    if (kind === 'public' || kind === 'private' || kind === 'dm') {
-      filters.push('c.kind = ?');
-      binds.push(kind);
+    if (hasFirstUser && firstUserId === secondUserId) {
+      return errorResponse('请选择两名不同的用户');
     }
 
-    const queryLimit = keyword ? ADMIN_MESSAGE_SEARCH_SCAN_LIMIT + 1 : limit;
-    const { results } = await c.env.DB.prepare(
-      `SELECT
-         m.id,
-         m.content,
-         m.attachment_name,
-         m.created_at,
-         c.id AS channel_id,
-         c.name AS channel_name,
-         c.kind AS channel_kind,
-         u.id AS sender_id,
-         u.display_name AS sender_display_name,
-         u.username AS sender_username
-       FROM messages m
-        JOIN channels c ON c.id = m.channel_id
-        JOIN users u ON u.id = m.sender_id
-        WHERE ${filters.join(' AND ')}
-        ORDER BY m.id DESC
-        LIMIT ?`
-    )
-      .bind(...binds, queryLimit)
-      .all();
-
-    const candidates = keyword ? results.slice(0, ADMIN_MESSAGE_SEARCH_SCAN_LIMIT) : results;
-    const messages = [];
-    let scannedCount = 0;
-
-    for (let offset = 0; offset < candidates.length; offset += ADMIN_MESSAGE_DECRYPT_BATCH_SIZE) {
-      const batch = candidates.slice(offset, offset + ADMIN_MESSAGE_DECRYPT_BATCH_SIZE);
-      const decryptedBatch = await Promise.all(
-        batch.map(async (row) => ({
-          row,
-          content: await decryptMessageContent(c.env, row.content, {
-            channelId: row.channel_id,
-            senderId: row.sender_id
-          })
-        }))
-      );
-
-      for (const { row, content } of decryptedBatch) {
-        scannedCount += 1;
-        const matches =
-          !keyword ||
-          content.toLocaleLowerCase().includes(normalizedKeyword) ||
-          String(row.attachment_name || '').toLocaleLowerCase().includes(normalizedKeyword);
-        if (!matches || messages.length >= limit) {
-          continue;
-        }
-
-        messages.push({
-          id: Number(row.id),
-          content,
-          attachmentName: row.attachment_name,
-          createdAt: row.created_at,
-          room: {
-            id: Number(row.channel_id),
-            name: row.channel_name,
-            kind: row.channel_kind
-          },
-          sender: {
-            id: Number(row.sender_id),
-            username: row.sender_username,
-            displayName: row.sender_display_name
-          }
-        });
-      }
-    }
-
-    return c.json({
-      messages,
-      scannedCount,
-      searchTruncated: Boolean(keyword && results.length > ADMIN_MESSAGE_SEARCH_SCAN_LIMIT)
+    const dmUserIds = hasFirstUser ? [firstUserId, secondUserId] : null;
+    const result = await searchAdminMessages(c.env, {
+      keyword,
+      channelId,
+      userId,
+      kind,
+      dmUserIds,
+      limit
     });
+
+    return c.json(result);
   });
+
   app.get('/api/admin/rooms/:kind/:roomId/messages', async (c) => {
     const kind = c.req.param('kind');
     const roomId = Number(c.req.param('roomId'));
     const before = c.req.query('before');
-    const room = await requireAccessibleRoom(c.env.DB, 0, kind, roomId, true);
-    if (!room) {
+    const access = await authorizeRoom(c.env.DB, { isAdmin: true }, kind, roomId);
+    if (!access.ok) {
       return errorResponse('会话不存在', 404);
     }
 
     const messages = await listMessages(c.env, roomId, before, 50);
-    return c.json({ room, messages });
+    return c.json({ room: access.room, messages });
   });
 }

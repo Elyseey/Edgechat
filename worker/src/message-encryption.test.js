@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { insertMessage } from './db.js';
+import { insertMessage } from './data/messages.js';
 import { isEncryptedMessageContent } from './encryption.js';
 
 const testKeyring = JSON.stringify({

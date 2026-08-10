@@ -1,6 +1,6 @@
 import { computed } from "vue";
 
-export function useActiveRoom({ activeRoom, groupSettingsForm }) {
+export function useActiveRoom({ activeRoom }) {
 	const activeRoomKey = computed(() =>
 		activeRoom.value?.kind && activeRoom.value?.id
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
@@ -23,9 +23,16 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 			return "从左侧会话列表中选择联系人或群组开始聊天。";
 		}
 
-		if (activeRoom.value.kind === "dm") {
-			return `与 @${activeRoom.value.otherUser?.username || activeRoom.value.name} 的私信`;
-		}
+			if (activeRoom.value.kind === "dm") {
+				return `与 @${activeRoom.value.otherUser?.username || activeRoom.value.name} 的私信`;
+			}
+
+			if (activeRoom.value.isGeneral) {
+				const memberCount = activeRoom.value.memberCount
+					? ` · ${activeRoom.value.memberCount} 位成员`
+					: "";
+				return `全员群组${memberCount}`;
+			}
 
 		const visibility =
 			activeRoom.value.kind === "private" ? "私有群组" : "公开群组";
@@ -39,10 +46,11 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 	});
 
 	function applyActiveChannel(channel) {
-		activeRoom.value = {
-			id: channel.id,
-			kind: channel.kind,
-			name: channel.name,
+			activeRoom.value = {
+				id: channel.id,
+				kind: channel.kind,
+				name: channel.name,
+				isGeneral: Boolean(channel.isGeneral),
 			description: channel.description,
 			avatarUrl: channel.avatarUrl || "",
 			avatarKey: channel.avatarKey || "",
@@ -52,7 +60,6 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 			memberCount: Number(channel.memberCount || 0),
 		};
 
-		syncGroupSettingsForm();
 	}
 
 	function selectChannel(channel) {
@@ -66,12 +73,6 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 			name: dm.name,
 			otherUser: dm.otherUser,
 		};
-	}
-
-	function syncGroupSettingsForm() {
-		groupSettingsForm.name = activeRoom.value?.name || "";
-		groupSettingsForm.avatarUrl = activeRoom.value?.avatarUrl || "";
-		groupSettingsForm.avatarKey = activeRoom.value?.avatarKey || "";
 	}
 
 	function roomLabel(room) {
@@ -94,7 +95,6 @@ export function useActiveRoom({ activeRoom, groupSettingsForm }) {
 		applyActiveChannel,
 		selectChannel,
 		selectDm,
-		syncGroupSettingsForm,
-		roomLabel,
+			roomLabel,
 	};
 }

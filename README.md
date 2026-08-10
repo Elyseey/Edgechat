@@ -2,11 +2,24 @@
   <img src="Edgechat.png" alt="Edgechat 标志" />
 </div>
 
-[GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://doc.chsm666.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
+[English README](README.en.md) · [GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://echat.azora.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
 
 EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系、公开群组、私有群组、私信、实时消息、文件上传和管理员后台，目标是在 Cloudflare 生态中以较低运维成本实现一套可直接落地的站内 IM。
 
 本项目采用 `GPL-3.0-or-later` 协议，详见 [LICENSE](LICENSE)。
+
+## 界面预览
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>聊天界面</strong></td>
+    <td width="50%" align="center"><strong>管理后台</strong></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/previews/chat-home.png" alt="EdgeChat 聊天界面预览" width="100%" /></td>
+    <td width="50%"><img src="assets/previews/admin-dashboard.png" alt="EdgeChat 管理后台预览" width="100%" /></td>
+  </tr>
+</table>
 
 ## 功能特性
 
@@ -15,7 +28,8 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 - 群主管理成员，管理员可查看任意群组和私信消息
 - 支持实时消息、历史消息分页、消息检索、文件发送
 - 支持文件上传与头像管理
-- 后台包含用户管理、消息查看、网站设置三个子页面
+- 后台一级导航包含仪表盘、用户管理、注册邀请、信息查看、网站设置，可直接进入消息巡检功能
+- 管理员可在网站设置中由浏览器直接比对源码仓库，检查当前部署是否有更新
 - 现代化 Liquid Glass 风格界面，已适配移动端并支持基础无障碍能力
 - 支持定时硬删除过期消息
 
@@ -35,8 +49,8 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 
 推荐优先使用 GitHub Actions 部署，适合长期维护和生产环境更新。
 
-- 快速开始：<https://doc.chsm666.top/guide/getting-started.html>
-- 详细教程：<https://doc.chsm666.top/guide/actions-deploy.html>
+- 快速开始：<https://echat.azora.top/guide/getting-started.html>
+- 详细教程：<https://echat.azora.top/guide/actions-deploy.html>
 
 仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
 服务端加密要求在 GitHub Repository Secrets 中配置 `EDGECHAT_ENCRYPTION_KEYRING`：
@@ -59,8 +73,8 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
 
 如果你希望本地手动部署，完整步骤、资源准备和注意事项请查看文档站教程：
 
-- 手动部署教程：<https://doc.chsm666.top/guide/getting-started.html>
-- 文档首页：<https://doc.chsm666.top/>
+- 手动部署教程：<https://echat.azora.top/guide/getting-started.html>
+- 文档首页：<https://echat.azora.top/>
 - Docker 本地部署：[DOCKER.md](DOCKER.md)
 
 ## 快速开始
@@ -91,6 +105,8 @@ npm run deploy
 
 在非交互环境下部署时，需要提前设置 `CLOUDFLARE_API_TOKEN`。
 
+后台更新检查会在构建时自动记录当前 GitHub 仓库、分支和提交。为了获得准确结果，手动部署应在 Git 仓库内基于已经推送的干净提交构建；源码仓库需要保持公开，浏览器才能直接调用 GitHub Compare API，整个过程不会创建定时任务。
+
 PowerShell 示例：
 
 ```powershell
@@ -102,6 +118,10 @@ npm run deploy
 
 ```text
 edgechat/
+├─ assets/
+│  └─ previews/
+│     ├─ chat-home.png
+│     └─ admin-dashboard.png
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ api.js
@@ -126,10 +146,11 @@ edgechat/
 ├─ wrangler.toml
 ├─ package.json
 ├─ README.md
+├─ README.en.md
 └─ LICENSE
 ```
 
-更多实现说明可查看 [TECHNICAL.md](TECHNICAL.md) 和文档站：<https://doc.chsm666.top/>
+更多实现说明可查看 [TECHNICAL.md](TECHNICAL.md) 和文档站：<https://echat.azora.top/>
 
 ## 贡献
 

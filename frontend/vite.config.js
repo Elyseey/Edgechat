@@ -2,12 +2,17 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveBuildMetadata } from './build-metadata.js';
 
 const dirname = fileURLToPath(new URL('.', import.meta.url));
+const buildMetadata = resolveBuildMetadata();
 
 export default defineConfig({
   root: resolve(dirname),
   plugins: [vue()],
+  define: {
+    'globalThis.__EDGECHAT_BUILD__': JSON.stringify(buildMetadata)
+  },
   server: {
     port: 5173,
     proxy: {

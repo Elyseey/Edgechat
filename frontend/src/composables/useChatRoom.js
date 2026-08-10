@@ -1,6 +1,7 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import api from "../api.js";
 import { dispatchAuthInvalid } from "../auth-storage.js";
+import { createRealtimeSession } from "../realtime-session.js";
 import { connectRoomSocket } from "../ws.js";
 
 const WS_CLOSE_UNAUTHORIZED = 4401;
@@ -10,88 +11,22 @@ const WS_REASON_FORBIDDEN = "room_forbidden";
 
 export function useChatRoom({
 	activeRoom,
-	channels,
-	users,
 	session,
 	error,
-	refreshSidebar,
-	markConversationRead,
-	applyConversationActivity,
-	canManageActiveRoom,
-	syncGroupSettingsForm,
-	groupSettingsForm,
-	returnToConversationList,
+	onRoomActivity = () => {},
+	onRoomAccessRevoked = () => {},
 }) {
-	const groupMembers = ref([]);
 	const messages = ref([]);
 	const loading = ref(false);
-	const memberLoading = ref(false);
 	const wsStatus = ref("closed");
 	const composerText = ref("");
 	const pendingAttachment = ref(null);
 	const sending = ref(false);
-	const inviteSubmitting = ref(false);
-	const groupSettingsSaving = ref(false);
-	const groupAvatarUploading = ref(false);
-	const showGroupEditor = ref(false);
 	const messagesEl = ref(null);
 	const fileInputEl = ref(null);
-	const groupAvatarInputEl = ref(null);
-	const inviteUserId = ref("");
-	let roomSocket = null;
-	let roomSocketKey = "";
-	let socketConnectToken = 0;
-	const intentionallyClosingSockets = new WeakSet();
-	const deferredCloseSockets = new Set();
-
-	const availableInviteUsers = computed(() => {
-		const memberIds = new Set(
-			groupMembers.value.map((member) => Number(member.id)),
-		);
-		return users.value.filter((user) => !memberIds.has(Number(user.id)));
-	});
-
-	const inviteUserOptions = computed(() =>
-		availableInviteUsers.value.map((user) => ({
-			value: String(user.id),
-			label: user.displayName,
-			description: `@${user.username}`,
-		})),
-	);
-
-	function formatTime(value) {
-		return new Date(value).toLocaleString();
-	}
 
 	function isOwnMessage(message) {
 		return Number(message.sender.id) === Number(session.value?.userId);
-	}
-
-	function previousMessage(index) {
-		return index > 0 ? messages.value[index - 1] : null;
-	}
-
-	function nextMessage(index) {
-		return index < messages.value.length - 1 ? messages.value[index + 1] : null;
-	}
-
-	function isSameSender(a, b) {
-		return a && b && Number(a.sender.id) === Number(b.sender.id);
-	}
-
-	function bubbleRowClass(message, index) {
-		return {
-			"chat-bubble-row--own": isOwnMessage(message),
-			"chat-bubble-row--stacked": isSameSender(previousMessage(index), message),
-		};
-	}
-
-	function bubbleClass(message, index) {
-		return {
-			"chat-bubble--own": isOwnMessage(message),
-			"chat-bubble--continued": isSameSender(previousMessage(index), message),
-			"chat-bubble--tail-hidden": isSameSender(nextMessage(index), message),
-		};
 	}
 
 	function scrollToBottom() {
@@ -108,13 +43,7 @@ export function useChatRoom({
 			return;
 		}
 
-		applyConversationActivity?.({
-			kind: activeRoom.value.kind,
-			roomId: activeRoom.value.id,
-			lastMessageAt: message.createdAt,
-			unreadCount: 0,
-		});
-		markConversationRead?.(activeRoom.value.kind, activeRoom.value.id);
+		onRoomActivity({ room: activeRoom.value, message });
 
 		if (!isOwnMessage(message)) {
 			void api
@@ -122,6 +51,56 @@ export function useChatRoom({
 				.catch(() => {});
 		}
 	}
+
+	function handleRoomAccessRevoked() {
+		const room = activeRoom.value;
+		if (!room) {
+			return;
+		}
+
+		disconnectSocket();
+		messages.value = [];
+		onRoomAccessRevoked(room);
+	}
+
+	function handleSocketClose(event) {
+		const code = Number(event?.code || 0);
+		const reason = String(event?.reason || "");
+		if (code === WS_CLOSE_UNAUTHORIZED || reason === WS_REASON_UNAUTHORIZED) {
+			dispatchAuthInvalid("Your session is no longer valid. Please sign in again.");
+			return;
+		}
+		if (code === WS_CLOSE_FORBIDDEN || reason === WS_REASON_FORBIDDEN) {
+			handleRoomAccessRevoked();
+		}
+	}
+
+	const roomSession = createRealtimeSession({
+		openConnection(params, handlers) {
+			return connectRoomSocket({
+				kind: params.kind,
+				roomId: params.roomId,
+				...handlers,
+			});
+		},
+		onStatus(event) {
+			wsStatus.value = event.status === "reconnecting" ? "connecting" : event.status;
+		},
+		onClose: handleSocketClose,
+		onMessage(payload) {
+			if (payload.type === "message" && payload.message) {
+				if (messages.value.some((item) => item.id === payload.message.id)) {
+					return;
+				}
+				messages.value = [...messages.value, payload.message];
+				applyActiveRoomActivity(payload.message);
+				nextTick().then(scrollToBottom);
+			}
+			if (payload.type === "error") {
+				error.value = payload.error;
+			}
+		},
+	});
 
 	async function loadMessages(before = null, append = false) {
 		if (!activeRoom.value) {
@@ -150,210 +129,29 @@ export function useChatRoom({
 		}
 	}
 
-	async function loadMembers() {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
-			groupMembers.value = [];
-			return;
-		}
-
-		memberLoading.value = true;
-		try {
-			const payload = await api.getChannelMembers(activeRoom.value.id);
-			groupMembers.value = payload.members;
-			activeRoom.value.canManage = payload.room.canManage;
-			activeRoom.value.myRole = payload.room.myRole;
-			activeRoom.value.memberCount = payload.members.length;
-			if (payload.room.name) {
-				activeRoom.value.name = payload.room.name;
-			}
-			activeRoom.value.avatarUrl = payload.room.avatarUrl || "";
-			activeRoom.value.avatarKey = payload.room.avatarKey || "";
-			syncGroupSettingsForm();
-		} catch (currentError) {
-			error.value = currentError.message;
-		} finally {
-			memberLoading.value = false;
-		}
-	}
-
-	function emitAuthInvalid(message) {
-		dispatchAuthInvalid(message);
-	}
-
-	function handleRoomAccessRevoked() {
-		const room = activeRoom.value;
-		if (!room) {
-			return;
-		}
-
-		const roomName = room.name || "this private room";
-		error.value =
-			room.kind === "private"
-				? `You no longer have access to "${roomName}".`
-				: "You no longer have access to this room.";
-
-		disconnectSocket();
-		activeRoom.value = null;
-		messages.value = [];
-		groupMembers.value = [];
-		showGroupEditor.value = false;
-		returnToConversationList();
-		void refreshSidebar();
-	}
-
-	function handleSocketClose(event) {
-		const code = Number(event?.code || 0);
-		const reason = String(event?.reason || "");
-		if (code === WS_CLOSE_UNAUTHORIZED || reason === WS_REASON_UNAUTHORIZED) {
-			emitAuthInvalid("Your session is no longer valid. Please sign in again.");
-			return;
-		}
-
-		if (code === WS_CLOSE_FORBIDDEN || reason === WS_REASON_FORBIDDEN) {
-			handleRoomAccessRevoked();
-		}
-	}
-
-	function markSocketForClose(socket) {
-		if (!socket) {
-			return;
-		}
-
-		intentionallyClosingSockets.add(socket);
-		try {
-			socket.close();
-		} catch {
-			intentionallyClosingSockets.delete(socket);
-		}
-	}
-
-	function flushDeferredSockets(exceptSocket = null) {
-		for (const socket of deferredCloseSockets) {
-			deferredCloseSockets.delete(socket);
-			if (!socket || socket === exceptSocket) {
-				continue;
-			}
-			if (socket === roomSocket) {
-				roomSocket = null;
-				roomSocketKey = "";
-			}
-			markSocketForClose(socket);
-		}
-	}
-
-	function disconnectSocket() {
-		socketConnectToken += 1;
-		flushDeferredSockets();
-		if (roomSocket) {
-			markSocketForClose(roomSocket);
-			roomSocket = null;
-			roomSocketKey = "";
-		}
-		wsStatus.value = "closed";
-	}
-
 	function connectSocket() {
 		if (!activeRoom.value) {
 			return;
 		}
-
-		const nextRoomKey = `${activeRoom.value.kind}:${activeRoom.value.id}`;
-		if (
-			roomSocket &&
-			roomSocketKey === nextRoomKey &&
-			roomSocket.readyState !== WebSocket.CLOSING &&
-			roomSocket.readyState !== WebSocket.CLOSED
-		) {
-			return;
-		}
-
-		const previousSocket = roomSocket;
-		if (previousSocket) {
-			deferredCloseSockets.add(previousSocket);
-		}
-
-		const connectToken = socketConnectToken + 1;
-		socketConnectToken = connectToken;
-		wsStatus.value = "connecting";
-		const socket = connectRoomSocket({
+		const key = `${activeRoom.value.kind}:${activeRoom.value.id}`;
+		roomSession.connect(key, {
 			kind: activeRoom.value.kind,
 			roomId: activeRoom.value.id,
-			onStatus(event) {
-				if (!event?.socket) {
-					return;
-				}
-
-				if (intentionallyClosingSockets.has(event.socket)) {
-					if (event.status === "closed") {
-						intentionallyClosingSockets.delete(event.socket);
-						deferredCloseSockets.delete(event.socket);
-					}
-					return;
-				}
-
-				if (event.socket !== socket || connectToken !== socketConnectToken) {
-					return;
-				}
-
-				const status = event?.status || "closed";
-				if (status === "open") {
-					roomSocket = socket;
-					roomSocketKey = nextRoomKey;
-					wsStatus.value = "open";
-					flushDeferredSockets(socket);
-					return;
-				}
-
-				if (status === "closed") {
-					flushDeferredSockets(socket);
-					if (event.socket === roomSocket) {
-						roomSocket = null;
-						roomSocketKey = "";
-					}
-					wsStatus.value = "closed";
-					handleSocketClose(event);
-					return;
-				}
-
-				if (status === "error") {
-					flushDeferredSockets(socket);
-				}
-
-				wsStatus.value = status;
-			},
-			onMessage(payload, sourceSocket) {
-				if (sourceSocket !== roomSocket || connectToken !== socketConnectToken) {
-					return;
-				}
-
-				if (payload.type === "message" && payload.message) {
-					if (messages.value.some((item) => item.id === payload.message.id)) {
-						return;
-					}
-					messages.value = [...messages.value, payload.message];
-					applyActiveRoomActivity(payload.message);
-					nextTick().then(scrollToBottom);
-				}
-				if (payload.type === "error") {
-					error.value = payload.error;
-				}
-			},
 		});
 	}
 
+	function disconnectSocket() {
+		roomSession.disconnect();
+	}
+
 	async function sendMessage() {
-		const activeRoomKey = activeRoom.value
+		const key = activeRoom.value
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
 			: "";
-		if (
-			!roomSocket ||
-			roomSocket.readyState !== WebSocket.OPEN ||
-			roomSocketKey !== activeRoomKey
-		) {
+		if (!roomSession.isOpenFor(key)) {
 			error.value = "Real-time connection is not ready. Please try again in a moment.";
 			return;
 		}
-
 		if (!composerText.value.trim() && !pendingAttachment.value) {
 			return;
 		}
@@ -361,12 +159,13 @@ export function useChatRoom({
 		sending.value = true;
 		error.value = "";
 		try {
-			roomSocket.send(
+			roomSession.send(
 				JSON.stringify({
 					type: "send",
 					content: composerText.value,
 					attachment: pendingAttachment.value,
 				}),
+				key,
 			);
 			composerText.value = "";
 			pendingAttachment.value = null;
@@ -386,10 +185,6 @@ export function useChatRoom({
 
 	function openFilePicker() {
 		fileInputEl.value?.click();
-	}
-
-	function openGroupAvatarPicker() {
-		groupAvatarInputEl.value?.click();
 	}
 
 	async function uploadAttachment(event) {
@@ -416,202 +211,38 @@ export function useChatRoom({
 		if (loading.value) {
 			return;
 		}
-
 		const firstMessage = messages.value[0];
-		if (!firstMessage) {
-			return;
-		}
-		await loadMessages(firstMessage.id, true);
-	}
-
-	function openGroupEditor() {
-		if (!canManageActiveRoom.value) {
-			return;
-		}
-		syncGroupSettingsForm();
-		showGroupEditor.value = true;
-	}
-
-	function closeGroupEditor() {
-		showGroupEditor.value = false;
-	}
-
-	async function inviteMember() {
-		if (
-			!activeRoom.value ||
-			activeRoom.value.kind === "dm" ||
-			!inviteUserId.value
-		) {
-			return;
-		}
-
-		inviteSubmitting.value = true;
-		error.value = "";
-		try {
-			const payload = await api.inviteChannelMembers(activeRoom.value.id, [
-				Number(inviteUserId.value),
-			]);
-			groupMembers.value = payload.members;
-			activeRoom.value.memberCount = payload.members.length;
-			inviteUserId.value = "";
-			await refreshSidebar();
-		} catch (currentError) {
-			error.value = currentError.message;
-		} finally {
-			inviteSubmitting.value = false;
+		if (firstMessage) {
+			await loadMessages(firstMessage.id, true);
 		}
 	}
 
-	async function removeMember(member) {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
-			return;
-		}
-
-		if (!window.confirm(`Remove ${member.displayName} from this group?`)) {
-			return;
-		}
-
-		try {
-			const payload = await api.removeChannelMember(
-				activeRoom.value.id,
-				member.id,
-			);
-			groupMembers.value = payload.members;
-			activeRoom.value.memberCount = payload.members.length;
-			await refreshSidebar();
-		} catch (currentError) {
-			error.value = currentError.message;
-		}
-	}
-
-	async function deleteGroup() {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
-			return;
-		}
-
-		if (!window.confirm(`Delete group ${activeRoom.value.name}?`)) {
-			return;
-		}
-
-		try {
-			await api.deleteOwnedChannel(activeRoom.value.id);
-			activeRoom.value = null;
-			messages.value = [];
-			groupMembers.value = [];
-			returnToConversationList();
-			await refreshSidebar();
-		} catch (currentError) {
-			error.value = currentError.message;
-		}
-	}
-
-	async function uploadGroupAvatar(event) {
-		const file = event.target.files?.[0];
-		if (!file || !activeRoom.value) {
-			return;
-		}
-
-		groupAvatarUploading.value = true;
-		error.value = "";
-		try {
-			const payload = await api.uploadFile(file);
-			groupSettingsForm.avatarUrl = payload.file.url;
-			groupSettingsForm.avatarKey = payload.file.key;
-		} catch (currentError) {
-			error.value = currentError.message;
-		} finally {
-			groupAvatarUploading.value = false;
-			event.target.value = "";
-		}
-	}
-
-	async function saveGroupSettings() {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
-			return;
-		}
-
-		const name = groupSettingsForm.name.trim();
-		if (!name) {
-			error.value = "Please enter a group name.";
-			return;
-		}
-
-		groupSettingsSaving.value = true;
-		error.value = "";
-		try {
-			const payload = await api.updateChannel(activeRoom.value.id, {
-				name,
-				avatarKey: groupSettingsForm.avatarKey || null,
-			});
-			activeRoom.value.name = payload.channel.name;
-			activeRoom.value.avatarKey = payload.channel.avatarKey || "";
-			activeRoom.value.avatarUrl = payload.channel.avatarUrl || "";
-			groupSettingsForm.name = activeRoom.value.name;
-			groupSettingsForm.avatarKey = activeRoom.value.avatarKey || "";
-			groupSettingsForm.avatarUrl = activeRoom.value.avatarUrl || "";
-
-			const channel = channels.value.find(
-				(item) => item.id === activeRoom.value.id,
-			);
-			if (channel) {
-				channel.name = activeRoom.value.name;
-				channel.avatarKey = activeRoom.value.avatarKey || "";
-				channel.avatarUrl = activeRoom.value.avatarUrl || "";
-			}
-			closeGroupEditor();
-			await refreshSidebar();
-		} catch (currentError) {
-			error.value = currentError.message;
-		} finally {
-			groupSettingsSaving.value = false;
-		}
-	}
-
-	watch(messages, () => {
-		nextTick().then(scrollToBottom);
-	}, { flush: 'post' });
+	watch(
+		messages,
+		() => {
+			nextTick().then(scrollToBottom);
+		},
+		{ flush: "post" },
+	);
 
 	return {
-		groupMembers,
 		messages,
 		loading,
-		memberLoading,
 		wsStatus,
 		composerText,
 		pendingAttachment,
 		sending,
-		inviteSubmitting,
-		groupSettingsSaving,
-		groupAvatarUploading,
-		showGroupEditor,
 		messagesEl,
 		fileInputEl,
-		groupAvatarInputEl,
-		inviteUserId,
-		availableInviteUsers,
-		inviteUserOptions,
-		formatTime,
 		isOwnMessage,
-		bubbleRowClass,
-		bubbleClass,
 		loadMessages,
-		loadMembers,
 		connectSocket,
 		disconnectSocket,
 		sendMessage,
 		handleComposerKeydown,
 		openFilePicker,
-		openGroupAvatarPicker,
 		uploadAttachment,
 		clearAttachment,
 		loadOlder,
-		openGroupEditor,
-		closeGroupEditor,
-		inviteMember,
-		removeMember,
-		deleteGroup,
-		uploadGroupAvatar,
-		saveGroupSettings,
 	};
 }
-

@@ -8,6 +8,7 @@ import './styles-liquid.css';
 import './styles/tokens.css';
 import './styles/layout.css';
 import './styles/ui.css';
+import './styles/admin.css';
 import './styles/chat.css';
 import './styles/chat-messages.css';
 import './styles/chat-attachments.css';

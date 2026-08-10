@@ -5,6 +5,7 @@ compatibility_date = "2026-04-05"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
+ADMIN_USERNAMES = "admin"
 MESSAGE_RETENTION_DAYS = "7"
 SOFT_DELETE_RETENTION_DAYS = "60"
 GC_BATCH_SIZE = "500"
@@ -39,9 +40,17 @@ class_name = "ChannelRoom"
 name = "SCHEDULER"
 class_name = "Scheduler"
 
+[[durable_objects.bindings]]
+name = "USER_INBOX"
+class_name = "UserInbox"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChannelRoom", "Scheduler"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["UserInbox"]
 
 [assets]
 directory = "./frontend/dist"

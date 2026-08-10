@@ -1,4 +1,4 @@
-import { canAccessFile, getUploadedFileMetadata, recordUploadedFile } from '../db.js';
+import { canAccessFile, getUploadedFileMetadata, recordUploadedFile } from '../data/uploaded-files.js';
 import { decryptAttachment, encryptAttachment } from '../encryption.js';
 import { validateSession } from '../session.js';
 import { errorResponse, requestBodyTooLarge } from '../utils.js';

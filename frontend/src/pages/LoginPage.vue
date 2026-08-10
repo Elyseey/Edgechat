@@ -78,15 +78,6 @@ async function submit() {
 
         <p v-if="error" class="error-text">{{ error }}</p>
       </form>
-
-      <button
-        v-if="store.site.allowPublicRegister"
-        class="register-link"
-        type="button"
-        @click="router.push('/register/public')"
-      >
-        没有账号？去注册
-      </button>
     </div>
   </div>
 </template>
@@ -277,21 +268,5 @@ async function submit() {
   color: #d9534f;
   margin: 0;
   text-align: center;
-}
-
-.register-link {
-  margin-top: 32px;
-  border: none;
-  background: none;
-  font-size: 13px;
-  color: #2e82d2;
-  cursor: pointer;
-  transition: color 0.2s;
-  opacity: 0;
-  animation: riseUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) 1.8s forwards;
-}
-
-.register-link:hover {
-  color: #2e82d2;
 }
 </style>
