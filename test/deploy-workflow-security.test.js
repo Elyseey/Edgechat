@@ -42,10 +42,26 @@ test("Cloudflare 生产凭据只注入实际调用 Cloudflare 的步骤", () => 
 		"Prepare D1 migrations",
 		"Apply D1 migrations",
 		"Ensure admin user (optional)",
+		"Prepare Worker encryption secret",
 		"Deploy worker",
+		"Migrate or rotate historical encryption",
 	]) {
 		const step = getStep(name);
 		assert.match(step, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
 		assert.match(step, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
 	}
+});
+
+test("首次部署自动创建密钥，后续部署保留 Cloudflare 中的已有密钥", () => {
+	const prepareStep = getStep("Prepare Worker encryption secret");
+	assert.match(prepareStep, /prepare-worker-encryption-secret\.mjs/);
+	assert.match(
+		prepareStep,
+		/EDGECHAT_ENCRYPTION_KEYRING: \$\{\{ secrets\.EDGECHAT_ENCRYPTION_KEYRING \}\}/,
+	);
+
+	const deployStep = getStep("Deploy worker");
+	assert.match(deployStep, /if \[\[ -f \.tmp\/worker-secrets\.json \]\]/);
+	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml --secrets-file/);
+	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml\n/);
 });

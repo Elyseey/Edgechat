@@ -53,19 +53,15 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 - 详细教程：<https://echat.azora.top/guide/actions-deploy.html>
 
 仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
-服务端加密要求在 GitHub Repository Secrets 中配置 `EDGECHAT_ENCRYPTION_KEYRING`：
+服务端加密密钥由部署流程管理。仓库所有者只需配置 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`：首次部署会生成随机 AES-256 密钥环并作为 `EDGECHAT_ENCRYPTION_KEYRING` Worker Secret 与代码一起上传；后续部署检测到该 Secret 后会原样保留，不会重新生成或覆盖。
+
+如果运维方需要自行备份密钥、迁移历史 R2 附件或执行密钥轮换，也可以在首次部署前可选配置同名 GitHub Repository Secret。格式为：
 
 ```json
 {"activeKeyId":"v1","keys":{"v1":"BASE64_ENCODED_32_BYTE_KEY"}}
 ```
 
-可使用 Node.js 生成密钥：
-
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
-```
-
-密钥不能提交到仓库。轮换时先保留旧 key，添加新 key 并更新 `activeKeyId`；完成部署后，从 Actions 手动运行 `Deploy Worker`，勾选历史加密迁移并在确认框填写 `BACKUP_COMPLETED`。迁移前必须备份 D1 和 R2，迁移报告确认旧 key 数据为零后才能删除旧 key。
+密钥不能提交到仓库。老版本 D1 中的明文消息保持兼容读取，并由 Worker 的定时任务分批、幂等地加密；默认每轮最多处理 20 批、每批 100 条，中断后会继续。R2 覆盖迁移仍需先完成 D1 与 R2 备份，再从 Actions 手动运行 `Deploy Worker` 并填写 `BACKUP_COMPLETED`。
 
 本地开发时复制 `.dev.vars.example` 为 `.dev.vars` 并替换示例密钥。Docker 启动前通过 `EDGECHAT_ENCRYPTION_KEYRING` 环境变量传入同样格式的密钥环。
 
