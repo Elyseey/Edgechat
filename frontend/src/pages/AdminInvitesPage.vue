@@ -4,13 +4,8 @@ import RegistrationInviteManager from '../components/admin/RegistrationInviteMan
 </script>
 
 <template>
-  <div class="admin-section">
-    <header class="admin-section__header">
-      <div class="admin-section__heading">
-        <h2>注册邀请</h2>
-        <p>创建站内账号，或发放带使用次数限制的注册链接。</p>
-      </div>
-    </header>
+  <div class="admin-section admin-invites-page">
+    <p class="admin-invites-page__intro">创建用户或生成注册链接</p>
 
     <div class="admin-section__body">
       <section id="create-user" class="admin-anchor-section">
@@ -22,3 +17,5 @@ import RegistrationInviteManager from '../components/admin/RegistrationInviteMan
     </div>
   </div>
 </template>
+
+<style scoped src="../styles/admin/invites-page.css"></style>

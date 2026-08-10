@@ -13,6 +13,8 @@ const sidebarSource = read('../frontend/src/components/admin/AdminSidebar.vue');
 const dashboardSource = read('../frontend/src/pages/AdminDashboardPage.vue');
 const usersSource = read('../frontend/src/pages/AdminUsersPage.vue');
 const invitesSource = read('../frontend/src/pages/AdminInvitesPage.vue');
+const userCreatorSource = read('../frontend/src/components/admin/AdminUserCreator.vue');
+const inviteManagerSource = read('../frontend/src/components/admin/RegistrationInviteManager.vue');
 const siteSource = read('../frontend/src/pages/AdminSitePage.vue');
 const siteAppearanceSource = read('../frontend/src/components/admin/AdminSiteAppearance.vue');
 const messagesSource = read('../frontend/src/pages/AdminMessagesPage.vue');
@@ -22,6 +24,9 @@ const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
 const legacyTokens = read('../frontend/src/styles/tokens.css');
 const messageSearchStyles = read('../frontend/src/styles/admin/message-search.css');
+const invitesPageStyles = read('../frontend/src/styles/admin/invites-page.css');
+const userCreatorStyles = read('../frontend/src/styles/admin/user-creator.css');
+const inviteManagerStyles = read('../frontend/src/styles/admin/invite-manager.css');
 
 test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
   assert.match(routerSource, /import AdminDashboardPage/);
@@ -56,6 +61,18 @@ test('用户管理只维护用户列表，创建用户和注册链接集中在�
   assert.match(invitesSource, /import RegistrationInviteManager/);
   assert.match(invitesSource, /id="create-user"/);
   assert.match(invitesSource, /id="registration-links"/);
+});
+
+test('注册邀请页限制内容宽度并用独立卡片组织创建工具与链接列表', () => {
+  assert.match(invitesSource, /admin-invites-page/);
+  assert.match(invitesPageStyles, /max-width: 1120px/);
+  assert.match(userCreatorSource, /admin-user-creator__identity-grid/);
+  assert.match(userCreatorStyles, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(inviteManagerSource, /invite-create-panel/);
+  assert.match(inviteManagerSource, /已创建链接/);
+  assert.match(inviteManagerSource, /admin-invite-card__status/);
+  assert.match(inviteManagerStyles, /border: 1px solid var\(--admin-border-strong\)/);
+  assert.doesNotMatch(inviteManagerStyles, /max-height: 320px|border-block-start: 1px solid var\(--admin-border\);\s*border-radius: 0/);
 });
 
 test('网站设置只读取站点配置且不重复展示统计信息', () => {

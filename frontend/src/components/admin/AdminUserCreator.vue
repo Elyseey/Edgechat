@@ -37,21 +37,25 @@ async function submitUser() {
     <p v-if="error" class="error-text">{{ error }}</p>
     <p v-else-if="success" class="success-text" role="status">{{ success }}</p>
     <form class="admin-user-creator__form" @submit.prevent="submitUser">
-      <label class="field">
-        <span>用户名</span>
-        <input v-model.trim="form.username" autocomplete="off" />
-      </label>
-      <label class="field">
-        <span>显示名称</span>
-        <input v-model.trim="form.displayName" autocomplete="off" />
-      </label>
+      <div class="admin-user-creator__identity-grid">
+        <label class="field">
+          <span>用户名</span>
+          <input v-model.trim="form.username" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>显示名称</span>
+          <input v-model.trim="form.displayName" autocomplete="off" />
+        </label>
+      </div>
       <label class="field">
         <span>初始密码</span>
         <input v-model="form.password" type="password" autocomplete="new-password" />
       </label>
-      <UiButton type="submit" block :disabled="submitting || !canSubmit">
-        {{ submitting ? '创建中...' : '创建用户' }}
-      </UiButton>
+      <div class="admin-user-creator__actions">
+        <UiButton type="submit" :disabled="submitting || !canSubmit">
+          {{ submitting ? '创建中...' : '创建用户' }}
+        </UiButton>
+      </div>
     </form>
   </UiSurface>
 </template>

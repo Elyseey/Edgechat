@@ -192,10 +192,12 @@ test("数据库与后台界面完整声明可使用次数能力", () => {
 		assert.match(sql, /CREATE TRIGGER IF NOT EXISTS validate_registration_invite_use/);
 		assert.match(sql, /REGISTRATION_INVITE_UNAVAILABLE/);
 	}
-	assert.match(inviteManager, /v-model\.number="inviteForm\.maxUses"/);
-	assert.match(inviteManager, /min="1" max="1000" step="1"/);
-	assert.match(inviteManager, /已使用 \$\{invite\.usedCount\} \/ \$\{invite\.maxUses\} 次/);
-	assert.match(adminInvitesPage, /import RegistrationInviteManager/);
+		assert.match(inviteManager, /v-model\.number="inviteForm\.maxUses"/);
+		assert.match(inviteManager, /min="1"[\s\S]*max="1000"[\s\S]*step="1"/);
+		assert.match(inviteManager, /已使用 \$\{invite\.usedCount\} \/ \$\{invite\.maxUses\} 次/);
+		assert.match(inviteManager, /已创建链接/);
+		assert.match(inviteManager, /admin-invite-card__status/);
+		assert.match(adminInvitesPage, /import RegistrationInviteManager/);
 	assert.match(adminInvitesPage, /<RegistrationInviteManager \/>/);
 	assert.doesNotMatch(adminSitePage, /RegistrationInviteManager|注册链接/);
 	assert.doesNotMatch(adminUsersPage, /RegistrationInviteManager|注册链接|创建用户/);

@@ -1,4 +1,5 @@
 <script setup>
+import { Ban, Copy, Ellipsis } from '@lucide/vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import api from '../../api.js';
 import UiButton from '../ui/Button.vue';
@@ -13,6 +14,10 @@ const inviteForm = reactive({
   note: '',
   maxUses: 1
 });
+const inviteDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  month: 'short',
+  day: 'numeric'
+});
 
 const inviteMaxUsesValid = computed(
   () => Number.isInteger(inviteForm.maxUses) && inviteForm.maxUses >= 1 && inviteForm.maxUses <= 1000
@@ -20,6 +25,26 @@ const inviteMaxUsesValid = computed(
 
 function inviteLinkUrl(token) {
   return new URL(`/register/${token}`, window.location.origin).toString();
+}
+
+function inviteStatusLabel(invite) {
+  if (invite.isAvailable) {
+    return '可用';
+  }
+  return invite.deletedAt ? '已停用' : '已用完';
+}
+
+function inviteStatusClass(invite) {
+  if (invite.isAvailable) {
+    return 'admin-invite-card__status--available';
+  }
+  return invite.deletedAt
+    ? 'admin-invite-card__status--disabled'
+    : 'admin-invite-card__status--exhausted';
+}
+
+function formatInviteDate(value) {
+  return inviteDateFormatter.format(new Date(value));
 }
 
 async function loadInvites() {
@@ -64,7 +89,8 @@ async function copyInvite(invite) {
   }
 }
 
-async function revokeInvite(invite) {
+async function revokeInvite(invite, event) {
+  event?.currentTarget.closest('details')?.removeAttribute('open');
   if (!window.confirm('确认停用这个注册链接吗？')) {
     return;
   }
@@ -81,24 +107,39 @@ onMounted(loadInvites);
 </script>
 
 <template>
-  <UiSurface class="panel registration-invite-manager">
-    <h3 class="panel-title">注册链接</h3>
+  <section class="registration-invite-manager">
+    <header class="registration-invite-manager__heading">
+      <h3>注册链接</h3>
+    </header>
     <p v-if="error" class="error-text">{{ error }}</p>
-    <p v-if="loading" class="muted">注册链接加载中...</p>
 
-    <div class="invite-form-grid">
-      <label class="field">
-        <span>链接备注</span>
-        <input v-model.trim="inviteForm.note" placeholder="例如：四月新成员入口" />
-      </label>
-      <label class="field">
-        <span>可使用次数</span>
-        <input v-model.number="inviteForm.maxUses" type="number" min="1" max="1000" step="1" />
-      </label>
-    </div>
-    <UiButton block :disabled="inviteSubmitting || !inviteMaxUsesValid" @click="createInvite">
-      {{ inviteSubmitting ? '创建中...' : '创建注册链接' }}
-    </UiButton>
+    <UiSurface class="invite-create-panel">
+      <form class="invite-create-form" @submit.prevent="createInvite">
+        <label class="field invite-create-form__note">
+          <span class="sr-only">链接备注</span>
+          <input v-model.trim="inviteForm.note" placeholder="备注（可选）" />
+        </label>
+        <label class="field invite-create-form__uses">
+          <span class="sr-only">可使用次数</span>
+          <input
+            v-model.number="inviteForm.maxUses"
+            type="number"
+            min="1"
+            max="1000"
+            step="1"
+            aria-label="可使用次数"
+          />
+        </label>
+        <UiButton type="submit" :disabled="inviteSubmitting || !inviteMaxUsesValid">
+          {{ inviteSubmitting ? '创建中...' : '创建' }}
+        </UiButton>
+      </form>
+    </UiSurface>
+
+    <header class="invite-list-heading">
+      <h3>已创建链接 <span>{{ invites.length }}</span></h3>
+    </header>
+    <p v-if="loading" class="muted">注册链接加载中...</p>
 
     <div class="invite-list">
       <div v-if="!loading && !invites.length" class="muted">还没有注册链接。</div>
@@ -109,38 +150,56 @@ onMounted(loadInvites);
         class="admin-invite-card"
       >
         <div class="admin-invite-card__head">
-          <div>
-            <strong>{{ invite.note || '未命名注册链接' }}</strong>
-            <p>
-              {{ invite.isAvailable
-                ? `可用，已使用 ${invite.usedCount} / ${invite.maxUses} 次`
-                : invite.deletedAt ? '已停用' : '次数已用完' }}
-            </p>
-          </div>
-          <div class="inline-actions">
-            <UiButton variant="secondary" size="sm" @click="copyInvite(invite)">
-              {{ copiedInviteId === invite.id ? '已复制' : '复制链接' }}
-            </UiButton>
-            <UiButton
-              v-if="invite.isAvailable"
-              variant="destructive"
-              size="sm"
-              @click="revokeInvite(invite)"
-            >
-              停用
-            </UiButton>
-          </div>
+          <strong>{{ invite.note || '未命名注册链接' }}</strong>
+          <span class="admin-invite-card__status" :class="inviteStatusClass(invite)">
+            {{ inviteStatusLabel(invite) }}
+          </span>
         </div>
         <div class="admin-invite-card__url">{{ inviteLinkUrl(invite.token) }}</div>
-        <div class="admin-invite-card__meta">
-          <span>创建者：{{ invite.creatorDisplayName }}</span>
-          <span>创建时间：{{ new Date(invite.createdAt).toLocaleString() }}</span>
-          <span>剩余次数：{{ invite.remainingUses }}</span>
-          <span v-if="invite.consumerDisplayName">最近使用者：{{ invite.consumerDisplayName }}</span>
-        </div>
+        <p class="admin-invite-card__usage">
+          {{ `已使用 ${invite.usedCount} / ${invite.maxUses} 次` }}
+          <span class="admin-invite-card__remaining">剩余 {{ invite.remainingUses }} 次</span>
+        </p>
+        <p v-if="invite.consumerDisplayName" class="admin-invite-card__consumer">
+          最近使用者：{{ invite.consumerDisplayName }}
+        </p>
+        <footer class="admin-invite-card__footer">
+          <div class="admin-invite-card__provenance">
+            <span>{{ invite.creatorDisplayName }}</span>
+            <span aria-hidden="true">·</span>
+            <time
+              :datetime="invite.createdAt"
+              :title="new Date(invite.createdAt).toLocaleString()"
+            >
+              {{ formatInviteDate(invite.createdAt) }}
+            </time>
+          </div>
+          <div class="admin-invite-card__actions">
+            <UiButton
+              variant="secondary"
+              size="sm"
+              :title="copiedInviteId === invite.id ? '已复制链接' : '复制链接'"
+              @click="copyInvite(invite)"
+            >
+              <Copy :size="15" aria-hidden="true" />
+              {{ copiedInviteId === invite.id ? '已复制' : '复制' }}
+            </UiButton>
+            <details v-if="invite.isAvailable" class="admin-invite-menu">
+              <summary class="admin-invite-menu__trigger" title="更多操作" aria-label="更多操作">
+                <Ellipsis :size="18" aria-hidden="true" />
+              </summary>
+              <div class="admin-invite-menu__popover">
+                <button type="button" @click="revokeInvite(invite, $event)">
+                  <Ban :size="15" aria-hidden="true" />
+                  停用链接
+                </button>
+              </div>
+            </details>
+          </div>
+        </footer>
       </UiSurface>
     </div>
-  </UiSurface>
+  </section>
 </template>
 
 <style scoped src="../../styles/admin/invite-manager.css"></style>
