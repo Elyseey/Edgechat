@@ -37,3 +37,17 @@ test("聊天侧栏跟随全屏根节点且不污染后台根节点", () => {
 
 	assert.doesNotMatch(chatPage, /(?:html|body|#app|\.admin-page)\s*{[^}]*zoom:/s);
 });
+
+test("GitHub 仓库入口位于添加人员左侧并复用相同按钮尺寸", () => {
+	const githubLink = chatPage.indexOf('href="https://github.com/aozorae/Edgechat"');
+	const addConversation = chatPage.indexOf('title="添加人员"');
+	assert.notEqual(githubLink, -1);
+	assert.ok(githubLink < addConversation);
+	assert.match(chatPage, /src="\/github\.svg"/);
+	assert.match(chatPage, /rel="noopener noreferrer"/);
+
+	const headerAction = getStyleRule(chatPage, ".header-action");
+	assert.match(headerAction, /flex:\s*0 0 36px;/);
+	assert.match(headerAction, /width:\s*36px;/);
+	assert.match(headerAction, /height:\s*36px;/);
+});

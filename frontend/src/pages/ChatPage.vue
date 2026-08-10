@@ -203,21 +203,33 @@ onBeforeUnmount(() => {
       <div class="sidebar-inner">
         <div class="sidebar-header">
           <h1 class="brand-title">EdgeChat</h1>
-          <button
-            type="button"
-            class="header-action"
-            title="添加人员"
-            aria-label="添加人员"
-            aria-haspopup="dialog"
-            :aria-expanded="showAddConversation"
-            @click="openAddConversation"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <title>添加人员</title>
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-              <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
-            </svg>
-          </button>
+          <div class="sidebar-header-actions">
+            <a
+              class="header-action"
+              href="https://github.com/aozorae/Edgechat"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="GitHub 仓库"
+              aria-label="打开 EdgeChat GitHub 仓库"
+            >
+              <img src="/github.svg" alt="" width="20" height="20" />
+            </a>
+            <button
+              type="button"
+              class="header-action"
+              title="添加人员"
+              aria-label="添加人员"
+              aria-haspopup="dialog"
+              :aria-expanded="showAddConversation"
+              @click="openAddConversation"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <title>添加人员</title>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="sidebar-divider"></div>
@@ -417,17 +429,26 @@ onBeforeUnmount(() => {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .header-action {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 36px;
   width: 36px;
   height: 36px;
+  padding: 0;
   border: none;
   border-radius: 50%;
   background: transparent;
   color: #54656f;
   cursor: pointer;
+  text-decoration: none;
   transition: background 150ms, color 150ms;
 }
 
@@ -687,6 +708,17 @@ onBeforeUnmount(() => {
   background: #f5f7fa;
   border-color: #c7d0d6;
   color: #111b21;
+}
+
+.header-action:focus-visible {
+  outline: 2px solid #008069;
+  outline-offset: 2px;
+}
+
+.header-action img {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
 
 .chat-header h2 {
