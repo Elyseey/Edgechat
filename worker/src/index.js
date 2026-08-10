@@ -30,6 +30,7 @@ import { Scheduler } from './do/Scheduler.js';
 import { UserInbox } from './do/UserInbox.js';
 import { forwardInboxConnection, forwardRoomConnection } from './do-bridge.js';
 import { runScheduledGc } from './gc.js';
+import { runScheduledMessageEncryptionMigration } from './message-encryption-migration.js';
 import {
   errorResponse,
   parseJsonRequest,
@@ -363,7 +364,10 @@ app.onError((error) => {
 export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(runScheduledGc(env));
+    ctx.waitUntil(Promise.all([
+      runScheduledGc(env),
+      runScheduledMessageEncryptionMigration(env)
+    ]));
   }
 };
 export { ChannelRoom, Scheduler, UserInbox };
