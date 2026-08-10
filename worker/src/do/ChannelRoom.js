@@ -216,8 +216,8 @@ export class ChannelRoom {
         return;
       }
 
-      const { message: saved, packet } = await submitRoomMessage(
-        this.env.DB,
+		const { message: saved, packet } = await submitRoomMessage(
+			this.env,
         currentMeta,
         payload
       );

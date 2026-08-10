@@ -1,9 +1,7 @@
 import { hashPassword } from '../auth.js';
-import { searchAdminMessages } from '../data/admin-message-search.js';
 import { listAdminChannels } from '../data/channels.js';
 import { listAdminDms } from '../data/dm-queries.js';
 import { ensureGeneralChannelMembership } from '../data/general-channel.js';
-import { listMessages } from '../data/messages.js';
 import {
   createRegistrationInvite,
   listActiveRegistrationInvites,
@@ -12,18 +10,8 @@ import {
 } from '../data/registration-invites.js';
 import { getSiteSettings, updateSiteSettings } from '../data/site-settings.js';
 import { listAdminUsers } from '../data/users.js';
-import { authorizeRoom } from '../room-access.js';
 import { ApiError } from '../errors.js';
-import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
-
-function parseOptionalPositiveInteger(value) {
-  if (value === undefined || value === null || value === '') {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
-}
+import { errorResponse, parseJsonRequest, randomToken } from '../utils.js';
 
 export function registerAdminRoutes(app) {
   app.get('/api/admin/overview', async (c) => {
@@ -206,52 +194,4 @@ export function registerAdminRoutes(app) {
     return c.json({ ok: true });
   });
 
-  app.get('/api/admin/messages/search', async (c) => {
-    const keyword = String(c.req.query('keyword') || '').trim();
-    const channelId = parseOptionalPositiveInteger(c.req.query('channelId'));
-    const userId = parseOptionalPositiveInteger(c.req.query('userId'));
-    const firstUserId = parseOptionalPositiveInteger(c.req.query('firstUserId'));
-    const secondUserId = parseOptionalPositiveInteger(c.req.query('secondUserId'));
-    const kind = c.req.query('kind');
-    const limit = sanitizeLimit(c.req.query('limit'), 50, 200);
-
-    if ([channelId, userId, firstUserId, secondUserId].some(Number.isNaN)) {
-      return errorResponse('搜索参数无效');
-    }
-
-    const hasFirstUser = firstUserId !== null;
-    const hasSecondUser = secondUserId !== null;
-    if (hasFirstUser !== hasSecondUser) {
-      return errorResponse('请选择两名用户');
-    }
-
-    if (hasFirstUser && firstUserId === secondUserId) {
-      return errorResponse('请选择两名不同的用户');
-    }
-
-    const dmUserIds = hasFirstUser ? [firstUserId, secondUserId] : null;
-    const messages = await searchAdminMessages(c.env.DB, {
-      keyword,
-      channelId,
-      userId,
-      kind,
-      dmUserIds,
-      limit
-    });
-
-    return c.json({ messages });
-  });
-
-  app.get('/api/admin/rooms/:kind/:roomId/messages', async (c) => {
-    const kind = c.req.param('kind');
-    const roomId = Number(c.req.param('roomId'));
-    const before = c.req.query('before');
-    const access = await authorizeRoom(c.env.DB, { isAdmin: true }, kind, roomId);
-    if (!access.ok) {
-      return errorResponse('会话不存在', 404);
-    }
-
-    const messages = await listMessages(c.env.DB, roomId, before, 50);
-    return c.json({ room: access.room, messages });
-  });
 }

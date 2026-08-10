@@ -55,7 +55,6 @@ const quickLinks = [
   { label: '用户管理', to: '/admin/users', icon: UserCog },
   { label: '创建用户', to: '/admin/invites#create-user', icon: UserPlus },
   { label: '注册链接', to: '/admin/invites#registration-links', icon: Link },
-  { label: '消息查看', to: '/admin/messages', icon: MessageSquare },
   { label: '网站设置', to: '/admin/site#site-appearance', icon: Settings },
   { label: '返回聊天', to: '/', icon: Home }
 ];

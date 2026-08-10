@@ -31,7 +31,16 @@ export function sanitizeLimit(value, fallback = 30, max = 100) {
   return Math.min(parsed, max);
 }
 
-export function pickAttachment(payload) {
+function keyBelongsToOwner(key, ownerUserId) {
+  if (ownerUserId === undefined || ownerUserId === null) {
+    return true;
+  }
+
+  const ownerPrefix = `${Number(ownerUserId)}/`;
+  return Number.isFinite(Number(ownerUserId)) && String(key || '').startsWith(ownerPrefix);
+}
+
+export function pickAttachment(payload, options = {}) {
   if (!payload || typeof payload !== 'object') {
     return null;
   }
@@ -40,12 +49,17 @@ export function pickAttachment(payload) {
     return null;
   }
 
+  const key = String(payload.key);
+  if (!keyBelongsToOwner(key, options.ownerUserId)) {
+    return null;
+  }
+
   return {
-    key: String(payload.key),
+    key,
     name: String(payload.name),
     type: String(payload.type),
     size: Number(payload.size) || 0,
-    url: `/files/${encodeURIComponent(String(payload.key))}`
+    url: `/files/${encodeURIComponent(key)}`
   };
 }
 

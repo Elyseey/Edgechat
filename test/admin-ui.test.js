@@ -7,6 +7,8 @@ function read(relativePath) {
 }
 
 const routerSource = read('../frontend/src/router.js');
+const apiSource = read('../frontend/src/api.js');
+const adminApiSource = read('../worker/src/api/admin.js');
 const mainSource = read('../frontend/src/main.js');
 const navigationSource = read('../frontend/src/admin/navigation.js');
 const sidebarSource = read('../frontend/src/components/admin/AdminSidebar.vue');
@@ -17,14 +19,10 @@ const userCreatorSource = read('../frontend/src/components/admin/AdminUserCreato
 const inviteManagerSource = read('../frontend/src/components/admin/RegistrationInviteManager.vue');
 const siteSource = read('../frontend/src/pages/AdminSitePage.vue');
 const siteAppearanceSource = read('../frontend/src/components/admin/AdminSiteAppearance.vue');
-const messagesSource = read('../frontend/src/pages/AdminMessagesPage.vue');
-const messageSearchSource = read('../frontend/src/components/admin/AdminMessageSearchPanel.vue');
-const conversationListsSource = read('../frontend/src/components/admin/AdminConversationLists.vue');
 const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
 const legacyTokens = read('../frontend/src/styles/tokens.css');
 const dashboardStyles = read('../frontend/src/styles/admin/dashboard.css');
-const messageSearchStyles = read('../frontend/src/styles/admin/message-search.css');
 const invitesPageStyles = read('../frontend/src/styles/admin/invites-page.css');
 const userCreatorStyles = read('../frontend/src/styles/admin/user-creator.css');
 const inviteManagerStyles = read('../frontend/src/styles/admin/invite-manager.css');
@@ -39,17 +37,16 @@ test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
   assert.match(routerSource, /meta: \{ admin: true/);
 });
 
-test('侧栏保留五个一级分类并折叠注册邀请与网站设置的二级项', () => {
+test('侧栏保留四个管理分类并移除消息查看入口', () => {
   assert.match(sidebarSource, /Edgecht 管理后台/);
-  for (const id of ['dashboard', 'users', 'invites', 'messages', 'site']) {
+  for (const id of ['dashboard', 'users', 'invites', 'site']) {
     assert.match(navigationSource, new RegExp(`id: '${id}'`));
   }
   assert.match(navigationSource, /label: '创建用户'/);
   assert.match(navigationSource, /label: '注册链接'/);
   assert.match(navigationSource, /label: '站点外观'/);
   assert.match(navigationSource, /label: '版本更新'/);
-  assert.match(navigationSource, /label: '信息查看'/);
-  assert.match(navigationSource, /to: '\/admin\/messages'/);
+  assert.doesNotMatch(navigationSource, /信息查看|\/admin\/messages/);
   assert.match(sidebarSource, /v-if="!item\.children"/);
   assert.match(sidebarSource, /:aria-expanded="isGroupOpen\(item\)"/);
   assert.match(sidebarSource, /v-show="isGroupOpen\(item\)"/);
@@ -108,17 +105,11 @@ test('仪表盘在中等桌面宽度提前重排且快捷入口文字保持完�
   );
 });
 
-test('后台操作面板保持纵向排列，消息搜索当前项使用黑底白字方块', () => {
-  assert.doesNotMatch(`${usersSource}${invitesSource}${siteSource}${messagesSource}`, /admin-grid--two/);
-  assert.match(messagesSource, /AdminMessageSearchPanel/);
-  assert.match(messagesSource, /AdminConversationLists/);
-  assert.match(conversationListsSource, /class="admin-stack"/);
-  assert.doesNotMatch(conversationListsSource, /admin-grid--two/);
-  assert.match(messageSearchSource, /search-mode-switch__item--active/);
-  assert.match(
-    messageSearchStyles,
-    /button\.search-mode-switch__item--active\s*\{[\s\S]*background: var\(--admin-ink\);[\s\S]*color: var\(--admin-panel\);/
-  );
+test('管理员消息正文查看的页面、客户端调用与服务端接口均已下线', () => {
+  assert.doesNotMatch(routerSource, /AdminMessagesPage|AdminRoomPage|admin-messages|admin-room/);
+  assert.doesNotMatch(apiSource, /adminRoomMessages|searchMessages|\/admin\/messages\/search/);
+  assert.doesNotMatch(adminApiSource, /\/api\/admin\/messages|\/api\/admin\/rooms.*messages/);
+  assert.doesNotMatch(dashboardSource, /消息查看|\/admin\/messages/);
 });
 
 test('后台视觉令牌匹配参考图并按职责拆分样式文件', () => {
@@ -140,9 +131,7 @@ test('后台核心 Vue 文件保持在单一职责的可维护规模', () => {
     ['AdminSidebar', sidebarSource],
     ['AdminDashboardPage', dashboardSource],
     ['AdminUsersPage', usersSource],
-    ['AdminSitePage', siteSource],
-    ['AdminMessagesPage', messagesSource],
-    ['AdminMessageSearchPanel', messageSearchSource]
+    ['AdminSitePage', siteSource]
   ]) {
     assert.ok(source.split('\n').length < 260, `${name} 不应重新膨胀为超大文件`);
   }

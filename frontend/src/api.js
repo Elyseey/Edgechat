@@ -171,6 +171,21 @@ export default {
     url.searchParams.set('token', token || '');
     return url.toString();
   },
+  getFileUrl(keyOrUrl) {
+    const raw = String(keyOrUrl || '');
+    if (!raw) {
+      return '';
+    }
+
+    const url = raw.startsWith('/files/')
+      ? new URL(raw, window.location.origin)
+      : new URL(`/files/${encodeURIComponent(raw)}`, window.location.origin);
+    const token = getStoredToken();
+    if (token) {
+      url.searchParams.set('token', token);
+    }
+    return url.pathname + url.search;
+  },
   adminUsers() {
     return request('/admin/users');
   },
@@ -238,19 +253,6 @@ export default {
   },
   adminDms() {
     return request('/admin/dms');
-  },
-  adminRoomMessages(kind, roomId, before) {
-    const query = before ? `?before=${encodeURIComponent(String(before))}` : '';
-    return request(`/admin/rooms/${kind}/${roomId}/messages${query}`);
-  },
-  searchMessages(params) {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        query.set(key, String(value));
-      }
-    });
-    return request(`/admin/messages/search?${query.toString()}`);
   },
   getRegisterInvite(token) {
     return request(`/register-links/${encodeURIComponent(token)}`);

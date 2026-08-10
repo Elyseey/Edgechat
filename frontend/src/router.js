@@ -7,9 +7,7 @@ import AdminPage from './pages/AdminPage.vue';
 import AdminDashboardPage from './pages/AdminDashboardPage.vue';
 import AdminUsersPage from './pages/AdminUsersPage.vue';
 import AdminInvitesPage from './pages/AdminInvitesPage.vue';
-import AdminMessagesPage from './pages/AdminMessagesPage.vue';
 import AdminSitePage from './pages/AdminSitePage.vue';
-import AdminRoomPage from './pages/AdminRoomPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
 import { addAuthInvalidListener } from './auth-storage.js';
 
@@ -62,24 +60,12 @@ const router = createRouter({
           meta: { admin: true, adminTitle: '注册邀请', adminIcon: 'invites', transition: 'page' }
         },
         {
-          path: 'messages',
-          name: 'admin-messages',
-          component: AdminMessagesPage,
-          meta: { admin: true, adminTitle: '消息查看', adminIcon: 'messages', transition: 'page' }
-        },
-        {
           path: 'site',
           name: 'admin-site',
           component: AdminSitePage,
           meta: { admin: true, adminTitle: '网站设置', adminIcon: 'site', transition: 'page' }
         }
       ]
-    },
-    {
-      path: '/admin/rooms/:kind/:roomId',
-      name: 'admin-room',
-      component: AdminRoomPage,
-      meta: { admin: true, transition: 'page' }
     },
     {
       path: '/settings',

@@ -11,20 +11,20 @@ test("消息提交 module 统一持久化参数与广播 packet", async () => {
 	const calls = [];
 	const message = { id: 11, content: "hello" };
 	const submit = createMessageSubmission({
-		async persistMessage(db, args) {
-			calls.push({ db, args });
+		async persistMessage(env, args) {
+			calls.push({ env, args });
 			return message;
 		},
 	});
-	const db = {};
+	const env = {};
 	const result = await submit(
-		db,
+		env,
 		{ room: { id: 3 }, principal: { userId: 7 } },
 		{ content: "hello", attachment: { key: "a" } },
 	);
 
 	assert.deepEqual(calls, [{
-		db,
+		env,
 		args: { channelId: 3, senderId: 7, content: "hello", attachment: { key: "a" } },
 	}]);
 	assert.equal(result.message, message);

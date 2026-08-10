@@ -25,10 +25,11 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 
 - 管理员创建用户，不开放自助注册
 - 支持公开群组、私有群组与私信会话
-- 群主管理成员，管理员可查看任意群组和私信消息
-- 支持实时消息、历史消息分页、消息检索、文件发送
+- 群主管理成员，管理员后台不提供群组或私信消息正文查看入口
+- 支持实时消息、历史消息分页和文件发送
 - 支持文件上传与头像管理
-- 后台一级导航包含仪表盘、用户管理、注册邀请、信息查看、网站设置，可直接进入消息巡检功能
+- 新写入的消息和新上传的附件使用 AES-256-GCM 服务端加密，历史数据不做批量回填
+- 后台一级导航包含仪表盘、用户管理、注册邀请和网站设置
 - 管理员可在网站设置中由浏览器直接比对源码仓库，检查当前部署是否有更新
 - 现代化 Liquid Glass 风格界面，已适配移动端并支持基础无障碍能力
 - 支持定时硬删除过期消息
@@ -53,6 +54,24 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 - 详细教程：<https://echat.azora.top/guide/actions-deploy.html>
 
 仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
+
+### 隐私与服务端加密
+
+GitHub Actions 会管理服务端加密 Worker Secrets。首次部署时，如果目标 Worker 尚无加密 Secret，工作流会自动生成随机 32 字节 AES 密钥，以独立的版本化 Secret 注入，并记录当前 active key ID；后续普通部署只检查这些 Secret 是否存在，不会重新生成、覆盖或轮换。生产环境已经存在的 `EDGECHAT_ENCRYPTION_KEYRING` JSON 密钥环也会被原样保留并继续兼容。
+
+部署后新写入的消息正文和新上传的附件会自动加密。历史 D1 消息和 R2 附件保持原状，读取时同时兼容历史明文与新密文；项目不会通过 Cron、定时任务或部署脚本循环加密全部历史数据。
+
+需要手动指定密钥时，可创建名为 `EDGECHAT_ENCRYPTION_KEYRING` 的 GitHub Repository Secret，格式如下：
+
+```json
+{"activeKeyId":"v1","keys":{"v1":"BASE64_ENCODED_32_BYTE_KEY"}}
+```
+
+首次部署会直接采用该值。已有 Worker 需要自动增量轮换时，手动运行 `Deploy Worker` 并勾选 `rotate_encryption_key`：工作流只新增一个版本化密钥 Secret，并把 active key ID 切换到新版本，所有旧 Secret 和旧 JSON 密钥环都保持不变。新消息会使用新 active key，旧密文继续使用各自信封中的 key ID 解密。
+
+`apply_encryption_keyring` 是备用的手动覆盖入口。使用它时，Repository Secret 中必须是完整 JSON 密钥环，`keys` 需要保留所有仍被历史密文引用的旧 key ID，再增加新 key 并更新 `activeKeyId`。删除旧 key 会导致对应历史密文永久无法读取。`apply_encryption_keyring` 与 `rotate_encryption_key` 不能在同一次运行中同时启用。
+
+这属于服务端静态加密，不是端到端加密。Worker 会在通过会话权限校验后解密内容，因此 Cloudflare Worker 运行环境和掌握密钥的部署方仍位于信任边界内。作为配套隐私调整，管理员后台的消息搜索与完整会话查看页面及其 API 已移除；管理员仍可看到消息数量等聚合统计。
 
 ### 手动部署
 

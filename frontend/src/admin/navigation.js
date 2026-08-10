@@ -1,4 +1,4 @@
-import { Gauge, MessageSquare, Settings, UserCog, UserPlus } from '@lucide/vue';
+import { Gauge, Settings, UserCog, UserPlus } from '@lucide/vue';
 
 export const adminNavigation = [
   {
@@ -27,13 +27,6 @@ export const adminNavigation = [
     ]
   },
   {
-    id: 'messages',
-    label: '信息查看',
-    description: '检索群组与私信消息',
-    to: '/admin/messages',
-    icon: MessageSquare
-  },
-  {
     id: 'site',
     label: '网站设置',
     description: '维护站点外观与版本状态',
@@ -50,6 +43,5 @@ export const adminRouteIcons = {
   dashboard: Gauge,
   users: UserCog,
   invites: UserPlus,
-  messages: MessageSquare,
   site: Settings
 };

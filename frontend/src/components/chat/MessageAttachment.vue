@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import api from '../../api.js';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
 
 const props = defineProps({
@@ -15,6 +16,7 @@ const imageFailed = ref(false);
 const isImage = computed(() => isPreviewableImageAttachment(props.attachment));
 const displayName = computed(() => props.attachment?.name || '附件');
 const openOriginalLabel = computed(() => `打开原图：${displayName.value}`);
+const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || props.attachment?.url));
 
 function openPreview() {
   if (!isImage.value || imageFailed.value) {
@@ -41,7 +43,7 @@ watch(previewOpen, (open) => {
 });
 
 watch(
-  () => props.attachment?.url,
+  () => props.attachment?.key || props.attachment?.url,
   () => {
     imageFailed.value = false;
   }
@@ -64,7 +66,7 @@ onBeforeUnmount(() => {
       >
         <img
           class="message-attachment__image"
-          :src="attachment.url"
+          :src="attachmentUrl"
           :alt="displayName"
           loading="lazy"
           @error="imageFailed = true"
@@ -72,7 +74,7 @@ onBeforeUnmount(() => {
       </button>
       <a
         v-else
-        :href="attachment.url"
+        :href="attachmentUrl"
         target="_blank"
         rel="noreferrer"
         class="chat-bubble__attachment message-attachment__file"
@@ -95,7 +97,7 @@ onBeforeUnmount(() => {
             <span class="image-preview-overlay__title">{{ displayName }}</span>
             <a
               class="image-preview-overlay__action"
-              :href="attachment.url"
+              :href="attachmentUrl"
               target="_blank"
               rel="noreferrer"
               :aria-label="openOriginalLabel"
@@ -106,14 +108,14 @@ onBeforeUnmount(() => {
               关闭
             </button>
           </div>
-          <img class="image-preview-overlay__image" :src="attachment.url" :alt="displayName" />
+          <img class="image-preview-overlay__image" :src="attachmentUrl" :alt="displayName" />
         </div>
       </Teleport>
     </template>
 
     <a
       v-else
-      :href="attachment.url"
+      :href="attachmentUrl"
       target="_blank"
       rel="noreferrer"
       class="chat-bubble__attachment message-attachment__file"

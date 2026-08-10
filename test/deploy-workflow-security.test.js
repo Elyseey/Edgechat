@@ -39,13 +39,32 @@ test("Cloudflare 生产凭据只注入实际调用 Cloudflare 的步骤", () => 
 	for (const name of [
 		"Ensure Cloudflare resources",
 		"Initialize D1 schema (first creation only)",
-		"Prepare D1 migrations",
-		"Apply D1 migrations",
-		"Ensure admin user (optional)",
-		"Deploy worker",
+			"Prepare D1 migrations",
+			"Apply D1 migrations",
+			"Ensure admin user (optional)",
+			"Prepare Worker encryption secret",
+			"Deploy worker",
 	]) {
 		const step = getStep(name);
 		assert.match(step, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
 		assert.match(step, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
 	}
+});
+
+test("首次部署自动创建密钥，普通部署保留密钥，手动轮换才允许更新", () => {
+	const prepareStep = getStep("Prepare Worker encryption secret");
+	assert.match(prepareStep, /prepare-worker-encryption-secret\.mjs/);
+	assert.match(
+		prepareStep,
+		/EDGECHAT_ENCRYPTION_KEYRING: \$\{\{ secrets\.EDGECHAT_ENCRYPTION_KEYRING \}\}/,
+	);
+	assert.match(prepareStep, /EDGECHAT_APPLY_ENCRYPTION_KEYRING:/);
+	assert.match(prepareStep, /EDGECHAT_ROTATE_ENCRYPTION_KEY:/);
+	assert.match(workflow, /apply_encryption_keyring:/);
+	assert.match(workflow, /rotate_encryption_key:/);
+
+	const deployStep = getStep("Deploy worker");
+	assert.match(deployStep, /if \[\[ -f \.tmp\/worker-secrets\.json \]\]/);
+	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml --secrets-file/);
+	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml/);
 });

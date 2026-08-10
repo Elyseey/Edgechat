@@ -35,6 +35,11 @@ export const D1_MIGRATIONS = [
     artifacts: ["table:message_reads"],
   },
   {
+    id: "2026-07-09-uploaded-files",
+    file: "worker/migrations/2026-07-09-uploaded-files.sql",
+    artifacts: ["table:uploaded_files", "index:idx_uploaded_files_owner"],
+  },
+  {
     id: "2026-07-28-general-channel",
     file: "worker/migrations/2026-07-28-general-channel.sql",
     artifacts: [

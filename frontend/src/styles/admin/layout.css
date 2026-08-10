@@ -22,8 +22,7 @@
 .admin-content::-webkit-scrollbar,
 .admin-section__body::-webkit-scrollbar,
 .admin-table-wrap::-webkit-scrollbar,
-.invite-list::-webkit-scrollbar,
-.admin-room-shell__stream::-webkit-scrollbar {
+.invite-list::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
@@ -31,8 +30,7 @@
 .admin-content::-webkit-scrollbar-thumb,
 .admin-section__body::-webkit-scrollbar-thumb,
 .admin-table-wrap::-webkit-scrollbar-thumb,
-.invite-list::-webkit-scrollbar-thumb,
-.admin-room-shell__stream::-webkit-scrollbar-thumb {
+.invite-list::-webkit-scrollbar-thumb {
   border-radius: var(--admin-radius-pill);
   background: var(--admin-border-strong);
 }

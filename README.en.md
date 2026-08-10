@@ -25,10 +25,11 @@ This project is licensed under `GPL-3.0-or-later`. See [LICENSE](LICENSE) for de
 
 - Admin-created users, with self-registration disabled
 - Public groups, private groups, and direct message conversations
-- Group owner member management, plus admin access to any group or direct message history
-- Real-time messaging, paginated history, message search, and file messages
+- Group owner member management, without an admin entry point for reading group or direct message content
+- Real-time messaging, paginated history, and file messages
 - File uploads and avatar management
-- Admin navigation for the dashboard, user management, registration invites, message inspection, and site settings
+- AES-256-GCM server-side encryption for newly written messages and newly uploaded attachments, without bulk backfilling legacy data
+- Admin navigation for the dashboard, user management, registration invites, and site settings
 - Browser-side update checks in site settings, comparing the current deployment with the source repository
 - Modern Liquid Glass-style interface, adapted for mobile and basic accessibility
 - Scheduled hard deletion for expired messages
@@ -53,6 +54,24 @@ GitHub Actions is recommended for long-term maintenance and production updates.
 - Detailed guide: <https://echat.azora.top/guide/actions-deploy.html>
 
 The repository includes `.github/workflows/deploy-worker.yml`. The workflow runs after pushing to `master` or `main`, or after a manual `workflow_dispatch` trigger.
+
+### Privacy and Server-side Encryption
+
+GitHub Actions manages the server-side encryption Worker Secrets. On the first deployment, if the target Worker has no encryption Secret, the workflow generates a random 32-byte AES key, injects it as an independent versioned Secret, and records the active key ID. Normal later deployments only check that the Secrets exist; they never regenerate, overwrite, or rotate them. Existing `EDGECHAT_ENCRYPTION_KEYRING` JSON keyrings remain supported and are preserved as-is.
+
+Messages written and attachments uploaded after deployment are encrypted automatically. Existing D1 messages and R2 objects are left untouched, while reads remain compatible with both legacy plaintext and new ciphertext. No Cron job, scheduled task, or deployment script loops through all historical data to encrypt it.
+
+To provide a key manually, create a GitHub Repository Secret named `EDGECHAT_ENCRYPTION_KEYRING`:
+
+```json
+{"activeKeyId":"v1","keys":{"v1":"BASE64_ENCODED_32_BYTE_KEY"}}
+```
+
+The first deployment uses this value directly. To rotate an existing Worker automatically and incrementally, manually run `Deploy Worker` with `rotate_encryption_key` enabled. The workflow adds one new versioned key Secret and switches the active key ID, while every old Secret and legacy JSON keyring stays unchanged. New messages use the new active key and old ciphertext continues to resolve its own key ID.
+
+`apply_encryption_keyring` is the backup manual override. When using it, the Repository Secret must contain the complete JSON keyring: retain every old key ID still referenced by ciphertext, add the new key, and update `activeKeyId`. Removing an old key makes the corresponding historical ciphertext permanently unreadable. Do not enable `apply_encryption_keyring` and `rotate_encryption_key` in the same run.
+
+This is server-side encryption at rest, not end-to-end encryption. The Worker decrypts content after session authorization, so the Cloudflare Worker runtime and the operator controlling the key remain inside the trust boundary. As a related privacy change, the admin message search and full-conversation pages and APIs have been removed; aggregate counts remain available.
 
 ### Manual Deployment
 
