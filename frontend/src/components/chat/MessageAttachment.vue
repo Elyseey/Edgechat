@@ -1,6 +1,5 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import api from '../../api.js';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
 
 const props = defineProps({
@@ -65,7 +64,7 @@ onBeforeUnmount(() => {
       >
         <img
           class="message-attachment__image"
-          :src="attachmentUrl"
+          :src="attachment.url"
           :alt="displayName"
           loading="lazy"
           @error="imageFailed = true"
@@ -73,7 +72,7 @@ onBeforeUnmount(() => {
       </button>
       <a
         v-else
-        :href="attachmentUrl"
+        :href="attachment.url"
         target="_blank"
         rel="noreferrer"
         class="chat-bubble__attachment message-attachment__file"
@@ -96,7 +95,7 @@ onBeforeUnmount(() => {
             <span class="image-preview-overlay__title">{{ displayName }}</span>
             <a
               class="image-preview-overlay__action"
-              :href="attachmentUrl"
+              :href="attachment.url"
               target="_blank"
               rel="noreferrer"
               :aria-label="openOriginalLabel"
@@ -107,14 +106,14 @@ onBeforeUnmount(() => {
               关闭
             </button>
           </div>
-          <img class="image-preview-overlay__image" :src="attachmentUrl" :alt="displayName" />
+          <img class="image-preview-overlay__image" :src="attachment.url" :alt="displayName" />
         </div>
       </Teleport>
     </template>
 
     <a
       v-else
-      :href="attachmentUrl"
+      :href="attachment.url"
       target="_blank"
       rel="noreferrer"
       class="chat-bubble__attachment message-attachment__file"

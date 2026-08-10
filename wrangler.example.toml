@@ -13,11 +13,6 @@ GC_MAX_BATCHES_PER_RUN = "20"
 R2_DELETE_MAX_RETRY = "8"
 ALLOWED_FILE_TYPES = "image/,video/,application/pdf,text/"
 MAX_FILE_SIZE = "20971520"
-ENCRYPTION_MIGRATION_BATCH_SIZE = "100"
-ENCRYPTION_MIGRATION_MAX_BATCHES = "20"
-
-[secrets]
-required = ["EDGECHAT_ENCRYPTION_KEYRING"]
 
 [[d1_databases]]
 binding = "DB"

@@ -1,10 +1,6 @@
-import { canAccessFile, getUploadedFileMetadata, recordUploadedFile } from '../data/uploaded-files.js';
-import { decryptAttachment, encryptAttachment } from '../encryption.js';
-import { validateSession } from '../session.js';
-import { errorResponse, requestBodyTooLarge } from '../utils.js';
+import { errorResponse } from '../utils.js';
 
-const FILE_RESPONSE_CACHE_CONTROL = 'private, no-store';
-const UPLOAD_BODY_OVERHEAD_BYTES = 1024 * 1024;
+const FILE_BROWSER_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const BLOCKED_MIME_TYPES = new Set([
   'text/html',
   'application/xhtml+xml',
@@ -39,17 +35,10 @@ function isInlineContentType(contentType) {
 }
 
 function sanitizeFilename(value) {
-  const cleaned = Array.from(
-    String(value || '')
-      .trim()
-      .replaceAll('/', '_')
-      .replaceAll('\\', '_')
-  )
-    .filter((char) => {
-      const code = char.codePointAt(0);
-      return code === undefined || (code >= 0x20 && code !== 0x7f);
-    })
-    .join('');
+  const cleaned = String(value || '')
+    .trim()
+    .replace(/[/\\]/g, '_')
+    .replace(/[\u0000-\u001F\u007F]/g, '');
   return cleaned.slice(0, 180) || 'file';
 }
 
@@ -87,10 +76,6 @@ function validateUpload(env, file) {
 export function registerUploadRoutes(app) {
   app.post('/api/upload', async (c) => {
     const session = c.get('session');
-    const maxFileSize = Number(c.env.MAX_FILE_SIZE || 20971520);
-    if (requestBodyTooLarge(c.req.raw, maxFileSize + UPLOAD_BODY_OVERHEAD_BYTES)) {
-      return errorResponse(`文件大小不能超过 ${Math.round(maxFileSize / 1024 / 1024)}MB`, 413);
-    }
     const formData = await c.req.formData();
     const file = formData.get('file');
     if (!(file instanceof File)) {
@@ -105,34 +90,15 @@ export function registerUploadRoutes(app) {
 
     const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
     const key = `${session.userId}/${Date.now()}-${crypto.randomUUID()}${extension}`;
-    const encryptedFile = await encryptAttachment(c.env, await file.arrayBuffer(), key);
-    await c.env.FILES.put(key, encryptedFile, {
+    await c.env.FILES.put(key, await file.arrayBuffer(), {
       httpMetadata: {
         contentType: normalizeContentType(file.type) || 'application/octet-stream',
-        cacheControl: FILE_RESPONSE_CACHE_CONTROL
+        cacheControl: FILE_BROWSER_CACHE_CONTROL
       },
       customMetadata: {
-        filename: sanitizeFilename(file.name),
-        edgechatEncryption: 'v1'
+        filename: sanitizeFilename(file.name)
       }
     });
-
-    try {
-      await recordUploadedFile(c.env.DB, {
-        key,
-        ownerUserId: session.userId,
-        filename: sanitizeFilename(file.name),
-        contentType: normalizeContentType(file.type) || 'application/octet-stream',
-        size: file.size
-      });
-    } catch (error) {
-      try {
-        await c.env.FILES.delete(key);
-      } catch (deleteError) {
-        console.warn('Failed to delete orphaned upload after metadata error', deleteError);
-      }
-      throw error;
-    }
 
     return c.json({
       file: {
@@ -147,38 +113,15 @@ export function registerUploadRoutes(app) {
 
   app.get('/files/:key{.+}', async (c) => {
     const key = decodeURIComponent(c.req.param('key'));
-    const token = c.req.header('authorization')?.startsWith('Bearer ')
-      ? c.req.header('authorization').slice('Bearer '.length).trim()
-      : new URL(c.req.url).searchParams.get('token') || '';
-    const auth = token ? await validateSession(c.env, token) : null;
-    const canRead = await canAccessFile(
-      c.env.DB,
-      key,
-      auth?.ok ? auth.session.userId : null,
-      auth?.ok ? auth.session.isAdmin : false
-    );
-    if (!canRead) {
-      return new Response('Forbidden', { status: 403 });
-    }
-    const [object, fileMetadata] = await Promise.all([
-      c.env.FILES.get(key),
-      getUploadedFileMetadata(c.env.DB, key)
-    ]);
+    const object = await c.env.FILES.get(key);
     if (!object) {
       return new Response('Not Found', { status: 404 });
     }
 
-    let decrypted;
-    try {
-      decrypted = await decryptAttachment(c.env, await object.arrayBuffer(), key);
-    } catch (error) {
-      console.error('Failed to decrypt attachment', { key, error });
-      throw error;
-    }
-
     const headers = new Headers();
     object.writeHttpMetadata(headers);
-    headers.set('cache-control', FILE_RESPONSE_CACHE_CONTROL);
+    headers.set('etag', object.httpEtag);
+    headers.set('cache-control', headers.get('cache-control') || FILE_BROWSER_CACHE_CONTROL);
     if (object.uploaded) {
       headers.set('last-modified', object.uploaded.toUTCString());
     }
@@ -190,18 +133,21 @@ export function registerUploadRoutes(app) {
       "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
     );
 
-    const contentType =
-      normalizeContentType(fileMetadata?.contentType) ||
-      normalizeContentType(headers.get('content-type')) ||
-      'application/octet-stream';
-    headers.set('content-type', contentType);
+    const contentType = normalizeContentType(headers.get('content-type'));
     const inlineAllowed = isInlineContentType(contentType);
     const dispositionKind =
       inlineAllowed && !contentType.startsWith('text/') ? 'inline' : 'attachment';
-    const filename =
-      fileMetadata?.filename || object.customMetadata?.filename || key.split('/').pop() || 'file';
+    const filename = object.customMetadata?.filename || key.split('/').pop() || 'file';
     headers.set('content-disposition', contentDispositionValue(dispositionKind, filename));
 
-    return new Response(decrypted.bytes, { headers });
+    const ifNoneMatch = c.req.header('if-none-match');
+    if (ifNoneMatch && ifNoneMatch === object.httpEtag) {
+      return new Response(null, {
+        status: 304,
+        headers
+      });
+    }
+
+    return new Response(object.body, { headers });
   });
 }

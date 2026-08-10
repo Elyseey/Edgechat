@@ -59,7 +59,7 @@ test('两名用户搜索使用排序后的私信键且只查询私信频道', as
     }
   ]);
 
-  const result = await searchAdminMessages({ DB: db }, {
+  const messages = await searchAdminMessages(db, {
     dmUserIds: [9, 2],
     limit: 80
   });
@@ -67,7 +67,7 @@ test('两名用户搜索使用排序后的私信键且只查询私信频道', as
   assert.match(capture.sql, /c\.kind = 'dm'/);
   assert.match(capture.sql, /c\.dm_key = \?/);
   assert.deepEqual(capture.binds, ['2:9', 80]);
-  assert.deepEqual(result.messages[0], {
+  assert.deepEqual(messages[0], {
     id: 7,
     content: 'hello',
     attachmentName: null,
@@ -95,9 +95,9 @@ test('两人私信搜索要求两个不同的有效用户', async () => {
   assert.equal(duplicateDb.capture.prepareCount, 0);
 });
 
-test('关键词搜索在 Worker 内解密匹配并保留结构化筛选', async () => {
+test('普通筛选保留关键词转义、频道、发送者与类型条件', async () => {
   const { db, capture } = createSearchDb([]);
-  await searchAdminMessages({ DB: db }, {
+  await searchAdminMessages(db, {
     keyword: '50%_off\\now',
     channelId: 4,
     userId: 6,
@@ -105,8 +105,9 @@ test('关键词搜索在 Worker 内解密匹配并保留结构化筛选', async 
     limit: 25
   });
 
+  assert.match(capture.sql, /m\.content LIKE \? ESCAPE '\\'/);
   assert.match(capture.sql, /c\.id = \?/);
   assert.match(capture.sql, /u\.id = \?/);
   assert.match(capture.sql, /c\.kind = \?/);
-  assert.deepEqual(capture.binds, [4, 6, 'private', 5001]);
+  assert.deepEqual(capture.binds, ['%50\\%\\_off\\\\now%', '%50\\%\\_off\\\\now%', 4, 6, 'private', 25]);
 });

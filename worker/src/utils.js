@@ -31,16 +31,7 @@ export function sanitizeLimit(value, fallback = 30, max = 100) {
   return Math.min(parsed, max);
 }
 
-function keyBelongsToOwner(key, ownerUserId) {
-  if (ownerUserId === undefined || ownerUserId === null) {
-    return true;
-  }
-
-  const ownerPrefix = `${Number(ownerUserId)}/`;
-  return Number.isFinite(Number(ownerUserId)) && String(key || '').startsWith(ownerPrefix);
-}
-
-export function pickAttachment(payload, options = {}) {
+export function pickAttachment(payload) {
   if (!payload || typeof payload !== 'object') {
     return null;
   }
@@ -49,17 +40,12 @@ export function pickAttachment(payload, options = {}) {
     return null;
   }
 
-  const key = String(payload.key);
-  if (!keyBelongsToOwner(key, options.ownerUserId)) {
-    return null;
-  }
-
   return {
-    key,
+    key: String(payload.key),
     name: String(payload.name),
     type: String(payload.type),
     size: Number(payload.size) || 0,
-    url: `/files/${encodeURIComponent(key)}`
+    url: `/files/${encodeURIComponent(String(payload.key))}`
   };
 }
 
@@ -81,26 +67,4 @@ export function randomToken(byteLength = 24) {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-export function canMutateAdminUser({
-  actorUserId,
-  targetUserId,
-  targetIsAdmin,
-  targetWillBeActive,
-  activeAdminCount
-}) {
-  if (targetWillBeActive) {
-    return { ok: true };
-  }
-
-  if (Number(actorUserId) === Number(targetUserId)) {
-    return { ok: false, message: '不能禁用或删除当前管理员账号' };
-  }
-
-  if (targetIsAdmin && Number(activeAdminCount || 0) <= 1) {
-    return { ok: false, message: '不能禁用或删除最后一个管理员账号' };
-  }
-
-  return { ok: true };
 }

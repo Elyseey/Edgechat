@@ -185,7 +185,7 @@ test("消息查询保持倒序 SQL、绑定顺序与升序 projection", async ()
 			sender_display_name: "Alice",
 		},
 	]);
-	const messages = await listMessages({ DB: db }, "3", "9", "20");
+	const messages = await listMessages(db, "3", "9", "20");
 	assert.deepEqual(capture.binds, [3, 9, 20]);
 	assert.match(capture.sql, /ORDER BY m\.id DESC LIMIT \?/);
 	assert.deepEqual(messages.map((message) => message.id), [4, 5]);

@@ -30,7 +30,6 @@ import { Scheduler } from './do/Scheduler.js';
 import { UserInbox } from './do/UserInbox.js';
 import { forwardInboxConnection, forwardRoomConnection } from './do-bridge.js';
 import { runScheduledGc } from './gc.js';
-import { runScheduledMessageEncryptionMigration } from './message-encryption-migration.js';
 import {
   errorResponse,
   parseJsonRequest,
@@ -38,33 +37,9 @@ import {
 } from './utils.js';
 
 const app = new Hono();
-const LOGIN_RATE_LIMIT_MAX = 5;
-const LOGIN_RATE_LIMIT_TTL_SECONDS = 15 * 60;
-
-function loginRateLimitKey(c, username) {
-  const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
-  return `login-rate:${encodeURIComponent(ip)}:${encodeURIComponent(String(username || '').trim().toLowerCase())}`;
-}
-
-async function getLoginFailureCount(c, username) {
-  const count = Number(await c.env.SESSIONS.get(loginRateLimitKey(c, username)) || 0);
-  return Number.isFinite(count) ? count : 0;
-}
-
-async function recordLoginFailure(c, username) {
-  const count = (await getLoginFailureCount(c, username)) + 1;
-  await c.env.SESSIONS.put(loginRateLimitKey(c, username), String(count), {
-    expirationTtl: LOGIN_RATE_LIMIT_TTL_SECONDS
-  });
-}
-
-async function clearLoginFailures(c, username) {
-  await c.env.SESSIONS.delete(loginRateLimitKey(c, username));
-}
 
 app.use('/api/*', async (c, next) => {
-  const contentType = c.req.header('content-type') || '';
-  if (contentType.includes('application/json') && requestBodyTooLarge(c.req.raw)) {
+  if (requestBodyTooLarge(c.req.raw)) {
     // 提前拒绝超大请求体，避免 Worker 在 JSON 解析前消耗过多内存。
     return errorResponse('请求体过大', 413);
   }
@@ -151,23 +126,16 @@ app.post('/api/auth/login', async (c) => {
     return errorResponse('请输入用户名和密码');
   }
 
-  if ((await getLoginFailureCount(c, username)) >= LOGIN_RATE_LIMIT_MAX) {
-    return errorResponse('登录失败次数过多，请稍后再试', 429);
-  }
-
   const user = await getUserByUsername(c.env.DB, username);
   if (!user || Number(user.is_disabled)) {
-    await recordLoginFailure(c, username);
     return errorResponse('账号或密码错误', 401);
   }
 
   const valid = await verifyPassword(password, user.password_hash, user.password_salt);
   if (!valid) {
-    await recordLoginFailure(c, username);
     return errorResponse('账号或密码错误', 401);
   }
 
-  await clearLoginFailures(c, username);
   const session = await createSession(c.env, user);
   return c.json({
     token: session.token,
@@ -364,10 +332,7 @@ app.onError((error) => {
 export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(Promise.all([
-      runScheduledGc(env),
-      runScheduledMessageEncryptionMigration(env)
-    ]));
+    ctx.waitUntil(runScheduledGc(env));
   }
 };
 export { ChannelRoom, Scheduler, UserInbox };

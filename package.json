@@ -11,7 +11,6 @@
 		"biome:write": "biome check --write .",
 		"biome:check": "biome check .",
 		"biome:ci": "biome ci .",
-		"migrate:encryption": "node .github/scripts/migrate-server-encryption.mjs",
 		"check": "npm run biome:ci && npm run build",
 		"deploy": "npm run build && wrangler deploy",
 		"d1:apply": "wrangler d1 execute cfchat-db --file ./worker/schema.sql"
