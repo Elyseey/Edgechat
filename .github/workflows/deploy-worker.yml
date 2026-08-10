@@ -5,6 +5,17 @@ on:
       - master
       - main
   workflow_dispatch:
+    inputs:
+      run_encryption_migration:
+        description: Encrypt or rotate all historical message and attachment data
+        required: false
+        default: false
+        type: boolean
+      backup_confirmation:
+        description: Type BACKUP_COMPLETED after backing up D1 and R2
+        required: false
+        default: ''
+        type: string
 concurrency:
   group: deploy-worker-${{ github.ref }}
   cancel-in-progress: true
@@ -46,6 +57,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file worker/schema.sql --config wrangler.ci.toml
+      - name: Ensure encryption migration schema
+        run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file worker/migrations/2026-08-10-server-encryption.sql --config wrangler.ci.toml
       - name: Generate admin bootstrap SQL (optional)
         env:
           EDGECHAT_ADMIN_USERNAME: ${{ secrets.EDGECHAT_ADMIN_USERNAME || secrets.CFCHAT_ADMIN_USERNAME }}
@@ -61,8 +74,30 @@ jobs:
       - name: Ensure admin user (optional)
         if: hashFiles('.tmp/edgechat-admin-upsert.sql') != ''
         run: npx wrangler d1 execute ${{ steps.ensure_resources.outputs.d1_database_name }} --remote --file .tmp/edgechat-admin-upsert.sql --config wrangler.ci.toml
+      - name: Prepare Worker secrets
+        env:
+          EDGECHAT_ENCRYPTION_KEYRING: ${{ secrets.EDGECHAT_ENCRYPTION_KEYRING }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p .tmp
+          node --input-type=module -e 'import { writeFileSync } from "node:fs"; import { loadEncryptionKeyring } from "./worker/src/encryption.js"; const value = process.env.EDGECHAT_ENCRYPTION_KEYRING; if (!value) throw new Error("Missing GitHub secret: EDGECHAT_ENCRYPTION_KEYRING"); loadEncryptionKeyring(value); writeFileSync(".tmp/worker-secrets.json", JSON.stringify({ EDGECHAT_ENCRYPTION_KEYRING: value }), { mode: 0o600 });'
       - name: Deploy worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --config wrangler.ci.toml
+        run: npx wrangler deploy --config wrangler.ci.toml --secrets-file .tmp/worker-secrets.json
+      - name: Migrate or rotate historical encryption
+        if: github.event_name == 'workflow_dispatch' && inputs.run_encryption_migration == true
+        env:
+          EDGECHAT_ENCRYPTION_KEYRING: ${{ secrets.EDGECHAT_ENCRYPTION_KEYRING }}
+          EDGECHAT_ENCRYPTION_MIGRATION_CONFIRM: ${{ inputs.backup_confirmation }}
+          EDGECHAT_D1_DATABASE_NAME: ${{ steps.ensure_resources.outputs.d1_database_name }}
+          EDGECHAT_R2_BUCKET_NAME: ${{ steps.ensure_resources.outputs.r2_bucket_name }}
+          EDGECHAT_WRANGLER_CONFIG: wrangler.ci.toml
+        run: npm run migrate:encryption
+      - name: Remove temporary secret files
+        if: always()
+        shell: bash
+        run: rm -f .tmp/worker-secrets.json

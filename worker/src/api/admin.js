@@ -1,5 +1,6 @@
 import { hashPassword } from '../auth.js';
 import { getSiteSettings, listMessages, requireAccessibleRoom, updateSiteSettings } from '../db.js';
+import { decryptMessageContent } from '../encryption.js';
 import { ApiError } from '../errors.js';
 import {
   canMutateAdminUser,
@@ -9,10 +10,9 @@ import {
   sanitizeLimit
 } from '../utils.js';
 
-function escapeSqlLike(value) {
-  // LIKE 的 %、_ 和转义符本身会改变匹配范围，转义后才能按用户输入字面量搜索。
-  return value.replace(/[\\%_]/g, '\\$&');
-}
+const ADMIN_MESSAGE_SEARCH_SCAN_LIMIT = 5000;
+const ADMIN_MESSAGE_DECRYPT_BATCH_SIZE = 50;
+
 
 async function getAdminMutationContext(db, targetUserId) {
   const [targetResult, adminCountResult] = await Promise.all([
@@ -400,18 +400,15 @@ export function registerAdminRoutes(app) {
 
   app.get('/api/admin/messages/search', async (c) => {
     const keyword = String(c.req.query('keyword') || '').trim();
-    const channelId = Number(c.req.query('channelId') || '');
-    const userId = Number(c.req.query('userId') || '');
+    const normalizedKeyword = keyword.toLocaleLowerCase();
+    const channelIdQuery = c.req.query('channelId');
+    const userIdQuery = c.req.query('userId');
+    const channelId = channelIdQuery ? Number(channelIdQuery) : null;
+    const userId = userIdQuery ? Number(userIdQuery) : null;
     const kind = c.req.query('kind');
     const limit = sanitizeLimit(c.req.query('limit'), 50, 200);
     const filters = ['m.deleted_at IS NULL', 'c.deleted_at IS NULL'];
     const binds = [];
-
-    if (keyword) {
-      const escapedKeyword = escapeSqlLike(keyword);
-      filters.push("(m.content LIKE ? ESCAPE '\\' OR m.attachment_name LIKE ? ESCAPE '\\')");
-      binds.push(`%${escapedKeyword}%`, `%${escapedKeyword}%`);
-    }
 
     if (Number.isFinite(channelId)) {
       filters.push('c.id = ?');
@@ -428,6 +425,7 @@ export function registerAdminRoutes(app) {
       binds.push(kind);
     }
 
+    const queryLimit = keyword ? ADMIN_MESSAGE_SEARCH_SCAN_LIMIT + 1 : limit;
     const { results } = await c.env.DB.prepare(
       `SELECT
          m.id,
@@ -447,29 +445,60 @@ export function registerAdminRoutes(app) {
         ORDER BY m.id DESC
         LIMIT ?`
     )
-      .bind(...binds, limit)
+      .bind(...binds, queryLimit)
       .all();
 
-    return c.json({
-      messages: results.map((row) => ({
-        id: Number(row.id),
-        content: row.content,
-        attachmentName: row.attachment_name,
-        createdAt: row.created_at,
-        room: {
-          id: Number(row.channel_id),
-          name: row.channel_name,
-          kind: row.channel_kind
-        },
-        sender: {
-          id: Number(row.sender_id),
-          username: row.sender_username,
-          displayName: row.sender_display_name
+    const candidates = keyword ? results.slice(0, ADMIN_MESSAGE_SEARCH_SCAN_LIMIT) : results;
+    const messages = [];
+    let scannedCount = 0;
+
+    for (let offset = 0; offset < candidates.length; offset += ADMIN_MESSAGE_DECRYPT_BATCH_SIZE) {
+      const batch = candidates.slice(offset, offset + ADMIN_MESSAGE_DECRYPT_BATCH_SIZE);
+      const decryptedBatch = await Promise.all(
+        batch.map(async (row) => ({
+          row,
+          content: await decryptMessageContent(c.env, row.content, {
+            channelId: row.channel_id,
+            senderId: row.sender_id
+          })
+        }))
+      );
+
+      for (const { row, content } of decryptedBatch) {
+        scannedCount += 1;
+        const matches =
+          !keyword ||
+          content.toLocaleLowerCase().includes(normalizedKeyword) ||
+          String(row.attachment_name || '').toLocaleLowerCase().includes(normalizedKeyword);
+        if (!matches || messages.length >= limit) {
+          continue;
         }
-      }))
+
+        messages.push({
+          id: Number(row.id),
+          content,
+          attachmentName: row.attachment_name,
+          createdAt: row.created_at,
+          room: {
+            id: Number(row.channel_id),
+            name: row.channel_name,
+            kind: row.channel_kind
+          },
+          sender: {
+            id: Number(row.sender_id),
+            username: row.sender_username,
+            displayName: row.sender_display_name
+          }
+        });
+      }
+    }
+
+    return c.json({
+      messages,
+      scannedCount,
+      searchTruncated: Boolean(keyword && results.length > ADMIN_MESSAGE_SEARCH_SCAN_LIMIT)
     });
   });
-
   app.get('/api/admin/rooms/:kind/:roomId/messages', async (c) => {
     const kind = c.req.param('kind');
     const roomId = Number(c.req.param('roomId'));
@@ -479,7 +508,7 @@ export function registerAdminRoutes(app) {
       return errorResponse('会话不存在', 404);
     }
 
-    const messages = await listMessages(c.env.DB, roomId, before, 50);
+    const messages = await listMessages(c.env, roomId, before, 50);
     return c.json({ room, messages });
   });
 }

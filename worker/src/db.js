@@ -1,3 +1,4 @@
+import { decryptMessageContent, encryptMessageContent } from './encryption.js';
 import { pickAttachment, publicFileUrl } from './utils.js';
 
 function toNullableNumber(value) {
@@ -196,7 +197,8 @@ export async function listChannelMembers(db, channelId) {
   }));
 }
 
-export async function listMessages(db, roomId, before = null, limit = 30) {
+export async function listMessages(env, roomId, before = null, limit = 30) {
+  const db = env.DB;
   const filters = ['m.channel_id = ?', 'm.deleted_at IS NULL'];
   const binds = [Number(roomId)];
   if (before) {
@@ -208,6 +210,7 @@ export async function listMessages(db, roomId, before = null, limit = 30) {
     .prepare(
       `SELECT
          m.id,
+         m.channel_id,
          m.content,
          m.attachment_key,
          m.attachment_name,
@@ -227,9 +230,8 @@ export async function listMessages(db, roomId, before = null, limit = 30) {
     .bind(...binds, Number(limit))
     .all();
 
-  return results
-    .map((row) => mapMessage(row))
-    .reverse();
+  const messages = await Promise.all(results.map((row) => mapMessage(env, row)));
+  return messages.reverse();
 }
 
 async function resolveReadableMessageId(db, channelId, messageId = null) {
@@ -330,6 +332,26 @@ export async function recordUploadedFile(db, { key, ownerUserId, filename, conte
     .run();
 }
 
+export async function getUploadedFileMetadata(db, key) {
+  const { results } = await db
+    .prepare(
+      `SELECT filename, content_type, size
+       FROM uploaded_files
+       WHERE object_key = ?
+       LIMIT 1`
+    )
+    .bind(String(key))
+    .all();
+
+  if (!results[0]) {
+    return null;
+  }
+  return {
+    filename: results[0].filename,
+    contentType: results[0].content_type,
+    size: Number(results[0].size || 0)
+  };
+}
 export async function fileBelongsToUser(db, key, userId) {
   const { results } = await db
     .prepare(
@@ -410,7 +432,8 @@ export async function canAccessFile(db, key, userId = null, isAdmin = false) {
   return Boolean(results[0]);
 }
 
-export async function insertMessage(db, { channelId, senderId, content, attachment }) {
+export async function insertMessage(env, { channelId, senderId, content, attachment }) {
+  const db = env.DB;
   const hasAttachment = attachment !== undefined && attachment !== null;
   const cleanAttachment = pickAttachment(attachment, { ownerUserId: senderId });
   const cleanContent = String(content || '').trim();
@@ -427,6 +450,8 @@ export async function insertMessage(db, { channelId, senderId, content, attachme
     throw new Error('Message content cannot be empty');
   }
 
+  const storedContent = await encryptMessageContent(env, cleanContent, { channelId, senderId });
+
   const result = await db
     .prepare(
       `INSERT INTO messages (
@@ -442,7 +467,7 @@ export async function insertMessage(db, { channelId, senderId, content, attachme
     .bind(
       Number(channelId),
       Number(senderId),
-      cleanContent,
+      storedContent,
       cleanAttachment?.key || null,
       cleanAttachment?.name || null,
       cleanAttachment?.type || null,
@@ -450,14 +475,16 @@ export async function insertMessage(db, { channelId, senderId, content, attachme
     )
     .run();
 
-  return getMessageById(db, result.meta.last_row_id);
+  return getMessageById(env, result.meta.last_row_id);
 }
 
-export async function getMessageById(db, messageId) {
+export async function getMessageById(env, messageId) {
+  const db = env.DB;
   const { results } = await db
     .prepare(
       `SELECT
          m.id,
+         m.channel_id,
          m.content,
          m.attachment_key,
          m.attachment_name,
@@ -476,13 +503,16 @@ export async function getMessageById(db, messageId) {
     .bind(Number(messageId))
     .all();
 
-  return results[0] ? mapMessage(results[0]) : null;
+  return results[0] ? mapMessage(env, results[0]) : null;
 }
 
-export function mapMessage(row) {
+export async function mapMessage(env, row) {
   return {
     id: Number(row.id),
-    content: row.content,
+    content: await decryptMessageContent(env, row.content, {
+      channelId: row.channel_id,
+      senderId: row.sender_id
+    }),
     createdAt: row.created_at,
     sender: {
       id: Number(row.sender_id),

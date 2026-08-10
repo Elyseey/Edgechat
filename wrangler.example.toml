@@ -13,6 +13,9 @@ R2_DELETE_MAX_RETRY = "8"
 ALLOWED_FILE_TYPES = "image/,video/,application/pdf,text/"
 MAX_FILE_SIZE = "20971520"
 
+[secrets]
+required = ["EDGECHAT_ENCRYPTION_KEYRING"]
+
 [[d1_databases]]
 binding = "DB"
 # Legacy D1 resource name kept intentionally; do not rename without a data migration plan.

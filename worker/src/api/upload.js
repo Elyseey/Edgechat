@@ -1,8 +1,9 @@
-import { canAccessFile, recordUploadedFile } from '../db.js';
+import { canAccessFile, getUploadedFileMetadata, recordUploadedFile } from '../db.js';
+import { decryptAttachment, encryptAttachment } from '../encryption.js';
 import { validateSession } from '../session.js';
 import { errorResponse, requestBodyTooLarge } from '../utils.js';
 
-const FILE_BROWSER_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const FILE_RESPONSE_CACHE_CONTROL = 'private, no-store';
 const UPLOAD_BODY_OVERHEAD_BYTES = 1024 * 1024;
 const BLOCKED_MIME_TYPES = new Set([
   'text/html',
@@ -104,13 +105,15 @@ export function registerUploadRoutes(app) {
 
     const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
     const key = `${session.userId}/${Date.now()}-${crypto.randomUUID()}${extension}`;
-    await c.env.FILES.put(key, await file.arrayBuffer(), {
+    const encryptedFile = await encryptAttachment(c.env, await file.arrayBuffer(), key);
+    await c.env.FILES.put(key, encryptedFile, {
       httpMetadata: {
         contentType: normalizeContentType(file.type) || 'application/octet-stream',
-        cacheControl: FILE_BROWSER_CACHE_CONTROL
+        cacheControl: FILE_RESPONSE_CACHE_CONTROL
       },
       customMetadata: {
-        filename: sanitizeFilename(file.name)
+        filename: sanitizeFilename(file.name),
+        edgechatEncryption: 'v1'
       }
     });
 
@@ -157,15 +160,25 @@ export function registerUploadRoutes(app) {
     if (!canRead) {
       return new Response('Forbidden', { status: 403 });
     }
-    const object = await c.env.FILES.get(key);
+    const [object, fileMetadata] = await Promise.all([
+      c.env.FILES.get(key),
+      getUploadedFileMetadata(c.env.DB, key)
+    ]);
     if (!object) {
       return new Response('Not Found', { status: 404 });
     }
 
+    let decrypted;
+    try {
+      decrypted = await decryptAttachment(c.env, await object.arrayBuffer(), key);
+    } catch (error) {
+      console.error('Failed to decrypt attachment', { key, error });
+      throw error;
+    }
+
     const headers = new Headers();
     object.writeHttpMetadata(headers);
-    headers.set('etag', object.httpEtag);
-    headers.set('cache-control', headers.get('cache-control') || FILE_BROWSER_CACHE_CONTROL);
+    headers.set('cache-control', FILE_RESPONSE_CACHE_CONTROL);
     if (object.uploaded) {
       headers.set('last-modified', object.uploaded.toUTCString());
     }
@@ -177,21 +190,18 @@ export function registerUploadRoutes(app) {
       "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
     );
 
-    const contentType = normalizeContentType(headers.get('content-type'));
+    const contentType =
+      normalizeContentType(fileMetadata?.contentType) ||
+      normalizeContentType(headers.get('content-type')) ||
+      'application/octet-stream';
+    headers.set('content-type', contentType);
     const inlineAllowed = isInlineContentType(contentType);
     const dispositionKind =
       inlineAllowed && !contentType.startsWith('text/') ? 'inline' : 'attachment';
-    const filename = object.customMetadata?.filename || key.split('/').pop() || 'file';
+    const filename =
+      fileMetadata?.filename || object.customMetadata?.filename || key.split('/').pop() || 'file';
     headers.set('content-disposition', contentDispositionValue(dispositionKind, filename));
 
-    const ifNoneMatch = c.req.header('if-none-match');
-    if (ifNoneMatch && ifNoneMatch === object.httpEtag) {
-      return new Response(null, {
-        status: 304,
-        headers
-      });
-    }
-
-    return new Response(object.body, { headers });
+    return new Response(decrypted.bytes, { headers });
   });
 }
