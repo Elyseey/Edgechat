@@ -14,7 +14,7 @@ import { getSiteSettings, updateSiteSettings } from '../data/site-settings.js';
 import { listAdminUsers } from '../data/users.js';
 import { authorizeRoom } from '../room-access.js';
 import { ApiError } from '../errors.js';
-import { errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
+import { canMutateAdminUser, errorResponse, parseJsonRequest, randomToken, sanitizeLimit } from '../utils.js';
 
 function parseOptionalPositiveInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -151,6 +151,23 @@ export function registerAdminRoutes(app) {
     const payload = await parseJsonRequest(c.req.raw);
     const isDisabled = payload.isDisabled ? 1 : 0;
     const bumpVersion = isDisabled ? 1 : 0;
+    const session = c.get('session');
+    const target = await c.env.DB.prepare(
+      `SELECT is_admin FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`
+    ).bind(userId).first();
+    if (!target) return errorResponse('用户不存在', 404);
+    const adminCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM users
+       WHERE is_admin = 1 AND is_disabled = 0 AND deleted_at IS NULL`
+    ).first();
+    const decision = canMutateAdminUser({
+      actorUserId: session.userId,
+      targetUserId: userId,
+      targetIsAdmin: Boolean(target.is_admin),
+      targetWillBeActive: !isDisabled,
+      activeAdminCount: Number(adminCount?.count || 0)
+    });
+    if (!decision.ok) return errorResponse(decision.message, 400);
     await c.env.DB.prepare(
       `UPDATE users
        SET is_disabled = ?,
@@ -192,6 +209,23 @@ export function registerAdminRoutes(app) {
 
   app.delete('/api/admin/users/:userId', async (c) => {
     const userId = Number(c.req.param('userId'));
+    const session = c.get('session');
+    const target = await c.env.DB.prepare(
+      `SELECT is_admin FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1`
+    ).bind(userId).first();
+    if (!target) return errorResponse('用户不存在', 404);
+    const adminCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM users
+       WHERE is_admin = 1 AND is_disabled = 0 AND deleted_at IS NULL`
+    ).first();
+    const decision = canMutateAdminUser({
+      actorUserId: session.userId,
+      targetUserId: userId,
+      targetIsAdmin: Boolean(target.is_admin),
+      targetWillBeActive: false,
+      activeAdminCount: Number(adminCount?.count || 0)
+    });
+    if (!decision.ok) return errorResponse(decision.message, 400);
     await c.env.DB.prepare(
       `UPDATE users
        SET deleted_at = CURRENT_TIMESTAMP,
@@ -230,7 +264,7 @@ export function registerAdminRoutes(app) {
     }
 
     const dmUserIds = hasFirstUser ? [firstUserId, secondUserId] : null;
-    const messages = await searchAdminMessages(c.env.DB, {
+    const result = await searchAdminMessages(c.env, {
       keyword,
       channelId,
       userId,
@@ -239,7 +273,7 @@ export function registerAdminRoutes(app) {
       limit
     });
 
-    return c.json({ messages });
+    return c.json(result);
   });
 
   app.get('/api/admin/rooms/:kind/:roomId/messages', async (c) => {
@@ -251,7 +285,7 @@ export function registerAdminRoutes(app) {
       return errorResponse('会话不存在', 404);
     }
 
-    const messages = await listMessages(c.env.DB, roomId, before, 50);
+    const messages = await listMessages(c.env, roomId, before, 50);
     return c.json({ room: access.room, messages });
   });
 }

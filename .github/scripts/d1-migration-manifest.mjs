@@ -35,6 +35,10 @@ export const D1_MIGRATIONS = [
     artifacts: ["table:message_reads"],
   },
   {
+    id: "2026-07-09-uploaded-files",
+    file: "worker/migrations/2026-07-09-uploaded-files.sql",
+    artifacts: ["table:uploaded_files", "index:idx_uploaded_files_owner"],
+  },  {
     id: "2026-07-28-general-channel",
     file: "worker/migrations/2026-07-28-general-channel.sql",
     artifacts: [
@@ -56,5 +60,10 @@ export const D1_MIGRATIONS = [
       "index:idx_registration_invite_uses_invite",
       "index:idx_registration_invites_usage",
     ],
+  },
+  {
+    id: "2026-08-10-server-encryption",
+    file: "worker/migrations/2026-08-10-server-encryption.sql",
+    artifacts: ["table:encryption_migration_state", "index:idx_encryption_migration_state_key"],
   },
 ];

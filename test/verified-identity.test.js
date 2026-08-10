@@ -12,12 +12,16 @@ import {
 test("verified principal headers 可以完整 roundtrip", () => {
 	const headers = createVerifiedPrincipalHeaders(
 		{ "content-type": "application/json" },
-		{ userId: 42, isAdmin: true },
+		{ userId: 42, isAdmin: true, token: "session-token" },
 	);
 	const request = new Request("https://cfchat.internal/connect", { headers });
 
 	assert.equal(isVerifiedInternalRequest(request), true);
-	assert.deepEqual(parseVerifiedPrincipal(request), { userId: 42, isAdmin: true });
+	assert.deepEqual(parseVerifiedPrincipal(request), {
+		userId: 42,
+		isAdmin: true,
+		token: "session-token",
+	});
 	assert.equal(parseVerifiedUserId(request), 42);
 	assert.equal(headers.get("content-type"), "application/json");
 });

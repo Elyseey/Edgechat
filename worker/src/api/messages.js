@@ -21,7 +21,7 @@ export function registerMessageRoutes(app) {
       return errorResponse('无权访问该会话', 403);
     }
 
-    const messages = await listMessages(c.env.DB, roomId, before, limit);
+    const messages = await listMessages(c.env, roomId, before, limit);
     await markRoomRead(c.env.DB, {
       channelId: roomId,
       userId: session.userId

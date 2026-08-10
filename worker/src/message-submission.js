@@ -8,9 +8,9 @@ export class MessageSubmissionError extends Error {
 }
 
 export function createMessageSubmission({ persistMessage = insertMessage } = {}) {
-	return async function submitRoomMessage(db, meta, payload) {
+	return async function submitRoomMessage(env, meta, payload) {
 		try {
-			const message = await persistMessage(db, {
+			const message = await persistMessage(env, {
 				channelId: meta.room.id,
 				senderId: meta.principal.userId,
 				content: payload.content,

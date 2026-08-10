@@ -44,23 +44,30 @@ test("完整数据库只登记迁移基线，不重复执行历史 SQL", async (
 });
 
 test("旧数据库只执行缺失的邀请次数迁移", async () => {
-	const lastMigrationIndex = D1_MIGRATIONS.length - 1;
+	const inviteMigrationIndex = D1_MIGRATIONS.findIndex(
+		(migration) => migration.id === "2026-07-29-registration-invite-usage",
+	);
 	const plan = await buildD1MigrationPlan({
 		migrations: D1_MIGRATIONS,
 		appliedMigrations: new Map(),
-		artifacts: artifactsThrough(lastMigrationIndex - 1),
+		artifacts: artifactsThrough(inviteMigrationIndex - 1),
 		readSql: readMigration,
 	});
 
-	assert.equal(plan.decisions.at(-1).action, "apply");
+	assert.equal(
+		plan.decisions.find((decision) => decision.id === "2026-07-29-registration-invite-usage")?.action,
+		"apply",
+	);
 	assert.match(plan.sql, /ADD COLUMN max_uses/);
 	assert.match(plan.sql, /CREATE TABLE IF NOT EXISTS registration_invite_uses/);
 	assert.doesNotMatch(plan.sql, /DROP TABLE channels/);
 });
 
 test("部分迁移状态会阻断部署，避免继续发布不兼容代码", async () => {
-	const lastMigrationIndex = D1_MIGRATIONS.length - 1;
-	const artifacts = artifactsThrough(lastMigrationIndex - 1);
+	const inviteMigrationIndex = D1_MIGRATIONS.findIndex(
+		(migration) => migration.id === "2026-07-29-registration-invite-usage",
+	);
+	const artifacts = artifactsThrough(inviteMigrationIndex - 1);
 	artifacts.add("column:registration_invites.max_uses");
 
 	await assert.rejects(
