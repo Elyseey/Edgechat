@@ -234,7 +234,7 @@ export class ChannelRoom {
         return;
       }
 
-      const saved = await insertMessage(this.env.DB, {
+      const saved = await insertMessage(this.env, {
         channelId: currentMeta.room.id,
         senderId: currentMeta.principal.userId,
         content: payload.content,

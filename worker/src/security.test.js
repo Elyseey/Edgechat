@@ -85,7 +85,7 @@ test('insertMessage rejects unavailable attachments even when text content exist
   };
 
   await assert.rejects(
-    insertMessage(fakeDb, {
+    insertMessage({ DB: fakeDb }, {
       channelId: 1,
       senderId: 42,
       content: 'with stolen attachment',

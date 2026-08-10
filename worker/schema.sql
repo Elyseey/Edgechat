@@ -104,6 +104,13 @@ CREATE TABLE IF NOT EXISTS pending_r2_delete (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS encryption_migration_state (
+  resource_type TEXT NOT NULL CHECK (resource_type IN ('attachment')),
+  resource_key TEXT NOT NULL,
+  key_id TEXT NOT NULL,
+  migrated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (resource_type, resource_key)
+);
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
 VALUES ('site_name', 'Edgechat');
 
@@ -133,3 +140,6 @@ CREATE INDEX IF NOT EXISTS idx_uploaded_files_owner
 
 CREATE INDEX IF NOT EXISTS idx_pending_r2_delete_next_retry
   ON pending_r2_delete(next_retry_at, retry_count);
+
+CREATE INDEX IF NOT EXISTS idx_encryption_migration_state_key
+  ON encryption_migration_state(resource_type, key_id, resource_key);

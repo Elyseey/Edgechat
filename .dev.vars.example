@@ -1,0 +1,2 @@
+# Development-only example. Generate a unique 32-byte key for every real environment.
+EDGECHAT_ENCRYPTION_KEYRING='{"activeKeyId":"dev-v1","keys":{"dev-v1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}'

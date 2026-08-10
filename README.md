@@ -39,6 +39,21 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
 - 详细教程：<https://doc.chsm666.top/guide/actions-deploy.html>
 
 仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
+服务端加密要求在 GitHub Repository Secrets 中配置 `EDGECHAT_ENCRYPTION_KEYRING`：
+
+```json
+{"activeKeyId":"v1","keys":{"v1":"BASE64_ENCODED_32_BYTE_KEY"}}
+```
+
+可使用 Node.js 生成密钥：
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+密钥不能提交到仓库。轮换时先保留旧 key，添加新 key 并更新 `activeKeyId`；完成部署后，从 Actions 手动运行 `Deploy Worker`，勾选历史加密迁移并在确认框填写 `BACKUP_COMPLETED`。迁移前必须备份 D1 和 R2，迁移报告确认旧 key 数据为零后才能删除旧 key。
+
+本地开发时复制 `.dev.vars.example` 为 `.dev.vars` 并替换示例密钥。Docker 启动前通过 `EDGECHAT_ENCRYPTION_KEYRING` 环境变量传入同样格式的密钥环。
 
 ### 手动部署
 
