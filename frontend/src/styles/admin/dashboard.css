@@ -107,13 +107,9 @@
 }
 
 .admin-quick-link__copy strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.admin-quick-link__copy strong {
   font-size: 0.96rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .admin-status-list {
@@ -178,11 +174,7 @@
   color: var(--admin-danger);
 }
 
-@media (max-width: 75rem) {
-  .admin-dashboard__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+@media (max-width: 96rem) {
   .admin-dashboard__body {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -190,6 +182,13 @@
   .admin-status-panel,
   .admin-quick-panel {
     min-height: auto;
+  }
+}
+
+@media (max-width: 75rem) {
+  .admin-dashboard__metrics,
+  .admin-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

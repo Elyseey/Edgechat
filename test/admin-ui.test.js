@@ -23,6 +23,7 @@ const conversationListsSource = read('../frontend/src/components/admin/AdminConv
 const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
 const legacyTokens = read('../frontend/src/styles/tokens.css');
+const dashboardStyles = read('../frontend/src/styles/admin/dashboard.css');
 const messageSearchStyles = read('../frontend/src/styles/admin/message-search.css');
 const invitesPageStyles = read('../frontend/src/styles/admin/invites-page.css');
 const userCreatorStyles = read('../frontend/src/styles/admin/user-creator.css');
@@ -89,6 +90,22 @@ test('仪表盘复用现有概况接口并只展示可验证统计', () => {
   assert.match(dashboardSource, /overview\.value\.users\.filter/);
   assert.match(dashboardSource, /快捷访问/);
   assert.match(dashboardSource, /运行概况/);
+});
+
+test('仪表盘在中等桌面宽度提前重排且快捷入口文字保持完整', () => {
+  assert.match(
+    dashboardStyles,
+    /@media \(max-width: 96rem\)[\s\S]*\.admin-dashboard__body\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/
+  );
+  assert.match(
+    dashboardStyles,
+    /@media \(max-width: 75rem\)[\s\S]*\.admin-dashboard__metrics,\s*\.admin-quick-grid\s*\{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/
+  );
+  assert.match(dashboardStyles, /\.admin-quick-link__copy strong\s*\{[\s\S]*overflow-wrap: anywhere;/);
+  assert.doesNotMatch(
+    dashboardStyles,
+    /\.admin-quick-link__copy strong\s*\{[\s\S]*?text-overflow: ellipsis;[\s\S]*?\}/
+  );
 });
 
 test('后台操作面板保持纵向排列，消息搜索当前项使用黑底白字方块', () => {
