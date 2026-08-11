@@ -131,3 +131,23 @@ export async function authorizeChannelManagement(db, principal, channelId) {
 	}
 	return { ok: true, channel, membership, identity };
 }
+
+export async function authorizeMessageModeration(db, principal, kind, roomId) {
+	const access = await authorizeRoom(db, principal, kind, roomId);
+	if (!access.ok || access.identity.isAdmin) {
+		return access;
+	}
+	if (access.room.kind === "dm") {
+		return { ok: false, reason: ROOM_ACCESS_FAILURE.FORBIDDEN };
+	}
+
+	const membership = await getChannelMembership(
+		db,
+		access.room.id,
+		access.identity.userId,
+	);
+	if (membership?.role !== "owner") {
+		return { ok: false, reason: ROOM_ACCESS_FAILURE.FORBIDDEN };
+	}
+	return { ...access, membership };
+}

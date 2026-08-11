@@ -96,6 +96,12 @@ export function useChatRoom({
 				applyActiveRoomActivity(payload.message);
 				nextTick().then(scrollToBottom);
 			}
+			if (payload.type === "message_deleted") {
+				const messageId = Number(payload.messageId);
+				messages.value = messages.value.filter(
+					(message) => Number(message.id) !== messageId,
+				);
+			}
 			if (payload.type === "error") {
 				error.value = payload.error;
 			}
@@ -176,6 +182,22 @@ export function useChatRoom({
 		}
 	}
 
+	function deleteMessage(messageId) {
+		const key = activeRoom.value
+			? `${activeRoom.value.kind}:${activeRoom.value.id}`
+			: "";
+		if (!roomSession.isOpenFor(key)) {
+			error.value = "实时连接尚未就绪，请稍后重试";
+			return false;
+		}
+
+		error.value = "";
+		return roomSession.send(
+			JSON.stringify({ type: "delete_message", messageId: Number(messageId) }),
+			key,
+		);
+	}
+
 	function handleComposerKeydown(event) {
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
@@ -219,8 +241,13 @@ export function useChatRoom({
 
 	watch(
 		messages,
-		() => {
-			nextTick().then(scrollToBottom);
+		(current, previous) => {
+			const receivedNewLastMessage =
+				current.length > previous.length &&
+				current.at(-1)?.id !== previous.at(-1)?.id;
+			if (receivedNewLastMessage) {
+				nextTick().then(scrollToBottom);
+			}
 		},
 		{ flush: "post" },
 	);
@@ -239,6 +266,7 @@ export function useChatRoom({
 		connectSocket,
 		disconnectSocket,
 		sendMessage,
+		deleteMessage,
 		handleComposerKeydown,
 		openFilePicker,
 		uploadAttachment,

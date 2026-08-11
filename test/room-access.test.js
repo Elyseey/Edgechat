@@ -4,6 +4,7 @@ import test from "node:test";
 import {
 	ROOM_ACCESS_FAILURE,
 	authorizeChannelManagement,
+	authorizeMessageModeration,
 	authorizeRoom,
 	getChannelById,
 	getChannelMembership,
@@ -109,4 +110,44 @@ test("频道管理只允许管理员或 owner，并拒绝 DM", async () => {
 		ok: false,
 		reason: ROOM_ACCESS_FAILURE.NOT_FOUND,
 	});
+});
+
+test("消息管理允许超级管理员删除任意可见消息，并只允许群主管理群消息", async () => {
+	const adminDm = createQueryQueue([[{ id: 8, kind: "dm" }]]);
+	const adminAccess = await authorizeMessageModeration(
+		adminDm.db,
+		{ isAdmin: true },
+		"dm",
+		8,
+	);
+	assert.equal(adminAccess.ok, true);
+	assert.deepEqual(adminDm.calls.map((call) => call.binds), [[8, "dm"]]);
+
+	const owner = createQueryQueue([
+		[{ id: 5, kind: "private" }],
+		[{ channel_id: 5, user_id: 7, role: "owner" }],
+	]);
+	const ownerAccess = await authorizeMessageModeration(
+		owner.db,
+		{ userId: 7 },
+		"private",
+		5,
+	);
+	assert.equal(ownerAccess.ok, true);
+	assert.equal(ownerAccess.membership.role, "owner");
+
+	const member = createQueryQueue([
+		[{ id: 5, kind: "private" }],
+		[{ role: "member" }],
+	]);
+	assert.deepEqual(
+		await authorizeMessageModeration(member.db, { userId: 7 }, "private", 5),
+		{ ok: false, reason: ROOM_ACCESS_FAILURE.FORBIDDEN },
+	);
+
+	const directMessage = createQueryQueue([[{ id: 8, kind: "dm" }]]);
+	assert.deepEqual(
+		await authorizeMessageModeration(directMessage.db, { userId: 7 }, "dm", 8),
+		{ ok: false, reason: ROOM_ACCESS_FAILURE.FORBIDDEN },
+	);
 });

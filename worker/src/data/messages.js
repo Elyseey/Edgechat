@@ -61,10 +61,24 @@ export async function listMessages(env, roomId, before = null, limit = 30) {
 
 export async function getMessageById(env, messageId) {
 	const { results } = await env.DB
-		.prepare(`${MESSAGE_SELECT} WHERE m.id = ? LIMIT 1`)
+		.prepare(`${MESSAGE_SELECT} WHERE m.id = ? AND m.deleted_at IS NULL LIMIT 1`)
 		.bind(Number(messageId))
 		.all();
 	return results[0] ? mapDecryptedMessage(env, results[0]) : null;
+}
+
+export async function softDeleteMessage(db, { channelId, messageId }) {
+	const result = await db
+		.prepare(
+			`UPDATE messages
+			 SET deleted_at = CURRENT_TIMESTAMP
+			 WHERE id = ?
+			   AND channel_id = ?
+			   AND deleted_at IS NULL`,
+		)
+		.bind(Number(messageId), Number(channelId))
+		.run();
+	return Number(result.meta?.changes || 0) > 0;
 }
 
 export async function insertMessage(env, { channelId, senderId, content, attachment }) {

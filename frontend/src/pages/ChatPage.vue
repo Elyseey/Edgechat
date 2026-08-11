@@ -6,6 +6,7 @@ import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
 import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
+import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
 import PendingAttachmentPreview from '../components/chat/PendingAttachmentPreview.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import UiTextarea from '../components/ui/Textarea.vue';
@@ -53,7 +54,7 @@ function handleRoomAccessRevoked(room) {
 const {
   messages, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, fileInputEl, isOwnMessage,
-  loadMessages, connectSocket, disconnectSocket, sendMessage, handleComposerKeydown,
+  loadMessages, connectSocket, disconnectSocket, sendMessage, deleteMessage, handleComposerKeydown,
   openFilePicker, uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
@@ -70,6 +71,62 @@ const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
 });
 
 const wsConnected = computed(() => wsStatus.value === 'open');
+const canModerateMessages = computed(
+  () => Boolean(session.value?.isAdmin || canManageActiveRoom.value)
+);
+const messageMenu = ref({ message: null, x: 0, y: 0 });
+let longPressTimer = null;
+let longPressOrigin = null;
+
+function closeMessageMenu() {
+  messageMenu.value = { message: null, x: 0, y: 0 };
+}
+
+function openMessageMenuAt(message, x, y) {
+  if (!canModerateMessages.value) return;
+  messageMenu.value = { message, x, y };
+}
+
+function cancelMessageLongPress() {
+  if (longPressTimer !== null) {
+    window.clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  longPressOrigin = null;
+}
+
+function openMessageContextMenu(event, message) {
+  if (!canModerateMessages.value) return;
+  event.preventDefault();
+  cancelMessageLongPress();
+  openMessageMenuAt(message, event.clientX, event.clientY);
+}
+
+function startMessageLongPress(event, message) {
+  cancelMessageLongPress();
+  if (!canModerateMessages.value || event.pointerType === 'mouse') return;
+
+  const origin = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY
+  };
+  longPressOrigin = origin;
+  longPressTimer = window.setTimeout(() => {
+    openMessageMenuAt(message, origin.x, origin.y);
+    longPressTimer = null;
+  }, 500);
+}
+
+function trackMessageLongPress(event) {
+  if (!longPressOrigin || event.pointerId !== longPressOrigin.pointerId) return;
+  if (
+    Math.abs(event.clientX - longPressOrigin.x) > 10 ||
+    Math.abs(event.clientY - longPressOrigin.y) > 10
+  ) {
+    cancelMessageLongPress();
+  }
+}
 
 const roomManagement = useRoomManagement({
   activeRoom, channels, users, error, refreshSidebar, conversationItems,
@@ -142,6 +199,8 @@ async function bootstrap() {
 }
 
 watch(activeRoomKey, async (k) => {
+  closeMessageMenu();
+  cancelMessageLongPress();
   if (!k) return;
   await loadMessages();
   connectSocket();
@@ -152,6 +211,16 @@ watch(activeRoomKey, async (k) => {
     }
   }
 });
+
+function confirmDeleteMessage() {
+  const message = messageMenu.value.message;
+  closeMessageMenu();
+  if (!message || !window.confirm('确认删除这条消息吗？删除后会话中的所有人都将看不到它。')) {
+    return;
+  }
+  deleteMessage(message.id);
+}
+
 onMounted(() => {
   void bootstrap().then(connectUnreadInbox);
 });
@@ -164,6 +233,7 @@ function formatBubbleTime(value) {
 }
 
 onBeforeUnmount(() => {
+  cancelMessageLongPress();
   disconnectUnreadInbox();
   disconnectSocket();
 });
@@ -284,11 +354,20 @@ onBeforeUnmount(() => {
 
           <article
             v-for="msg in messages" :key="msg.id"
-            class="message-row" :class="{ 'message-row--own': isOwnMessage(msg) }"
+            class="message-row"
+            :class="{
+              'message-row--own': isOwnMessage(msg),
+              'message-row--moderatable': canModerateMessages
+            }"
           >
             <div
               class="message-bubble"
               :class="{ 'message-bubble--with-attachment': msg.attachment }"
+              @contextmenu="openMessageContextMenu($event, msg)"
+              @pointerdown="startMessageLongPress($event, msg)"
+              @pointermove="trackMessageLongPress"
+              @pointerup="cancelMessageLongPress"
+              @pointercancel="cancelMessageLongPress"
             >
               <div v-if="activeRoom.kind !== 'dm' && !isOwnMessage(msg)" class="message-sender-name">
                 {{ msg.sender.displayName }}
@@ -299,6 +378,14 @@ onBeforeUnmount(() => {
             </div>
           </article>
         </section>
+
+        <MessageContextMenu
+          :open="Boolean(messageMenu.message)"
+          :x="messageMenu.x"
+          :y="messageMenu.y"
+          @close="closeMessageMenu"
+          @delete="confirmDeleteMessage"
+        />
 
         <footer class="chat-composer">
           <div v-if="pendingAttachment" class="composer-attachment">
@@ -798,6 +885,11 @@ onBeforeUnmount(() => {
   position: relative;
   word-break: break-word;
   box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
+}
+
+.message-row--moderatable .message-bubble {
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
 }
 
 .message-bubble--with-attachment {

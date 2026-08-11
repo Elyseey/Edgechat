@@ -1,4 +1,5 @@
 import { MessageSubmissionError, submitRoomMessage } from '../message-submission.js';
+import { deleteRoomMessage, MessageDeletionError } from '../message-deletion.js';
 import { authorizeRoom } from '../room-access.js';
 import { validateSession } from '../session.js';
 import { projectUnreadMessage } from '../unread-projection.js';
@@ -205,7 +206,7 @@ export class ChannelRoom {
       return;
     }
 
-    if (payload.type !== 'send') {
+    if (!['send', 'delete_message'].includes(payload.type)) {
       sendSocketError(ws, 'Unsupported message type');
       return;
     }
@@ -216,8 +217,14 @@ export class ChannelRoom {
         return;
       }
 
-		const { message: saved, packet } = await submitRoomMessage(
-			this.env,
+      if (payload.type === 'delete_message') {
+        const { packet } = await deleteRoomMessage(this.env, currentMeta, payload);
+        await this.broadcast(packet);
+        return;
+      }
+
+      const { message: saved, packet } = await submitRoomMessage(
+        this.env,
         currentMeta,
         payload
       );
@@ -232,16 +239,16 @@ export class ChannelRoom {
         })
       );
     } catch (error) {
-      if (error instanceof MessageSubmissionError) {
+      if (error instanceof MessageSubmissionError || error instanceof MessageDeletionError) {
         sendSocketError(ws, error.message);
         return;
       }
       console.error(JSON.stringify({
-        message: 'room message submission failed',
+        message: 'room message action failed',
         roomId: Number(meta.room?.id || 0),
         error: error instanceof Error ? error.message : String(error)
       }));
-      sendSocketError(ws, '消息发送失败');
+      sendSocketError(ws, '消息操作失败');
     }
   }
 
