@@ -192,6 +192,14 @@ export default {
   adminOverview() {
     return request('/admin/overview');
   },
+  adminStorageScan(cursor = '') {
+    const query = new URLSearchParams();
+    if (cursor) {
+      query.set('cursor', cursor);
+    }
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request(`/admin/storage/scan${suffix}`);
+  },
   adminSiteSettings() {
     return request('/admin/site-settings');
   },
