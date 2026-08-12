@@ -53,7 +53,8 @@ async function mapDecryptedMessage(env, row) {
 const MESSAGE_SELECT = `SELECT
   m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
   m.attachment_size, m.sender_kind, m.external_sender_id, m.external_sender_name,
-  m.external_sender_avatar_url, m.source, m.source_message_id, m.created_at,
+	  m.external_sender_avatar_url, m.source, m.source_message_id,
+	  m.source_attachment_id, m.source_attachment_unique_id, m.created_at,
   u.id AS sender_id, u.username AS sender_username,
   u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key
  FROM messages m LEFT JOIN users u ON u.id = m.sender_id`;
@@ -80,7 +81,7 @@ export async function getMessageById(env, messageId) {
 	return results[0] ? mapDecryptedMessage(env, results[0]) : null;
 }
 
-async function getMessageBySource(env, source, sourceMessageId) {
+export async function getMessageBySource(env, source, sourceMessageId) {
 	const { results } = await env.DB
 		.prepare(
 			`${MESSAGE_SELECT}
@@ -114,18 +115,23 @@ async function persistMessage(env, {
 	attachment = null,
 	source = "edgechat",
 	sourceMessageId = null,
+	sourceAttachmentId = null,
+	sourceAttachmentUniqueId = null,
 }) {
 	const isExternal = externalSender !== null;
 	const normalizedSenderId = isExternal ? null : Number(senderId);
 	const hasAttachment = attachment !== undefined && attachment !== null;
-	const cleanAttachment = isExternal
-		? null
-		: pickAttachment(attachment, { ownerUserId: normalizedSenderId });
+	// 外部附件只能从已验证的内部 Bridge 入口进入；本地客户端仍必须通过上传归属校验。
+	const cleanAttachment = pickAttachment(
+		attachment,
+		isExternal ? {} : { ownerUserId: normalizedSenderId },
+	);
 	const cleanContent = String(content || "").trim();
 	if (hasAttachment && !cleanAttachment) {
 		throw new Error("Invalid attachment");
 	}
 	if (
+		!isExternal &&
 		cleanAttachment &&
 		!(await fileBelongsToUser(env.DB, cleanAttachment.key, normalizedSenderId))
 	) {
@@ -151,8 +157,9 @@ async function persistMessage(env, {
 				`INSERT INTO messages (
 				   channel_id, sender_id, content, attachment_key, attachment_name,
 				   attachment_type, attachment_size, sender_kind, external_sender_id,
-				   external_sender_name, external_sender_avatar_url, source, source_message_id
-				 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				   external_sender_name, external_sender_avatar_url, source, source_message_id,
+				   source_attachment_id, source_attachment_unique_id
+				 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				Number(channelId),
@@ -166,8 +173,10 @@ async function persistMessage(env, {
 				isExternal ? externalId : null,
 				isExternal ? externalName : null,
 				isExternal ? String(externalSender.avatarUrl || "") : null,
-				String(source || "edgechat"),
-				sourceMessageId ? String(sourceMessageId) : null,
+					String(source || "edgechat"),
+					sourceMessageId ? String(sourceMessageId) : null,
+					sourceAttachmentId ? String(sourceAttachmentId) : null,
+					sourceAttachmentUniqueId ? String(sourceAttachmentUniqueId) : null,
 			)
 			.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };

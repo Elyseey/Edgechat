@@ -1,5 +1,6 @@
 import { canAccessFile, getUploadedFileMetadata, recordUploadedFile } from '../data/uploaded-files.js';
 import { decryptAttachment, encryptAttachment } from '../encryption.js';
+import { normalizeContentType, sanitizeFilename } from '../attachment-metadata.js';
 import { validateSession } from '../session.js';
 import { errorResponse, requestBodyTooLarge } from '../utils.js';
 
@@ -15,13 +16,6 @@ const BLOCKED_MIME_TYPES = new Set([
   'application/xml'
 ]);
 
-function normalizeContentType(value) {
-  return String(value || '')
-    .split(';')[0]
-    .trim()
-    .toLowerCase();
-}
-
 function isInlineContentType(contentType) {
   if (!contentType) {
     return false;
@@ -36,21 +30,6 @@ function isInlineContentType(contentType) {
     return true;
   }
   return false;
-}
-
-function sanitizeFilename(value) {
-  const cleaned = Array.from(
-    String(value || '')
-      .trim()
-      .replaceAll('/', '_')
-      .replaceAll('\\', '_')
-  )
-    .filter((character) => {
-      const codePoint = character.codePointAt(0);
-      return codePoint === undefined || (codePoint >= 0x20 && codePoint !== 0x7f);
-    })
-    .join('');
-  return cleaned.slice(0, 180) || 'file';
 }
 
 function contentDispositionValue(kind, filename) {

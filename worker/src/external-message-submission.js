@@ -4,9 +4,12 @@ export async function submitExternalMessage(env, { room, payload }) {
 	const result = await insertExternalMessage(env, {
 		channelId: room.id,
 		content: payload.content,
+		attachment: payload.attachment,
 		externalSender: payload.externalSender,
 		source: payload.source,
 		sourceMessageId: payload.sourceMessageId,
+		sourceAttachmentId: payload.sourceAttachmentId,
+		sourceAttachmentUniqueId: payload.sourceAttachmentUniqueId,
 	});
 	return {
 		...result,

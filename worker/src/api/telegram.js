@@ -54,7 +54,11 @@ export function registerTelegramWebhookRoute(app) {
 			return c.json({ ok: true });
 		}
 
-		await ingestTelegramMessage(c.env, { mapping, telegramMessage });
+			await ingestTelegramMessage(c.env, {
+				mapping,
+				telegramMessage,
+				botToken: credentials.botToken,
+			});
 		return c.json({ ok: true });
 	});
 }

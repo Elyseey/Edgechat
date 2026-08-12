@@ -11,7 +11,7 @@ const keyring = JSON.stringify({
   }
 });
 
-function fileDb({ accessible }) {
+function fileDb({ accessible, metadata = true }) {
   return {
     prepare(sql) {
       return {
@@ -19,9 +19,9 @@ function fileDb({ accessible }) {
           return {
             async all() {
               if (sql.includes('SELECT filename, content_type, size')) {
-                return {
-                  results: [{ filename: '报告.bin', content_type: 'application/octet-stream', size: 4 }]
-                };
+                return metadata
+                  ? { results: [{ filename: '报告.bin', content_type: 'application/octet-stream', size: 4 }] }
+                  : { results: [] };
               }
               return { results: accessible ? [{ found: 1 }] : [] };
             }
@@ -92,4 +92,39 @@ test('unauthorized attachment download is rejected before reading R2', async () 
 
   assert.equal(response.status, 403);
   assert.equal(r2Read, false);
+});
+
+test('telegram attachment downloads through message authorization without uploaded file ownership', async () => {
+  const objectKey = 'telegram/-1001/9-example.jpg';
+  const plaintext = Uint8Array.from([5, 6, 7]);
+  const ciphertext = await encryptAttachment(keyring, plaintext, objectKey);
+  const app = new Hono();
+  registerUploadRoutes(app);
+
+  const response = await app.request(
+    `https://edgechat.test/files/${encodeURIComponent(objectKey)}`,
+    {},
+    {
+      DB: fileDb({ accessible: true, metadata: false }),
+      FILES: {
+        async get() {
+          return {
+            customMetadata: { filename: 'telegram-photo.jpg' },
+            async arrayBuffer() {
+              return ciphertext.buffer;
+            },
+            writeHttpMetadata(headers) {
+              headers.set('content-type', 'image/jpeg');
+            }
+          };
+        }
+      },
+      EDGECHAT_ENCRYPTION_KEYRING: keyring
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), plaintext);
+  assert.equal(response.headers.get('content-type'), 'image/jpeg');
+  assert.match(response.headers.get('content-disposition'), /telegram-photo\.jpg/);
 });

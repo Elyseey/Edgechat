@@ -76,4 +76,12 @@ export const D1_MIGRATIONS = [
       "index:idx_telegram_mappings_channel",
     ],
   },
+  {
+    id: "2026-08-12-telegram-files",
+    file: "worker/migrations/2026-08-12-telegram-files.sql",
+    artifacts: [
+      "column:messages.source_attachment_id",
+      "column:messages.source_attachment_unique_id",
+    ],
+  },
 ];

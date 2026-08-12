@@ -232,7 +232,9 @@ test("消息 projection 保持附件和发送者字段", () => {
 			attachment_key: "files/a b.txt",
 			attachment_name: "a b.txt",
 			attachment_type: "text/plain",
-			attachment_size: "10",
+				attachment_size: "10",
+				source_attachment_id: null,
+				source_attachment_unique_id: null,
 		}),
 			{
 				id: 5,

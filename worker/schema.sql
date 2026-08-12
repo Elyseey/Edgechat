@@ -108,6 +108,8 @@ CREATE TABLE IF NOT EXISTS messages (
   external_sender_avatar_url TEXT,
   source TEXT NOT NULL DEFAULT 'edgechat',
   source_message_id TEXT,
+  source_attachment_id TEXT,
+  source_attachment_unique_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT,
   CHECK (

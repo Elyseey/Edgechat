@@ -2,20 +2,111 @@ import {
 	getTelegramCredentials,
 	listEnabledTelegramMappingsForChannel,
 } from "../../data/telegram.js";
+import { getMessageBySource } from "../../data/messages.js";
 import { submitExternalRoomMessage } from "../../do-bridge.js";
-import { sendTelegramText } from "./client.js";
+import { sendTelegramMedia, sendTelegramText } from "./client.js";
+import {
+	deleteImportedTelegramAttachment,
+	importTelegramAttachment,
+	loadEdgeChatAttachment,
+	TELEGRAM_BRIDGE_FILE_LIMIT,
+} from "./files.js";
 
 function logBridgeFailure(message, data) {
 	console.warn(JSON.stringify({ message, ...data }));
 }
 
-export function splitTelegramText(text, limit = 4096) {
-	const characters = Array.from(String(text));
+function escapeTelegramHtml(value) {
+	return String(value || "")
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;");
+}
+
+export function formatTelegramMessage(displayName, content = "") {
+	const sender = `<b>${escapeTelegramHtml(displayName)}:</b>`;
+	const body = escapeTelegramHtml(content);
+	return body ? `${sender}\n\n${body}` : sender;
+}
+
+export function splitTelegramFormattedMessage(displayName, content, limit) {
+	const characters = Array.from(String(content || ""));
+	if (!characters.length) return [formatTelegramMessage(displayName)];
+	const sender = formatTelegramMessage(displayName);
+	const prefix = `${sender}\n\n`;
 	const chunks = [];
-	for (let offset = 0; offset < characters.length; offset += limit) {
-		chunks.push(characters.slice(offset, offset + limit).join(""));
+	let current = "";
+	for (const character of characters) {
+		const escaped = escapeTelegramHtml(character);
+		if (Array.from(prefix + current + escaped).length > limit && current) {
+			chunks.push(prefix + current);
+			current = escaped;
+		} else {
+			current += escaped;
+		}
 	}
+	if (current) chunks.push(prefix + current);
 	return chunks;
+}
+
+function telegramMediaKind(contentType) {
+	if (contentType.startsWith("image/")) return "photo";
+	if (contentType.startsWith("video/")) return "video";
+	return "document";
+}
+
+async function sendTextMessage(botToken, chatId, displayName, content) {
+	for (const chunk of splitTelegramFormattedMessage(displayName, content, 4096)) {
+		await sendTelegramText(botToken, { chatId, text: chunk });
+	}
+}
+
+async function sendMessageToTelegram(env, botToken, mapping, message) {
+	const displayName = message.sender.displayName;
+	if (!message.attachment) {
+		if (message.content) {
+			await sendTextMessage(botToken, mapping.telegramChatId, displayName, message.content);
+		}
+		return;
+	}
+
+	if (Number(message.attachment.size) > TELEGRAM_BRIDGE_FILE_LIMIT) {
+		logBridgeFailure("telegram outbound attachment skipped: file too large", {
+			roomId: Number(mapping.channelId),
+			mappingId: mapping.id,
+			attachmentSize: Number(message.attachment.size),
+		});
+		if (message.content) {
+			await sendTextMessage(botToken, mapping.telegramChatId, displayName, message.content);
+		}
+		return;
+	}
+
+	const file = await loadEdgeChatAttachment(env, message.attachment);
+	if (!file) {
+		logBridgeFailure("telegram outbound attachment skipped: file too large", {
+			roomId: Number(mapping.channelId),
+			mappingId: mapping.id,
+		});
+		if (message.content) {
+			await sendTextMessage(botToken, mapping.telegramChatId, displayName, message.content);
+		}
+		return;
+	}
+
+	const captions = splitTelegramFormattedMessage(displayName, message.content, 1024);
+	await sendTelegramMedia(botToken, {
+		chatId: mapping.telegramChatId,
+		kind: telegramMediaKind(file.type),
+		bytes: file.bytes,
+		filename: file.name,
+		contentType: file.type,
+		caption: captions[0],
+	});
+	for (const chunk of captions.slice(1)) {
+		await sendTelegramText(botToken, { chatId: mapping.telegramChatId, text: chunk });
+	}
 }
 
 export async function forwardEdgeChatMessageToTelegram(env, { room, message }) {
@@ -28,20 +119,14 @@ export async function forwardEdgeChatMessageToTelegram(env, { room, message }) {
 			getTelegramCredentials(env),
 			listEnabledTelegramMappingsForChannel(env.DB, room.id),
 		]);
-		if (!credentials || !mappings.length || !message.content) {
+		if (!credentials || !mappings.length || (!message.content && !message.attachment)) {
 			return;
 		}
 
-		const text = `${message.sender.displayName}: ${message.content}`;
 		await Promise.all(
 			mappings.map(async (mapping) => {
 				try {
-					for (const chunk of splitTelegramText(text)) {
-						await sendTelegramText(credentials.botToken, {
-							chatId: mapping.telegramChatId,
-							text: chunk,
-						});
-					}
+					await sendMessageToTelegram(env, credentials.botToken, mapping, message);
 				} catch (error) {
 					logBridgeFailure("telegram outbound message failed", {
 						roomId: Number(room.id),
@@ -59,20 +144,65 @@ export async function forwardEdgeChatMessageToTelegram(env, { room, message }) {
 	}
 }
 
-export async function ingestTelegramMessage(env, { mapping, telegramMessage }) {
-	const response = await submitExternalRoomMessage(env, {
-		room: {
-			id: mapping.channelId,
-			kind: "public",
-			name: mapping.channelName,
-		},
-		content: telegramMessage.content,
-		source: "telegram",
-		sourceMessageId: telegramMessage.sourceMessageId,
-		externalSender: telegramMessage.sender,
-	});
-	if (!response.ok) {
-		throw new Error(`Telegram 入站消息提交失败：${response.status}`);
+export async function ingestTelegramMessage(env, { mapping, telegramMessage, botToken }) {
+	const existing = await getMessageBySource(
+		env,
+		"telegram",
+		telegramMessage.sourceMessageId,
+	);
+	if (existing) return { ok: true, created: false };
+
+	let imported = { attachment: null, oversized: false };
+	if (telegramMessage.attachment) {
+		if (!botToken) throw new Error("Telegram Bridge 未配置");
+		imported = await importTelegramAttachment(env, {
+			botToken,
+			telegramChatId: telegramMessage.telegramChatId,
+			telegramMessageId: telegramMessage.telegramMessageId,
+			attachment: telegramMessage.attachment,
+		});
 	}
-	return response.json();
+
+	const content = imported.oversized
+		? [telegramMessage.content, "附件超过 16 MB，未同步"].filter(Boolean).join("\n\n")
+		: telegramMessage.content;
+	try {
+		const response = await submitExternalRoomMessage(env, {
+			room: {
+				id: mapping.channelId,
+				kind: "public",
+				name: mapping.channelName,
+			},
+			content,
+			attachment: imported.attachment,
+			source: "telegram",
+			sourceMessageId: telegramMessage.sourceMessageId,
+			sourceAttachmentId: telegramMessage.attachment?.fileId || null,
+			sourceAttachmentUniqueId: telegramMessage.attachment?.fileUniqueId || null,
+			externalSender: telegramMessage.sender,
+		});
+		if (!response.ok) {
+			throw new Error(`Telegram 入站消息提交失败：${response.status}`);
+		}
+		const result = await response.json();
+		if (!result.created) {
+			await deleteImportedTelegramAttachment(env, imported.attachment);
+		}
+		return result;
+	} catch (error) {
+		// DO 响应中断时先按去重键复查，避免删除已经被正式消息引用的 R2 对象。
+		const persisted = await getMessageBySource(
+			env,
+			"telegram",
+			telegramMessage.sourceMessageId,
+		).catch(() => null);
+		if (persisted) {
+			if (persisted.attachment?.key !== imported.attachment?.key) {
+				await deleteImportedTelegramAttachment(env, imported.attachment);
+			}
+			return { ok: true, created: false, message: persisted };
+		}
+		await deleteImportedTelegramAttachment(env, imported.attachment);
+		throw error;
+	}
 }
