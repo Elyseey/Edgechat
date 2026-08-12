@@ -1,0 +1,150 @@
+import {
+	createTelegramMapping,
+	deleteTelegramMapping,
+	getTelegramCredentials,
+	getTelegramMappingByChatId,
+	listTelegramBridgeAdminState,
+	saveTelegramBridgeConfig,
+	updateTelegramMapping,
+} from "../data/telegram.js";
+import {
+	getTelegramBot,
+	getTelegramChat,
+	setTelegramWebhook,
+	TelegramApiError,
+} from "../integrations/telegram/client.js";
+import { ingestTelegramMessage } from "../integrations/telegram/bridge.js";
+import { parseTelegramMessageUpdate } from "../integrations/telegram/parser.js";
+import { errorResponse, parseJsonRequest, randomToken } from "../utils.js";
+
+function webhookUrl(requestUrl) {
+	const url = new URL(requestUrl);
+	url.pathname = "/api/integrations/telegram/webhook";
+	url.search = "";
+	return url.toString();
+}
+
+function telegramApiError(error) {
+	return error instanceof TelegramApiError
+		? errorResponse(error.message, 400)
+		: null;
+}
+
+export function registerTelegramWebhookRoute(app) {
+	app.post("/api/integrations/telegram/webhook", async (c) => {
+		const credentials = await getTelegramCredentials(c.env);
+		if (!credentials) {
+			return errorResponse("Telegram Bridge 未配置", 503);
+		}
+		if (
+			c.req.header("X-Telegram-Bot-Api-Secret-Token") !== credentials.webhookSecret
+		) {
+			return errorResponse("Webhook 验证失败", 401);
+		}
+
+		const telegramMessage = parseTelegramMessageUpdate(await parseJsonRequest(c.req.raw));
+		if (!telegramMessage) {
+			return c.json({ ok: true });
+		}
+		const mapping = await getTelegramMappingByChatId(
+			c.env.DB,
+			telegramMessage.telegramChatId,
+		);
+		if (!mapping) {
+			return c.json({ ok: true });
+		}
+
+		await ingestTelegramMessage(c.env, { mapping, telegramMessage });
+		return c.json({ ok: true });
+	});
+}
+
+export function registerTelegramAdminRoutes(app) {
+	app.get("/api/admin/telegram", async (c) => {
+		return c.json(await listTelegramBridgeAdminState(c.env));
+	});
+
+	app.put("/api/admin/telegram/config", async (c) => {
+		const payload = await parseJsonRequest(c.req.raw);
+		const botToken = String(payload.botToken || "").trim();
+		if (!botToken) {
+			return errorResponse("Telegram Bot Token 不能为空");
+		}
+
+		try {
+			const bot = await getTelegramBot(botToken);
+			const secret = randomToken(32);
+			const url = webhookUrl(c.req.url);
+			await setTelegramWebhook(botToken, { url, secretToken: secret });
+			await saveTelegramBridgeConfig(c.env, {
+				botToken,
+				webhookSecret: secret,
+				botUsername: bot.username || "",
+				webhookUrl: url,
+				updatedBy: c.get("session").userId,
+			});
+			return c.json(await listTelegramBridgeAdminState(c.env));
+		} catch (error) {
+			return telegramApiError(error) || errorResponse("Telegram 配置保存失败", 500);
+		}
+	});
+
+	app.post("/api/admin/telegram/mappings", async (c) => {
+		const payload = await parseJsonRequest(c.req.raw);
+		const channelId = Number(payload.channelId);
+		const telegramChatId = String(payload.telegramChatId || "").trim();
+		if (!Number.isInteger(channelId) || channelId <= 0 || !/^-\d+$/.test(telegramChatId)) {
+			return errorResponse("请选择公开群组并填写有效的 Telegram 群 ID");
+		}
+
+		try {
+			const credentials = await getTelegramCredentials(c.env);
+			if (!credentials) {
+				return errorResponse("请先连接 Telegram Bot");
+				}
+				const telegramChat = await getTelegramChat(credentials.botToken, telegramChatId);
+				if (!["group", "supergroup"].includes(telegramChat.type)) {
+					return errorResponse("目标必须是 Telegram 群组或超级群组");
+				}
+				const mappingId = await createTelegramMapping(c.env.DB, {
+				channelId,
+				telegramChatId,
+				telegramChatTitle:
+					telegramChat.title || telegramChat.username || String(telegramChat.id),
+				createdBy: c.get("session").userId,
+			});
+			if (!mappingId) {
+				return errorResponse("公开群组不存在", 404);
+			}
+			return c.json(await listTelegramBridgeAdminState(c.env));
+		} catch (error) {
+			const telegramError = telegramApiError(error);
+			if (telegramError) {
+				return telegramError;
+			}
+			if (String(error?.message || error).includes("UNIQUE")) {
+				return errorResponse("这个 EdgeChat 群组或 Telegram 群已经绑定");
+			}
+			throw error;
+		}
+	});
+
+	app.patch("/api/admin/telegram/mappings/:mappingId", async (c) => {
+		const payload = await parseJsonRequest(c.req.raw);
+		const updated = await updateTelegramMapping(c.env.DB, c.req.param("mappingId"), {
+			enabled: Boolean(payload.enabled),
+		});
+		if (!updated) {
+			return errorResponse("Telegram 映射不存在", 404);
+		}
+		return c.json(await listTelegramBridgeAdminState(c.env));
+	});
+
+	app.delete("/api/admin/telegram/mappings/:mappingId", async (c) => {
+		const deleted = await deleteTelegramMapping(c.env.DB, c.req.param("mappingId"));
+		if (!deleted) {
+			return errorResponse("Telegram 映射不存在", 404);
+		}
+		return c.json(await listTelegramBridgeAdminState(c.env));
+	});
+}

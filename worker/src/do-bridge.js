@@ -68,3 +68,15 @@ export async function notifyUserInbox(env, userId, payload) {
 	});
 	return response;
 }
+
+export async function submitExternalRoomMessage(env, payload) {
+	const room = payload.room;
+	return getChannelRoomStub(env, room.kind, room.id).fetch(
+		`${INTERNAL_ORIGIN}/external-message`,
+		{
+			method: "POST",
+			headers: createInternalHeaders({ "Content-Type": "application/json" }),
+			body: JSON.stringify(payload),
+		},
+	);
+}

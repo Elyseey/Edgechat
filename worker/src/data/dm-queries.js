@@ -37,8 +37,9 @@ export async function listUserDms(db, userId) {
 			   other.display_name AS other_display_name,
 			   other.avatar_key AS other_avatar_key,
 			   (SELECT MAX(m.created_at) FROM messages m WHERE m.channel_id = c.id AND m.deleted_at IS NULL) AS last_message_at,
-			   (SELECT COUNT(*) FROM messages m
-			    WHERE m.channel_id = c.id AND m.deleted_at IS NULL AND m.sender_id != ?
+				   (SELECT COUNT(*) FROM messages m
+				    WHERE m.channel_id = c.id AND m.deleted_at IS NULL
+				      AND (m.sender_id IS NULL OR m.sender_id != ?)
 			      AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0)) AS unread_count
 			 FROM channels c
 			 JOIN channel_members me ON me.channel_id = c.id AND me.user_id = ?

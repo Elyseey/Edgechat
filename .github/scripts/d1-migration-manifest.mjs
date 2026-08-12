@@ -62,4 +62,18 @@ export const D1_MIGRATIONS = [
       "index:idx_registration_invites_usage",
     ],
   },
+  {
+    id: "2026-08-12-telegram-bridge",
+    file: "worker/migrations/2026-08-12-telegram-bridge.sql",
+    artifacts: [
+      "column:messages.sender_kind",
+      "column:messages.external_sender_id",
+      "column:messages.source",
+      "column:messages.source_message_id",
+      "table:telegram_bridge_config",
+      "table:telegram_mappings",
+      "index:idx_messages_external_source",
+      "index:idx_telegram_mappings_channel",
+    ],
+  },
 ];

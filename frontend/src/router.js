@@ -8,6 +8,7 @@ import AdminDashboardPage from './pages/AdminDashboardPage.vue';
 import AdminUsersPage from './pages/AdminUsersPage.vue';
 import AdminInvitesPage from './pages/AdminInvitesPage.vue';
 import AdminSitePage from './pages/AdminSitePage.vue';
+import AdminTelegramPage from './pages/AdminTelegramPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
 import { addAuthInvalidListener } from './auth-storage.js';
 
@@ -58,6 +59,12 @@ const router = createRouter({
           name: 'admin-invites',
           component: AdminInvitesPage,
           meta: { admin: true, adminTitle: '注册邀请', adminIcon: 'invites', transition: 'page' }
+        },
+        {
+          path: 'telegram',
+          name: 'admin-telegram',
+          component: AdminTelegramPage,
+          meta: { admin: true, adminTitle: 'Telegram 互通', adminIcon: 'telegram', transition: 'page' }
         },
         {
           path: 'site',

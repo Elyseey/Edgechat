@@ -8,16 +8,24 @@ function toNullableNumber(value) {
 }
 
 export function mapMessage(row, content = row.content) {
+	const isExternal = row.sender_kind === "external";
 	return {
-		id: Number(row.id),
-		content,
-		createdAt: row.created_at,
-		sender: {
-			id: Number(row.sender_id),
-			username: row.sender_username,
-			displayName: row.sender_display_name,
-			avatarUrl: row.sender_avatar_key ? publicFileUrl(row.sender_avatar_key) : "",
-		},
+			id: Number(row.id),
+			content,
+			createdAt: row.created_at,
+			source: row.source || "edgechat",
+			sender: {
+				kind: isExternal ? "external" : "local",
+				id: isExternal ? String(row.external_sender_id || "") : Number(row.sender_id),
+				username: isExternal ? "" : row.sender_username,
+				displayName: isExternal ? row.external_sender_name : row.sender_display_name,
+				avatarUrl: isExternal
+					? row.external_sender_avatar_url || ""
+					: row.sender_avatar_key
+						? publicFileUrl(row.sender_avatar_key)
+						: "",
+				source: isExternal ? row.source : "edgechat",
+			},
 		attachment: row.attachment_key
 			? {
 					key: row.attachment_key,
@@ -32,18 +40,23 @@ export function mapMessage(row, content = row.content) {
 
 async function mapDecryptedMessage(env, row) {
 	const content = await decryptMessageContent(env, row.content, {
-		channelId: row.channel_id,
-		senderId: row.sender_id,
-	});
+				channelId: row.channel_id,
+				senderId: row.sender_id ?? 0,
+				senderContext:
+					row.sender_kind === "external"
+						? `${row.source}:${row.external_sender_id}`
+						: "",
+		});
 	return mapMessage(row, content);
 }
 
 const MESSAGE_SELECT = `SELECT
   m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
-  m.attachment_size, m.created_at,
+  m.attachment_size, m.sender_kind, m.external_sender_id, m.external_sender_name,
+  m.external_sender_avatar_url, m.source, m.source_message_id, m.created_at,
   u.id AS sender_id, u.username AS sender_username,
   u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key
- FROM messages m JOIN users u ON u.id = m.sender_id`;
+ FROM messages m LEFT JOIN users u ON u.id = m.sender_id`;
 
 export async function listMessages(env, roomId, before = null, limit = 30) {
 	const filters = ["m.channel_id = ?", "m.deleted_at IS NULL"];
@@ -67,6 +80,18 @@ export async function getMessageById(env, messageId) {
 	return results[0] ? mapDecryptedMessage(env, results[0]) : null;
 }
 
+async function getMessageBySource(env, source, sourceMessageId) {
+	const { results } = await env.DB
+		.prepare(
+			`${MESSAGE_SELECT}
+			 WHERE m.source = ? AND m.source_message_id = ?
+			 LIMIT 1`,
+		)
+		.bind(String(source), String(sourceMessageId))
+		.all();
+	return results[0] ? mapDecryptedMessage(env, results[0]) : null;
+}
+
 export async function softDeleteMessage(db, { channelId, messageId }) {
 	const result = await db
 		.prepare(
@@ -81,32 +106,92 @@ export async function softDeleteMessage(db, { channelId, messageId }) {
 	return Number(result.meta?.changes || 0) > 0;
 }
 
-export async function insertMessage(env, { channelId, senderId, content, attachment }) {
+async function persistMessage(env, {
+	channelId,
+	senderId = null,
+	externalSender = null,
+	content,
+	attachment = null,
+	source = "edgechat",
+	sourceMessageId = null,
+}) {
+	const isExternal = externalSender !== null;
+	const normalizedSenderId = isExternal ? null : Number(senderId);
 	const hasAttachment = attachment !== undefined && attachment !== null;
-	const cleanAttachment = pickAttachment(attachment, { ownerUserId: senderId });
+	const cleanAttachment = isExternal
+		? null
+		: pickAttachment(attachment, { ownerUserId: normalizedSenderId });
 	const cleanContent = String(content || "").trim();
 	if (hasAttachment && !cleanAttachment) {
 		throw new Error("Invalid attachment");
 	}
-	if (cleanAttachment && !(await fileBelongsToUser(env.DB, cleanAttachment.key, senderId))) {
+	if (
+		cleanAttachment &&
+		!(await fileBelongsToUser(env.DB, cleanAttachment.key, normalizedSenderId))
+	) {
 		throw new Error("Attachment is not available");
 	}
 	if (!cleanContent && !cleanAttachment) {
 		throw new Error("Message content cannot be empty");
 	}
-	const storedContent = await encryptMessageContent(env, cleanContent, { channelId, senderId });
-	const result = await env.DB
-		.prepare(
-			`INSERT INTO messages (
-			   channel_id, sender_id, content, attachment_key,
-			   attachment_name, attachment_type, attachment_size
-			 ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		)
-		.bind(
-			Number(channelId), Number(senderId), storedContent,
-			cleanAttachment?.key || null, cleanAttachment?.name || null,
-			cleanAttachment?.type || null, cleanAttachment?.size || null,
-		)
-		.run();
-	return getMessageById(env, result.meta.last_row_id);
+	const externalId = isExternal ? String(externalSender.id || "").trim() : "";
+	const externalName = isExternal ? String(externalSender.displayName || "").trim() : "";
+	if (isExternal && (!externalId || !externalName || !sourceMessageId)) {
+		throw new Error("External sender is incomplete");
+	}
+
+	const storedContent = await encryptMessageContent(env, cleanContent, {
+		channelId,
+		senderId: normalizedSenderId ?? 0,
+		senderContext: isExternal ? `${source}:${externalId}` : "",
+	});
+	try {
+		const result = await env.DB
+			.prepare(
+				`INSERT INTO messages (
+				   channel_id, sender_id, content, attachment_key, attachment_name,
+				   attachment_type, attachment_size, sender_kind, external_sender_id,
+				   external_sender_name, external_sender_avatar_url, source, source_message_id
+				 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			)
+			.bind(
+				Number(channelId),
+				normalizedSenderId,
+				storedContent,
+				cleanAttachment?.key || null,
+				cleanAttachment?.name || null,
+				cleanAttachment?.type || null,
+				cleanAttachment?.size || null,
+				isExternal ? "external" : "local",
+				isExternal ? externalId : null,
+				isExternal ? externalName : null,
+				isExternal ? String(externalSender.avatarUrl || "") : null,
+				String(source || "edgechat"),
+				sourceMessageId ? String(sourceMessageId) : null,
+			)
+			.run();
+		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
+	} catch (error) {
+		if (sourceMessageId && String(error?.message || error).includes("UNIQUE")) {
+			const existing = await getMessageBySource(env, source, sourceMessageId);
+			if (existing) {
+				return { message: existing, created: false };
+			}
+		}
+		throw error;
+	}
+}
+
+export async function insertMessage(env, { channelId, senderId, content, attachment }) {
+	const result = await persistMessage(env, {
+		channelId,
+		senderId,
+		content,
+		attachment,
+	});
+	return result.message;
+}
+
+export function insertExternalMessage(env, payload) {
+	return persistMessage(env, payload);
 }

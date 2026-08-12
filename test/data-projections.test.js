@@ -234,16 +234,19 @@ test("消息 projection 保持附件和发送者字段", () => {
 			attachment_type: "text/plain",
 			attachment_size: "10",
 		}),
-		{
-			id: 5,
-			content: "hello",
-			createdAt: "2026-07-23",
-			sender: {
-				id: 2,
-				username: "alice",
-				displayName: "Alice",
-				avatarUrl: "/files/avatar.png",
-			},
+			{
+				id: 5,
+				content: "hello",
+				createdAt: "2026-07-23",
+				source: "edgechat",
+				sender: {
+					kind: "local",
+					id: 2,
+					username: "alice",
+					displayName: "Alice",
+					avatarUrl: "/files/avatar.png",
+					source: "edgechat",
+				},
 			attachment: {
 				key: "files/a b.txt",
 				name: "a b.txt",

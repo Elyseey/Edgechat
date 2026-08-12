@@ -7,6 +7,7 @@ import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
+import SenderSourceBadge from '../components/chat/SenderSourceBadge.vue';
 import PendingAttachmentPreview from '../components/chat/PendingAttachmentPreview.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import UiTextarea from '../components/ui/Textarea.vue';
@@ -370,7 +371,8 @@ onBeforeUnmount(() => {
               @pointercancel="cancelMessageLongPress"
             >
               <div v-if="activeRoom.kind !== 'dm' && !isOwnMessage(msg)" class="message-sender-name">
-                {{ msg.sender.displayName }}
+                <span>{{ msg.sender.displayName }}</span>
+                <SenderSourceBadge :source="msg.sender.source" />
               </div>
               <p v-if="msg.content">{{ msg.content }}</p>
               <MessageAttachment v-if="msg.attachment" :attachment="msg.attachment" />
@@ -901,6 +903,9 @@ onBeforeUnmount(() => {
 }
 
 .message-sender-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12.5px;
   font-weight: 600;
   color: #008069;

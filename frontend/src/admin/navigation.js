@@ -1,4 +1,4 @@
-import { Gauge, Settings, UserCog, UserPlus } from '@lucide/vue';
+import { Gauge, Send, Settings, UserCog, UserPlus } from '@lucide/vue';
 
 export const adminNavigation = [
   {
@@ -27,6 +27,13 @@ export const adminNavigation = [
     ]
   },
   {
+    id: 'telegram',
+    label: 'Telegram 互通',
+    description: '管理 Bot 与公开群组映射',
+    to: '/admin/telegram',
+    icon: Send
+  },
+  {
     id: 'site',
     label: '网站设置',
     description: '维护站点外观与版本状态',
@@ -43,5 +50,6 @@ export const adminRouteIcons = {
   dashboard: Gauge,
   users: UserCog,
   invites: UserPlus,
+  telegram: Send,
   site: Settings
 };

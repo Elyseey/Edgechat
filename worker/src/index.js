@@ -25,6 +25,10 @@ import { registerChannelRoutes } from './api/channels.js';
 import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
+import {
+  registerTelegramAdminRoutes,
+  registerTelegramWebhookRoute
+} from './api/telegram.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
 import { UserInbox } from './do/UserInbox.js';
@@ -50,7 +54,7 @@ app.use('/api/*', async (c, next) => {
 app.use('/api/*', cors({
   origin: '*',
   allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 }));
 
 app.get('/api/health', (c) => c.json({ ok: true }));
@@ -59,6 +63,8 @@ app.get('/api/site', async (c) => {
   const site = await getSiteSettings(c.env.DB);
   return c.json({ site });
 });
+
+registerTelegramWebhookRoute(app);
 
 app.get('/api/register-links/:token', async (c) => {
   const token = String(c.req.param('token') || '').trim();
@@ -287,6 +293,7 @@ registerDmRoutes(app);
 registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);
+registerTelegramAdminRoutes(app);
 
 app.get('/api/ws/:kind/:id', async (c) => {
   const session = c.get('session');

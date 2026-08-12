@@ -25,9 +25,12 @@ export function useChatRoom({
 	const messagesEl = ref(null);
 	const fileInputEl = ref(null);
 
-	function isOwnMessage(message) {
-		return Number(message.sender.id) === Number(session.value?.userId);
-	}
+		function isOwnMessage(message) {
+			return (
+				message.sender.kind !== "external" &&
+				Number(message.sender.id) === Number(session.value?.userId)
+			);
+		}
 
 	function scrollToBottom() {
 		const element = messagesEl.value;

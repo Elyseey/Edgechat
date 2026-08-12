@@ -1,4 +1,6 @@
-const MESSAGE_PREFIX = 'edgechat:enc:v1:';
+const MESSAGE_V1_PREFIX = 'edgechat:enc:v1:';
+const MESSAGE_V2_PREFIX = 'edgechat:enc:v2:';
+const SECRET_PREFIX = 'edgechat:secret:v1:';
 const KEY_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const AES_KEY_BYTES = 32;
 const NONCE_BYTES = 12;
@@ -147,13 +149,26 @@ function messageAad(channelId, senderId) {
   return encoder.encode(`edgechat:message:v1:${Number(channelId)}:${Number(senderId)}`);
 }
 
+function externalMessageAad(channelId, senderContext) {
+  // 外部用户没有本地数值账号，v2 使用来源与外部 ID 绑定密文，同时保留 v1 本地消息兼容性。
+  return encoder.encode(`edgechat:message:v2:${Number(channelId)}:${String(senderContext)}`);
+}
+
 function attachmentAad(objectKey) {
   // R2 对象键参与认证，避免同一份密文被替换到其他下载地址。
   return encoder.encode(`edgechat:attachment:v1:${String(objectKey)}`);
 }
 
+function secretAad(context) {
+  // 配置密文绑定到明确用途，避免数据库中的 Bot Token 与 Webhook Secret 被互换后仍能解密。
+  return encoder.encode(`edgechat:secret:v1:${String(context)}`);
+}
+
 export function isEncryptedMessageContent(value) {
-  return typeof value === 'string' && value.startsWith(MESSAGE_PREFIX);
+  return (
+    typeof value === 'string' &&
+    (value.startsWith(MESSAGE_V1_PREFIX) || value.startsWith(MESSAGE_V2_PREFIX))
+  );
 }
 
 export function getMessageEnvelopeKeyId(value) {
@@ -164,7 +179,11 @@ export function getMessageEnvelopeKeyId(value) {
   return parts.length === 6 && KEY_ID_PATTERN.test(parts[3]) ? parts[3] : null;
 }
 
-export async function encryptMessageContent(source, plaintext, { channelId, senderId }) {
+export async function encryptMessageContent(
+  source,
+  plaintext,
+  { channelId, senderId, senderContext = '' }
+) {
   const cleanPlaintext = String(plaintext || '');
   if (!cleanPlaintext) {
     return '';
@@ -173,18 +192,30 @@ export async function encryptMessageContent(source, plaintext, { channelId, send
   const keyring = loadEncryptionKeyring(source);
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
   const cryptoKey = await getCryptoKey(keyring, keyring.activeKeyId);
+  const usesExternalContext = Boolean(senderContext);
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: nonce, additionalData: messageAad(channelId, senderId) },
+      {
+        name: 'AES-GCM',
+        iv: nonce,
+        additionalData: usesExternalContext
+          ? externalMessageAad(channelId, senderContext)
+          : messageAad(channelId, senderId)
+      },
       cryptoKey,
       encoder.encode(cleanPlaintext)
     )
   );
 
-  return `${MESSAGE_PREFIX}${keyring.activeKeyId}:${bytesToBase64(nonce)}:${bytesToBase64(ciphertext)}`;
+  const prefix = usesExternalContext ? MESSAGE_V2_PREFIX : MESSAGE_V1_PREFIX;
+  return `${prefix}${keyring.activeKeyId}:${bytesToBase64(nonce)}:${bytesToBase64(ciphertext)}`;
 }
 
-export async function decryptMessageContent(source, value, { channelId, senderId }) {
+export async function decryptMessageContent(
+  source,
+  value,
+  { channelId, senderId, senderContext = '' }
+) {
   const content = String(value || '');
   // 历史明文保持原样读取，不做请求内回写，也不触发后台批量迁移。
   if (!isEncryptedMessageContent(content)) {
@@ -205,8 +236,18 @@ export async function decryptMessageContent(source, value, { channelId, senderId
   }
 
   try {
+    const isV2 = content.startsWith(MESSAGE_V2_PREFIX);
+    if (isV2 && !senderContext) {
+      throw new Error('Encrypted message sender context is unavailable');
+    }
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: nonce, additionalData: messageAad(channelId, senderId) },
+      {
+        name: 'AES-GCM',
+        iv: nonce,
+        additionalData: isV2
+          ? externalMessageAad(channelId, senderContext)
+          : messageAad(channelId, senderId)
+      },
       await getCryptoKey(keyring, keyId),
       ciphertext
     );
@@ -216,6 +257,58 @@ export async function decryptMessageContent(source, value, { channelId, senderId
       throw error;
     }
     throw new Error('Encrypted message authentication failed');
+  }
+}
+
+export async function encryptSecretValue(source, plaintext, context) {
+  const cleanPlaintext = String(plaintext || '');
+  if (!cleanPlaintext) {
+    return '';
+  }
+
+  const keyring = loadEncryptionKeyring(source);
+  const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: nonce, additionalData: secretAad(context) },
+      await getCryptoKey(keyring, keyring.activeKeyId),
+      encoder.encode(cleanPlaintext)
+    )
+  );
+
+  return `${SECRET_PREFIX}${keyring.activeKeyId}:${bytesToBase64(nonce)}:${bytesToBase64(ciphertext)}`;
+}
+
+export async function decryptSecretValue(source, value, context) {
+  const encrypted = String(value || '');
+  if (!encrypted.startsWith(SECRET_PREFIX)) {
+    throw new Error('Encrypted secret envelope is malformed');
+  }
+
+  const parts = encrypted.split(':');
+  if (parts.length !== 6 || !KEY_ID_PATTERN.test(parts[3])) {
+    throw new Error('Encrypted secret envelope is malformed');
+  }
+
+  const keyring = loadEncryptionKeyring(source);
+  const nonce = base64ToBytes(parts[4], 'Secret nonce');
+  const ciphertext = base64ToBytes(parts[5], 'Secret ciphertext');
+  if (nonce.byteLength !== NONCE_BYTES || ciphertext.byteLength < 16) {
+    throw new Error('Encrypted secret envelope is malformed');
+  }
+
+  try {
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: nonce, additionalData: secretAad(context) },
+      await getCryptoKey(keyring, parts[3]),
+      ciphertext
+    );
+    return decoder.decode(plaintext);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Encryption key is unavailable:')) {
+      throw error;
+    }
+    throw new Error('Encrypted secret authentication failed');
   }
 }
 

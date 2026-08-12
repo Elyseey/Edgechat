@@ -51,9 +51,10 @@ export async function listVisibleChannels(db, userId) {
 			   EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ? AND cm.role = 'owner') AS can_manage,
 			   (SELECT COUNT(*) FROM channel_members cm WHERE cm.channel_id = c.id) AS member_count,
 			   (SELECT MAX(m.created_at) FROM messages m WHERE m.channel_id = c.id AND m.deleted_at IS NULL) AS last_message_at,
-			   CASE WHEN EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ?)
-			     THEN (SELECT COUNT(*) FROM messages m
-			           WHERE m.channel_id = c.id AND m.deleted_at IS NULL AND m.sender_id != ?
+				   CASE WHEN EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ?)
+				     THEN (SELECT COUNT(*) FROM messages m
+				           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
+				             AND (m.sender_id IS NULL OR m.sender_id != ?)
 			             AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0))
 			     ELSE 0 END AS unread_count
 			 FROM channels c

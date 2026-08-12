@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import MessageAttachment from './MessageAttachment.vue';
+import SenderSourceBadge from './SenderSourceBadge.vue';
 import UiAvatar from '../ui/Avatar.vue';
 import UiButton from '../ui/Button.vue';
 import UiSurface from '../ui/Surface.vue';
@@ -36,11 +37,14 @@ const emit = defineEmits(['load-older']);
 const scrollContainer = ref(null);
 
 function isOwnMessage(message) {
-  return Number(message.sender.id) === Number(props.sessionUserId);
+  return message.sender.kind !== 'external' && Number(message.sender.id) === Number(props.sessionUserId);
 }
 
 function isSameSender(left, right) {
-  return left && right && Number(left.sender.id) === Number(right.sender.id);
+  return left && right
+    && left.sender.kind === right.sender.kind
+    && left.sender.source === right.sender.source
+    && String(left.sender.id) === String(right.sender.id);
 }
 
 function bubbleRowClass(message, index) {
@@ -106,7 +110,10 @@ defineExpose({
         />
         <div class="chat-bubble" :class="bubbleClass(message, index)">
           <div class="chat-bubble__meta">
-            <strong>{{ isOwnMessage(message) ? '我' : message.sender.displayName }}</strong>
+            <strong>
+              {{ isOwnMessage(message) ? '我' : message.sender.displayName }}
+              <SenderSourceBadge :source="message.sender.source" />
+            </strong>
             <span>{{ formatTime(message.createdAt) }}</span>
           </div>
           <p v-if="message.content">{{ message.content }}</p>

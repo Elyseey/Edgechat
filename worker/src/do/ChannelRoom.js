@@ -1,9 +1,11 @@
 import { MessageSubmissionError, submitRoomMessage } from '../message-submission.js';
 import { deleteRoomMessage, MessageDeletionError } from '../message-deletion.js';
+import { submitExternalMessage } from '../external-message-submission.js';
+import { forwardEdgeChatMessageToTelegram } from '../integrations/telegram/bridge.js';
 import { authorizeRoom } from '../room-access.js';
 import { validateSession } from '../session.js';
 import { projectUnreadMessage } from '../unread-projection.js';
-import { parseVerifiedPrincipal } from '../verified-identity.js';
+import { isVerifiedInternalRequest, parseVerifiedPrincipal } from '../verified-identity.js';
 
 const MESSAGE_SIZE_LIMIT = 10 * 1024;
 
@@ -139,8 +141,44 @@ export class ChannelRoom {
     }
   }
 
+  runMessageProjections(room, message) {
+    this.state.waitUntil(
+      Promise.all([
+        projectUnreadMessage(this.env, {
+          room,
+          senderId: message.sender.kind === 'local' ? message.sender.id : null,
+          message
+        }),
+        forwardEdgeChatMessageToTelegram(this.env, { room, message })
+      ])
+    );
+  }
+
+  async receiveExternalMessage(request) {
+    if (!isVerifiedInternalRequest(request)) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const payload = await request.json();
+    const room = payload.room;
+    if (room?.kind !== 'public' || !Number.isInteger(Number(room.id))) {
+      return new Response('Invalid room', { status: 400 });
+    }
+
+    const result = await submitExternalMessage(this.env, { room, payload });
+    if (result.created) {
+      await this.broadcast(result.packet);
+      this.runMessageProjections(room, result.message);
+    }
+    return Response.json({ ok: true, created: result.created, message: result.message });
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/external-message' && request.method === 'POST') {
+      return this.receiveExternalMessage(request);
+    }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected websocket', { status: 426 });
@@ -229,15 +267,8 @@ export class ChannelRoom {
         payload
       );
       await this.broadcast(packet);
-
-      // 未读投影不影响消息提交结果，交给 DO 生命周期继续完成，缩短发送链路。
-      this.state.waitUntil(
-        projectUnreadMessage(this.env, {
-          room: currentMeta.room,
-          senderId: currentMeta.principal.userId,
-          message: saved
-        })
-      );
+      // 未读与外部桥接都属于提交后投影，异步执行以缩短 WebSocket 发送链路。
+      this.runMessageProjections(currentMeta.room, saved);
     } catch (error) {
       if (error instanceof MessageSubmissionError || error instanceof MessageDeletionError) {
         sendSocketError(ws, error.message);

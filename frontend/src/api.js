@@ -195,6 +195,33 @@ export default {
   adminSiteSettings() {
     return request('/admin/site-settings');
   },
+  adminTelegram() {
+    return request('/admin/telegram');
+  },
+  saveAdminTelegramConfig(payload) {
+    return request('/admin/telegram/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  createAdminTelegramMapping(payload) {
+    return request('/admin/telegram/mappings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  updateAdminTelegramMapping(mappingId, payload) {
+    return request(`/admin/telegram/mappings/${mappingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  deleteAdminTelegramMapping(mappingId) {
+    return request(`/admin/telegram/mappings/${mappingId}`, { method: 'DELETE' });
+  },
   listAdminRegisterLinks() {
     return request('/admin/register-links');
   },

@@ -19,6 +19,7 @@ const userCreatorSource = read('../frontend/src/components/admin/AdminUserCreato
 const inviteManagerSource = read('../frontend/src/components/admin/RegistrationInviteManager.vue');
 const siteSource = read('../frontend/src/pages/AdminSitePage.vue');
 const siteAppearanceSource = read('../frontend/src/components/admin/AdminSiteAppearance.vue');
+const telegramSource = read('../frontend/src/pages/AdminTelegramPage.vue');
 const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
 const legacyTokens = read('../frontend/src/styles/tokens.css');
@@ -37,9 +38,9 @@ test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
   assert.match(routerSource, /meta: \{ admin: true/);
 });
 
-test('侧栏保留四个管理分类并移除消息查看入口', () => {
+test('侧栏保留五个管理分类并移除消息查看入口', () => {
   assert.match(sidebarSource, /Edgecht 管理后台/);
-  for (const id of ['dashboard', 'users', 'invites', 'site']) {
+  for (const id of ['dashboard', 'users', 'invites', 'telegram', 'site']) {
     assert.match(navigationSource, new RegExp(`id: '${id}'`));
   }
   assert.match(navigationSource, /label: '创建用户'/);
@@ -89,6 +90,16 @@ test('仪表盘复用现有概况接口并只展示可验证统计', () => {
   assert.match(dashboardSource, /运行概况/);
 });
 
+test('Telegram 互通页由管理员路由保护并分别管理 Bot 与公开群组映射', () => {
+  assert.match(routerSource, /import AdminTelegramPage/);
+  assert.match(routerSource, /path: 'telegram'/);
+  assert.match(routerSource, /adminTitle: 'Telegram 互通'/);
+  assert.match(telegramSource, /api\.saveAdminTelegramConfig/);
+  assert.match(telegramSource, /api\.createAdminTelegramMapping/);
+  assert.match(telegramSource, /type="checkbox"/);
+  assert.match(telegramSource, /Telegram 群 ID/);
+});
+
 test('仪表盘在中等桌面宽度提前重排且快捷入口文字保持完整', () => {
   assert.match(
     dashboardStyles,
@@ -131,6 +142,7 @@ test('后台核心 Vue 文件保持在单一职责的可维护规模', () => {
     ['AdminSidebar', sidebarSource],
     ['AdminDashboardPage', dashboardSource],
     ['AdminUsersPage', usersSource],
+    ['AdminTelegramPage', telegramSource],
     ['AdminSitePage', siteSource]
   ]) {
     assert.ok(source.split('\n').length < 260, `${name} 不应重新膨胀为超大文件`);
