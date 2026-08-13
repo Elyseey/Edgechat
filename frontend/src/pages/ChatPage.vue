@@ -1,4 +1,5 @@
 <script setup>
+import { ArrowLeft, Menu, Settings, UsersRound } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AddConversationDialog from '../components/chat/AddConversationDialog.vue';
@@ -7,6 +8,7 @@ import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
+import MobileNavigationDrawer from '../components/chat/MobileNavigationDrawer.vue';
 import SenderSourceBadge from '../components/chat/SenderSourceBadge.vue';
 import PendingAttachmentPreview from '../components/chat/PendingAttachmentPreview.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
@@ -14,6 +16,7 @@ import UiTextarea from '../components/ui/Textarea.vue';
 import { useActiveRoom } from '../composables/useActiveRoom.js';
 import { useChatRoom } from '../composables/useChatRoom.js';
 import { useChatSidebar } from '../composables/useChatSidebar.js';
+import { useChatViewport } from '../composables/useChatViewport.js';
 import { useConversationCreation } from '../composables/useConversationCreation.js';
 import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
@@ -22,11 +25,26 @@ import store from '../store.js';
 const router = useRouter();
 const error = ref('');
 const activeRoom = ref(null);
+const showMobileNavigation = ref(false);
 const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
 
 const { activeRoomKey, canManageActiveRoom, applyActiveChannel, selectDm, roomLabel } =
   useActiveRoom({ activeRoom });
+const {
+  isMobileViewport,
+  mobileView,
+  startViewportSync,
+  stopViewportSync,
+  openConversationView,
+  returnToConversationList
+} = useChatViewport({ activeRoom });
+const activeRoomAvatar = computed(() => {
+  if (!activeRoom.value) return '';
+  return activeRoom.value.kind === 'dm'
+    ? activeRoom.value.otherUser?.avatarUrl || ''
+    : activeRoom.value.avatarUrl || '';
+});
 
 const {
   channels, dms, users, sidebarLoading, conversationItems, formatListTime,
@@ -49,6 +67,7 @@ function handleRoomAccessRevoked(room) {
     ? `You no longer have access to "${roomName}".`
     : 'You no longer have access to this room.';
   activeRoom.value = null;
+  returnToConversationList();
   void refreshSidebar();
 }
 
@@ -72,6 +91,18 @@ const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
 });
 
 const wsConnected = computed(() => wsStatus.value === 'open');
+const activeRoomSubtitle = computed(() => {
+  if (!activeRoom.value) return '';
+  if (activeRoom.value.kind === 'dm') {
+    return activeRoom.value.otherUser?.username
+      ? `@${activeRoom.value.otherUser.username}`
+      : wsConnected.value ? '在线' : '正在连接';
+  }
+  if (activeRoom.value.memberCount) {
+    return `${activeRoom.value.memberCount} 位成员`;
+  }
+  return activeRoom.value.isGeneral ? '全员群组' : '群组会话';
+});
 const canModerateMessages = computed(
   () => Boolean(session.value?.isAdmin || canManageActiveRoom.value)
 );
@@ -132,6 +163,7 @@ function trackMessageLongPress(event) {
 const roomManagement = useRoomManagement({
   activeRoom, channels, users, error, refreshSidebar, conversationItems,
   openConversation, canManageActiveRoom,
+  returnToConversationList,
   onRoomDeleted: () => {
     disconnectSocket();
     messages.value = [];
@@ -172,6 +204,7 @@ const {
   availableUsers: availableInviteUsers,
   inviteSubmitting,
   toggle: toggleMemberPanel,
+  close: closeMemberPanel,
   invite: inviteMember,
   remove: removeMember
 } = memberManagement;
@@ -187,11 +220,27 @@ const {
 } = groupSettings;
 
 async function selectConversation(item) {
-  await openConversation(item);
+  try {
+    await openConversation(item);
+    openConversationView();
+  } catch (currentError) {
+    error.value = currentError.message;
+  }
 }
 
 function logout() { store.logout(); router.push('/login'); }
 function openAdmin() { router.push('/admin'); }
+function openSettings() { router.push('/settings'); }
+function closeMobileNavigation() { showMobileNavigation.value = false; }
+function navigateFromMobileDrawer(callback) {
+  closeMobileNavigation();
+  callback();
+}
+function returnToMobileConversationList() {
+  closeMemberPanel();
+  closeMessageMenu();
+  returnToConversationList();
+}
 
 async function bootstrap() {
   error.value = '';
@@ -203,6 +252,7 @@ watch(activeRoomKey, async (k) => {
   closeMessageMenu();
   cancelMessageLongPress();
   if (!k) return;
+  openConversationView();
   await loadMessages();
   connectSocket();
   for (const delay of [0, 50, 150, 300]) {
@@ -223,6 +273,7 @@ function confirmDeleteMessage() {
 }
 
 onMounted(() => {
+  startViewportSync();
   void bootstrap().then(connectUnreadInbox);
 });
 function formatBubbleTime(value) {
@@ -237,11 +288,19 @@ onBeforeUnmount(() => {
   cancelMessageLongPress();
   disconnectUnreadInbox();
   disconnectSocket();
+  stopViewportSync();
 });
 </script>
 
 <template>
-  <div class="chat-layout">
+  <div
+    class="chat-layout"
+    :class="{
+      'chat-layout--mobile': isMobileViewport,
+      'chat-layout--mobile-list': isMobileViewport && mobileView === 'list',
+      'chat-layout--mobile-chat': isMobileViewport && mobileView === 'chat'
+    }"
+  >
     <!-- Far-Left Navigation Sidebar -->
     <aside class="right-sidebar">
       <div class="right-sidebar-inner">
@@ -273,10 +332,19 @@ onBeforeUnmount(() => {
     <aside class="left-sidebar">
       <div class="sidebar-inner">
         <div class="sidebar-header">
+          <button
+            type="button"
+            class="header-action mobile-menu-action"
+            aria-label="打开导航"
+            :aria-expanded="showMobileNavigation"
+            @click="showMobileNavigation = true"
+          >
+            <Menu :size="22" aria-hidden="true" />
+          </button>
           <h1 class="brand-title">EdgeChat</h1>
           <div class="sidebar-header-actions">
             <a
-              class="header-action"
+              class="header-action header-action--github"
               href="https://github.com/aozorae/Edgechat"
               target="_blank"
               rel="noopener noreferrer"
@@ -336,14 +404,52 @@ onBeforeUnmount(() => {
     <main class="chat-main">
       <template v-if="activeRoom">
         <header class="chat-header">
-          <h2>{{ roomLabel(activeRoom) }}</h2>
+          <button
+            type="button"
+            class="chat-header__back"
+            aria-label="返回会话列表"
+            @click="returnToMobileConversationList"
+          >
+            <ArrowLeft :size="24" aria-hidden="true" />
+          </button>
+          <UiAvatar
+            class="chat-header__avatar"
+            :src="activeRoomAvatar"
+            :fallback="roomLabel(activeRoom)?.[0] || '?'"
+            size="sm"
+          />
+          <div class="chat-header__identity">
+            <h2>{{ roomLabel(activeRoom) }}</h2>
+            <span>{{ activeRoomSubtitle }}</span>
+          </div>
           <div class="chat-header__actions">
-            <div class="chat-header__status" :class="wsConnected ? 'online' : 'offline'"></div>
-            <button v-if="activeRoom.kind !== 'dm'" type="button" class="chat-header__button" @click="toggleMemberPanel">
-              {{ showMemberPanel ? '收起成员' : '成员' }}
+            <div
+              class="chat-header__status"
+              :class="wsConnected ? 'online' : 'offline'"
+              :title="wsConnected ? '实时连接正常' : '正在连接'"
+              :aria-label="wsConnected ? '实时连接正常' : '正在连接'"
+              role="status"
+            ></div>
+            <button
+              v-if="activeRoom.kind !== 'dm'"
+              type="button"
+              class="chat-header__button"
+              :aria-label="showMemberPanel ? '关闭成员列表' : '查看成员列表'"
+              :aria-expanded="showMemberPanel"
+              @click="toggleMemberPanel"
+            >
+              <UsersRound :size="19" aria-hidden="true" />
+              <span>{{ showMemberPanel ? '收起成员' : '成员' }}</span>
             </button>
-            <button v-if="canManageActiveRoom" type="button" class="chat-header__button" @click="openGroupEditor">
-              群设置
+            <button
+              v-if="canManageActiveRoom"
+              type="button"
+              class="chat-header__button"
+              aria-label="打开群设置"
+              @click="openGroupEditor"
+            >
+              <Settings :size="19" aria-hidden="true" />
+              <span>群设置</span>
             </button>
           </div>
         </header>
@@ -396,7 +502,14 @@ onBeforeUnmount(() => {
           <div v-if="error" class="composer-error">{{ error }}</div>
           <div class="composer-row">
             <input ref="fileInputEl" type="file" class="composer-file-input" @change="uploadAttachment" />
-            <button type="button" class="composer-btn" :disabled="!activeRoom" @click="openFilePicker">
+            <button
+              type="button"
+              class="composer-btn"
+              :disabled="!activeRoom"
+              title="添加附件"
+              aria-label="添加附件"
+              @click="openFilePicker"
+            >
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
                 <title>添加附件</title>
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -406,7 +519,14 @@ onBeforeUnmount(() => {
               v-model="composerText" class="composer-input" auto-grow :max-height="120" rows="1"
               :disabled="!activeRoom" placeholder="输入消息..." @keydown="handleComposerKeydown"
             />
-            <button type="button" class="composer-send" :disabled="sending || !activeRoom" @click="sendMessage">
+            <button
+              type="button"
+              class="composer-send"
+              :disabled="sending || !activeRoom || (!composerText.trim() && !pendingAttachment)"
+              title="发送消息"
+              aria-label="发送消息"
+              @click="sendMessage"
+            >
               <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <title>发送</title>
                 <line x1="4" y1="12" x2="20" y2="12"/>
@@ -426,21 +546,34 @@ onBeforeUnmount(() => {
       </div>
     </main>
 
-    <aside v-if="showMemberPanel" class="room-management-sidebar">
-      <MemberPanel
-        :room="activeRoom"
-        :members="groupMembers"
-        :loading="memberLoading"
-        :can-manage="canManageActiveRoom"
-        :invite-user-id="inviteUserId"
-        :available-invite-users="availableInviteUsers"
-        :invite-submitting="inviteSubmitting"
-        @update:invite-user-id="inviteUserId = $event"
-        @invite="inviteMember"
-        @remove-member="removeMember"
-        @delete-group="deleteGroup"
-      />
-    </aside>
+    <div v-if="showMemberPanel" class="room-management-layer" @click.self="closeMemberPanel">
+      <aside class="room-management-sidebar">
+        <MemberPanel
+          :room="activeRoom"
+          :members="groupMembers"
+          :loading="memberLoading"
+          :can-manage="canManageActiveRoom"
+          :invite-user-id="inviteUserId"
+          :available-invite-users="availableInviteUsers"
+          :invite-submitting="inviteSubmitting"
+          @close="closeMemberPanel"
+          @update:invite-user-id="inviteUserId = $event"
+          @invite="inviteMember"
+          @remove-member="removeMember"
+          @delete-group="deleteGroup"
+        />
+      </aside>
+    </div>
+
+    <MobileNavigationDrawer
+      :show="showMobileNavigation"
+      :session="session"
+      :show-admin="showAdminEntry"
+      @close="closeMobileNavigation"
+      @settings="navigateFromMobileDrawer(openSettings)"
+      @admin="navigateFromMobileDrawer(openAdmin)"
+      @logout="navigateFromMobileDrawer(logout)"
+    />
 
     <AddConversationDialog
       :show="showAddConversation"
@@ -478,9 +611,11 @@ onBeforeUnmount(() => {
 <style scoped>
 .chat-layout {
   display: flex;
-  height: 100dvh;
-  background: #efeae2;
   width: 100%;
+  height: var(--chat-viewport-height, 100dvh);
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #efeae2;
 }
 
 .left-sidebar {
@@ -508,6 +643,10 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   padding: 16px 16px 12px;
   background: #ffffff;
+}
+
+.mobile-menu-action {
+  display: none;
 }
 
 .brand-title {
@@ -544,6 +683,14 @@ onBeforeUnmount(() => {
 .header-action:hover {
   background: rgba(0, 0, 0, 0.05);
   color: #111b21;
+}
+
+.header-action:active,
+.sidebar-item:active,
+.chat-header__button:active,
+.composer-btn:active:not(:disabled),
+.composer-send:active:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .sidebar-section {
@@ -603,6 +750,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   text-align: left;
   transition: background 150ms;
+  touch-action: manipulation;
 }
 
 .sidebar-item:hover {
@@ -717,6 +865,7 @@ onBeforeUnmount(() => {
   transition: background 150ms, color 150ms, transform 150ms;
   padding: 0;
   position: relative;
+  touch-action: manipulation;
 }
 
 .right-sidebar-action:hover,
@@ -763,6 +912,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: #efeae2;
 }
 
@@ -776,13 +927,42 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #e9edef;
 }
 
+.chat-header__back {
+  display: none;
+}
+
+.chat-header__avatar {
+  flex: 0 0 auto;
+}
+
+.chat-header__identity {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-header__identity span {
+  overflow: hidden;
+  color: #667781;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-header__actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .chat-header__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
   padding: 6px 10px;
   border: 1px solid #d8dee2;
   border-radius: 8px;
@@ -791,6 +971,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   cursor: pointer;
   transition: background 150ms, color 150ms, border-color 150ms;
+  touch-action: manipulation;
 }
 
 .chat-header__button:hover {
@@ -818,6 +999,9 @@ onBeforeUnmount(() => {
   color: #111b21;
   background: transparent;
   border-radius: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-header__status {
@@ -833,8 +1017,11 @@ onBeforeUnmount(() => {
 
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .chat-messages::-webkit-scrollbar { width: 6px; }
@@ -987,6 +1174,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   flex-shrink: 0;
   transition: background 150ms, color 150ms;
+  touch-action: manipulation;
 }
 
 .composer-btn:hover:not(:disabled) {
@@ -1001,10 +1189,13 @@ onBeforeUnmount(() => {
 
 .composer-input {
   flex: 1;
+  min-width: 0;
 }
 
 /* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
 :deep(.composer-input.ui-textarea) {
+  width: 100%;
+  min-width: 0;
   border: none;
   background: #ffffff;
   box-shadow: none;
@@ -1039,6 +1230,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   flex-shrink: 0;
   transition: background 150ms;
+  touch-action: manipulation;
 }
 
 .composer-send:hover:not(:disabled) {
@@ -1080,38 +1272,241 @@ onBeforeUnmount(() => {
   color: #111b21;
 }
 
-.room-management-sidebar {
+.room-management-layer {
   width: 340px;
   flex-shrink: 0;
+  height: 100%;
+}
+
+.room-management-sidebar {
+  width: 100%;
   height: 100%;
   overflow-y: auto;
   background: #f7f9fa;
   border-left: 1px solid #e9edef;
 }
 
-@media (max-width: 768px) {
-  .left-sidebar {
-    width: 280px;
+@media (max-width: 960px) {
+  .chat-layout {
+    min-height: 0;
+    background: #ffffff;
   }
+
   .right-sidebar {
-    width: 60px;
-    padding: 10px 4px;
+    display: none;
   }
-  .right-sidebar-inner {
-    padding: 10px 4px;
+
+  .left-sidebar {
+    width: 100%;
+    max-width: none;
+    border-right: 0;
   }
-  .right-sidebar-action,
-  .right-sidebar-user {
-    width: 36px;
-    height: 36px;
+
+  .chat-main {
+    width: 100%;
+    flex: 0 0 100%;
   }
-  .room-management-sidebar {
+
+  .chat-layout--mobile-list .chat-main,
+  .chat-layout--mobile-chat .left-sidebar {
+    display: none;
+  }
+
+  .sidebar-header {
+    min-height: 64px;
+    gap: 8px;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      8px
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .mobile-menu-action {
+    display: flex;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .brand-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 21px;
+  }
+
+  .header-action {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .header-action--github {
+    display: none;
+  }
+
+  .sidebar-header-actions {
+    gap: 0;
+  }
+
+  .sidebar-list {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  .sidebar-item {
+    width: 100%;
+    min-height: 68px;
+    margin: 0;
+    padding: 11px max(16px, env(safe-area-inset-right)) 11px max(16px, env(safe-area-inset-left));
+    border-radius: 0;
+  }
+
+  .sidebar-item + .sidebar-item {
+    border-top: 1px solid #f0f2f5;
+  }
+
+  .chat-header {
+    min-height: 64px;
+    gap: 8px;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      8px
+      max(4px, env(safe-area-inset-left));
+  }
+
+  .chat-header__back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #111b21;
+    touch-action: manipulation;
+  }
+
+  .chat-header__back:active {
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  .chat-header__avatar {
+    flex: 0 0 36px;
+  }
+
+  .chat-header__identity h2 {
+    font-size: 15px;
+  }
+
+  .chat-header__button {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+  }
+
+  .chat-header__button span {
+    display: none;
+  }
+
+  .chat-header__status {
+    width: 7px;
+    height: 7px;
+  }
+
+  .chat-header__actions {
+    gap: 0;
+  }
+
+  .chat-messages {
+    padding: 14px max(10px, env(safe-area-inset-right)) 18px max(10px, env(safe-area-inset-left));
+    scrollbar-gutter: auto;
+  }
+
+  .message-row {
+    margin-bottom: 8px;
+  }
+
+  .message-bubble {
+    max-width: 88%;
+  }
+
+  .chat-composer {
+    padding:
+      8px
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .composer-row {
+    gap: 4px;
+  }
+
+  .composer-btn,
+  .composer-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
+  :deep(.composer-input.ui-textarea) {
+    min-height: 44px;
+    padding: 11px 12px;
+    font-size: 16px;
+  }
+
+  .room-management-layer {
     position: fixed;
-    top: 0;
-    right: 0;
-    z-index: 30;
-    width: min(340px, 92vw);
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    justify-content: flex-end;
+    width: auto;
+    height: auto;
+    padding-left: 48px;
+    background: rgba(11, 20, 26, 0.35);
+  }
+
+  .room-management-sidebar {
+    width: min(360px, 100%);
+    height: 100%;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
     box-shadow: -12px 0 30px rgba(11, 20, 26, 0.16);
+  }
+}
+
+@media (max-width: 380px) {
+  .chat-header__avatar,
+  .chat-header__status {
+    display: none;
+  }
+
+  .chat-header {
+    gap: 4px;
+  }
+
+  .message-bubble {
+    max-width: 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-action,
+  .sidebar-item,
+  .chat-header__button,
+  .composer-btn,
+  .composer-send {
+    transition: none;
   }
 }
 </style>

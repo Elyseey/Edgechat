@@ -68,3 +68,17 @@ test("首次部署自动创建密钥，普通部署保留密钥，手动轮换�
 	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml --secrets-file/);
 	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml/);
 });
+
+test("资源确认脚本优先复用生产 SESSIONS KV 且保留显式标题覆盖", () => {
+	const script = readFileSync(
+		new URL("../.github/scripts/ensure-cloudflare-resources.mjs", import.meta.url),
+		"utf8",
+	).replaceAll("\r\n", "\n");
+
+	assert.match(script, /const PRODUCTION_KV_NAMESPACE_TITLE = "SESSIONS";/);
+	assert.match(
+		script,
+		/kvNamespaceTitleExplicit\s*\? \[kvNamespaceTitle\]\s*:\s*\[PRODUCTION_KV_NAMESPACE_TITLE, LEGACY_KV_NAMESPACE_TITLE\]/s,
+	);
+	assert.match(script, /setOutput\("kv_namespace_title", kv\.title\);/);
+});

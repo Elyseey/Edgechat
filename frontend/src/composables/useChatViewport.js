@@ -3,22 +3,40 @@ import { ref } from "vue";
 export function useChatViewport({ activeRoom }) {
 	const isMobileViewport = ref(false);
 	const mobileView = ref("list");
-	const showMemberPanel = ref(false);
+	let viewportInitialized = false;
 
 	function syncViewportState() {
 		const nextIsMobile = window.innerWidth <= 960;
-		if (nextIsMobile === isMobileViewport.value) {
+		if (viewportInitialized && nextIsMobile === isMobileViewport.value) {
 			return;
 		}
 
+		viewportInitialized = true;
 		isMobileViewport.value = nextIsMobile;
-		if (nextIsMobile) {
-			mobileView.value = activeRoom.value ? "chat" : "list";
-			showMemberPanel.value = false;
-		} else {
-			mobileView.value = "chat";
-			showMemberPanel.value = false;
-		}
+		mobileView.value = nextIsMobile && !activeRoom.value ? "list" : "chat";
+	}
+
+	function syncViewportHeight() {
+		const viewportHeight = window.visualViewport?.height || window.innerHeight;
+		document.documentElement.style.setProperty(
+			"--chat-viewport-height",
+			`${Math.round(viewportHeight)}px`,
+		);
+	}
+
+	function startViewportSync() {
+		syncViewportState();
+		syncViewportHeight();
+		window.addEventListener("resize", syncViewportState);
+		window.addEventListener("resize", syncViewportHeight);
+		window.visualViewport?.addEventListener("resize", syncViewportHeight);
+	}
+
+	function stopViewportSync() {
+		window.removeEventListener("resize", syncViewportState);
+		window.removeEventListener("resize", syncViewportHeight);
+		window.visualViewport?.removeEventListener("resize", syncViewportHeight);
+		document.documentElement.style.removeProperty("--chat-viewport-height");
 	}
 
 	function openConversationView() {
@@ -30,21 +48,15 @@ export function useChatViewport({ activeRoom }) {
 	function returnToConversationList() {
 		if (isMobileViewport.value) {
 			mobileView.value = "list";
-			showMemberPanel.value = false;
 		}
-	}
-
-	function toggleMemberPanel() {
-		showMemberPanel.value = !showMemberPanel.value;
 	}
 
 	return {
 		isMobileViewport,
 		mobileView,
-		showMemberPanel,
-		syncViewportState,
+		startViewportSync,
+		stopViewportSync,
 		openConversationView,
 		returnToConversationList,
-		toggleMemberPanel,
 	};
 }

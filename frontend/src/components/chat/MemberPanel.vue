@@ -1,4 +1,5 @@
 <script setup>
+import { X } from '@lucide/vue';
 import UiAvatar from '../ui/Avatar.vue';
 import UiBadge from '../ui/Badge.vue';
 import UiButton from '../ui/Button.vue';
@@ -35,7 +36,7 @@ defineProps({
   }
 });
 
-const emit = defineEmits(['update:inviteUserId', 'invite', 'remove-member', 'delete-group']);
+const emit = defineEmits(['close', 'update:inviteUserId', 'invite', 'remove-member', 'delete-group']);
 </script>
 
 <template>
@@ -51,6 +52,9 @@ const emit = defineEmits(['update:inviteUserId', 'invite', 'remove-member', 'del
         <UiButton v-if="canManage && !room.isGeneral" variant="destructive" size="sm" @click="emit('delete-group')">
           删除群组
         </UiButton>
+        <button type="button" class="chat-member-panel__close" aria-label="关闭成员列表" @click="emit('close')">
+          <X :size="20" aria-hidden="true" />
+        </button>
       </div>
     </div>
 
@@ -94,3 +98,25 @@ const emit = defineEmits(['update:inviteUserId', 'invite', 'remove-member', 'del
     </div>
   </UiSurface>
 </template>
+
+<style scoped>
+.chat-member-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #54656f;
+  touch-action: manipulation;
+}
+
+.chat-member-panel__close:hover,
+.chat-member-panel__close:active {
+  background: rgba(0, 0, 0, 0.06);
+}
+</style>

@@ -1,5 +1,6 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue';
+import { ref, toRef, watch } from 'vue';
+import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
 import UiAvatar from '../ui/Avatar.vue';
 
 const props = defineProps({
@@ -13,13 +14,16 @@ const emit = defineEmits(['close', 'create-group', 'open-dm']);
 const step = ref('choose');
 const firstActionEl = ref(null);
 
+useOverlayLifecycle({
+  open: toRef(props, 'show'),
+  onClose: () => emit('close'),
+  focusTarget: firstActionEl
+});
+
 watch(
   () => props.show,
-  (show) => {
+  () => {
     step.value = 'choose';
-    if (show) {
-      void nextTick(() => firstActionEl.value?.focus());
-    }
   }
 );
 </script>
@@ -30,7 +34,6 @@ watch(
       v-if="show"
       class="add-conversation-overlay"
       @click.self="emit('close')"
-      @keydown.esc="emit('close')"
     >
       <section
         class="add-conversation-dialog"
@@ -136,13 +139,17 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
   background: rgba(0, 0, 0, 0.4);
 }
 
 .add-conversation-dialog {
   width: min(440px, 100%);
-  max-height: min(620px, calc(100vh - 32px));
+  max-height: min(620px, calc(100dvh - 32px));
   overflow: hidden;
   border-radius: 16px;
   background: #fff;
@@ -359,7 +366,7 @@ watch(
 
   .add-conversation-dialog {
     width: 100%;
-    max-height: 88vh;
+    max-height: calc(100dvh - env(safe-area-inset-top));
     border-radius: 16px 16px 0 0;
   }
 
@@ -368,6 +375,14 @@ watch(
   .add-conversation-dialog__people {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .add-conversation-dialog__people {
+    min-height: 0;
+  }
+
+  .add-conversation-dialog__list {
+    max-height: min(50dvh, 360px);
   }
 }
 

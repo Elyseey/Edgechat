@@ -17,6 +17,7 @@ const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 
 const LEGACY_D1_DATABASE_NAME = "cfchat-db";
 const LEGACY_KV_NAMESPACE_TITLE = "cfchat-sessions";
+const PRODUCTION_KV_NAMESPACE_TITLE = "SESSIONS";
 const LEGACY_R2_BUCKET_NAME = "cfchat-files";
 
 function readEnv(...names) {
@@ -35,6 +36,9 @@ const d1DatabaseName =
 const kvNamespaceTitle =
   readEnv("EDGECHAT_KV_NAMESPACE_TITLE", "CFCHAT_KV_NAMESPACE_TITLE") ??
   LEGACY_KV_NAMESPACE_TITLE;
+const kvNamespaceTitleExplicit = Boolean(
+  readEnv("EDGECHAT_KV_NAMESPACE_TITLE", "CFCHAT_KV_NAMESPACE_TITLE"),
+);
 const r2BucketName =
   readEnv("EDGECHAT_R2_BUCKET_NAME", "CFCHAT_R2_BUCKET_NAME") ?? LEGACY_R2_BUCKET_NAME;
 
@@ -189,10 +193,15 @@ async function ensureD1Database() {
 
 async function ensureKvNamespace() {
   const namespaces = await listKvNamespaces();
-  const existing = namespaces.find((ns) => ns.title === kvNamespaceTitle && ns.id);
+  const candidateTitles = kvNamespaceTitleExplicit
+    ? [kvNamespaceTitle]
+    : [PRODUCTION_KV_NAMESPACE_TITLE, LEGACY_KV_NAMESPACE_TITLE];
+  const existing = candidateTitles
+    .map((title) => namespaces.find((namespace) => namespace.title === title && namespace.id))
+    .find(Boolean);
   if (existing) {
-    console.log(`KV namespace already exists: ${kvNamespaceTitle} (${existing.id})`);
-    return { id: existing.id, created: false };
+    console.log(`KV namespace already exists: ${existing.title} (${existing.id})`);
+    return { id: existing.id, title: existing.title, created: false };
   }
 
   console.log(`Creating KV namespace: ${kvNamespaceTitle}`);
@@ -204,7 +213,7 @@ async function ensureKvNamespace() {
     throw new Error("KV create response is missing namespace id");
   }
 
-  return { id, created: true };
+  return { id, title: kvNamespaceTitle, created: true };
 }
 
 async function ensureR2Bucket() {
@@ -236,7 +245,7 @@ async function main() {
   setOutput("d1_database_name", d1DatabaseName);
   setOutput("d1_database_id", d1.id);
   setOutput("d1_created", d1.created);
-  setOutput("kv_namespace_title", kvNamespaceTitle);
+  setOutput("kv_namespace_title", kv.title);
   setOutput("kv_namespace_id", kv.id);
   setOutput("kv_created", kv.created);
   setOutput("r2_bucket_name", r2BucketName);

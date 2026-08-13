@@ -19,11 +19,31 @@ function getStyleRule(source, selector) {
 test("聊天界面使用原始控件尺寸铺满整个视口", () => {
 	const layout = getStyleRule(chatPage, ".chat-layout");
 	assert.match(layout, /width:\s*100%;/);
-	assert.match(layout, /height:\s*100dvh;/);
+	assert.match(layout, /height:\s*var\(--chat-viewport-height,\s*100dvh\);/);
+	assert.match(layout, /overflow:\s*hidden;/);
 	assert.doesNotMatch(chatPage, /--chat-interface-scale/);
 	assert.doesNotMatch(chatPage, /zoom\s*:/);
 	assert.doesNotMatch(chatPage, /width:\s*80%;/);
 	assert.doesNotMatch(chatPage, /height:\s*80vh;/);
+});
+
+test("移动端聊天页只显示会话列表或当前聊天中的一个视图", () => {
+	assert.match(chatPage, /'chat-layout--mobile-list': isMobileViewport && mobileView === 'list'/);
+	assert.match(chatPage, /'chat-layout--mobile-chat': isMobileViewport && mobileView === 'chat'/);
+	assert.match(
+		chatPage,
+		/\.chat-layout--mobile-list \.chat-main,\s*\.chat-layout--mobile-chat \.left-sidebar\s*{\s*display:\s*none;/s,
+	);
+	assert.match(chatPage, /class="chat-header__back"/);
+	assert.match(chatPage, /@click="returnToMobileConversationList"/);
+});
+
+test("移动端主要图标按钮保留四十四像素触控区域", () => {
+	assert.match(chatPage, /\.mobile-menu-action\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
+	assert.match(chatPage, /\.chat-header__back\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
+	assert.match(chatPage, /\.chat-header__button\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
+	assert.match(chatPage, /\.composer-btn,\s*\.composer-send\s*{\s*width:\s*44px;\s*height:\s*44px;/s);
+	assert.match(chatPage, /font-size:\s*16px;/);
 });
 
 test("聊天侧栏跟随全屏根节点且不污染后台根节点", () => {

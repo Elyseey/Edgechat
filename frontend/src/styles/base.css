@@ -9,6 +9,11 @@ body,
   margin: 0;
 }
 
+html,
+body {
+  overflow-x: clip;
+}
+
 html {
   background: var(--bg);
   scrollbar-width: none;
@@ -23,7 +28,6 @@ html::-webkit-scrollbar {
 
 body {
   position: relative;
-  overflow-x: hidden;
   background:
     radial-gradient(circle at 12% 8%, rgba(45, 156, 151, 0.2), transparent 32%),
     radial-gradient(circle at 88% 16%, rgba(90, 143, 203, 0.2), transparent 34%),

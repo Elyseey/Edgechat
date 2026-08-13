@@ -1,6 +1,7 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import api from '../../api.js';
+import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
 
 const props = defineProps({
@@ -18,29 +19,23 @@ const displayName = computed(() => props.attachment?.name || '附件');
 const openOriginalLabel = computed(() => `打开原图：${displayName.value}`);
 const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || props.attachment?.url));
 
+useOverlayLifecycle({
+  open: previewOpen,
+  onClose: closePreview,
+  focusTarget: previewEl
+});
+
 function openPreview() {
   if (!isImage.value || imageFailed.value) {
     return;
   }
 
   previewOpen.value = true;
-  nextTick(() => previewEl.value?.focus());
 }
 
 function closePreview() {
   previewOpen.value = false;
 }
-
-function handleKeydown(event) {
-  if (event.key === 'Escape') {
-    closePreview();
-  }
-}
-
-watch(previewOpen, (open) => {
-  const method = open ? 'addEventListener' : 'removeEventListener';
-  window[method]('keydown', handleKeydown);
-});
 
 watch(
   () => props.attachment?.key || props.attachment?.url,
@@ -48,10 +43,6 @@ watch(
     imageFailed.value = false;
   }
 );
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown);
-});
 </script>
 
 <template>
@@ -104,7 +95,7 @@ onBeforeUnmount(() => {
             >
               打开原图
             </a>
-            <button type="button" class="image-preview-overlay__close" @click="closePreview">
+            <button type="button" class="image-preview-overlay__close" aria-label="关闭图片预览" @click="closePreview">
               关闭
             </button>
           </div>
