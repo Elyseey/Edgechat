@@ -1,0 +1,96 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { ensureR2Bucket } from "../.github/scripts/ensure-cloudflare-resources.mjs";
+
+function jsonResponse(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+test("R2 error 10042 disables attachment storage without failing deployment", async () => {
+  const requests = [];
+  const result = await ensureR2Bucket({
+    accountId: "account",
+    apiToken: "token",
+    async fetchImpl(url, init) {
+      requests.push({ url: String(url), method: init.method });
+      return jsonResponse(
+        {
+          success: false,
+          errors: [{ code: 10042, message: "Please enable R2 in the Cloudflare dashboard." }],
+        },
+        400,
+      );
+    },
+  });
+
+  assert.deepEqual(result, { available: false, created: false });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].method, "GET");
+  assert.match(requests[0].url, /\/r2\/buckets\?per_page=1$/);
+});
+
+test("R2 access keeps the existing bucket flow", async () => {
+  const requests = [];
+  const responses = [
+    jsonResponse({ success: true, result: { buckets: [] } }),
+    jsonResponse({ success: true, result: { buckets: [{ name: "cfchat-files" }] } }),
+  ];
+  const result = await ensureR2Bucket({
+    accountId: "account",
+    apiToken: "token",
+    async fetchImpl(url, init) {
+      requests.push({ url: String(url), method: init.method });
+      return responses.shift();
+    },
+  });
+
+  assert.deepEqual(result, { available: true, created: false });
+  assert.deepEqual(
+    requests.map((request) => request.method),
+    ["GET", "GET"],
+  );
+});
+
+test("R2 permission and credential errors still stop deployment", async () => {
+  await assert.rejects(
+    ensureR2Bucket({
+      accountId: "account",
+      apiToken: "token",
+      async fetchImpl() {
+        return jsonResponse(
+          {
+            success: false,
+            errors: [{ code: 10000, message: "Authentication error" }],
+          },
+          403,
+        );
+      },
+    }),
+    /10000: Authentication error/,
+  );
+});
+
+test("R2 error 10042 does not hide additional Cloudflare errors", async () => {
+  await assert.rejects(
+    ensureR2Bucket({
+      accountId: "account",
+      apiToken: "token",
+      async fetchImpl() {
+        return jsonResponse(
+          {
+            success: false,
+            errors: [
+              { code: 10042, message: "Please enable R2 in the Cloudflare dashboard." },
+              { code: 10000, message: "Authentication error" },
+            ],
+          },
+          403,
+        );
+      },
+    }),
+    /10042: .*; 10000: Authentication error/,
+  );
+});

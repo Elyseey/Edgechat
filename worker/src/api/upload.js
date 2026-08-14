@@ -65,6 +65,10 @@ function validateUpload(env, file) {
 
 export function registerUploadRoutes(app) {
   app.post('/api/upload', async (c) => {
+    if (!c.env.FILES) {
+      return errorResponse('当前部署没有绑定 R2，无法上传附件', 503);
+    }
+
     const session = c.get('session');
     const maxFileSize = Number(c.env.MAX_FILE_SIZE || 20971520);
     if (requestBodyTooLarge(c.req.raw, maxFileSize + UPLOAD_BODY_OVERHEAD_BYTES)) {
@@ -135,6 +139,9 @@ export function registerUploadRoutes(app) {
     const canRead = await canAccessFile(c.env.DB, key, auth?.ok ? auth.session.userId : null);
     if (!canRead) {
       return new Response('Forbidden', { status: 403 });
+    }
+    if (!c.env.FILES) {
+      return errorResponse('当前部署没有绑定 R2，无法读取附件', 503);
     }
 
     const [object, fileMetadata] = await Promise.all([

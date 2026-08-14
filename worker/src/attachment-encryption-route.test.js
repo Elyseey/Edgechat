@@ -32,6 +32,31 @@ function fileDb({ accessible, metadata = true }) {
   };
 }
 
+test('attachment upload reports when the deployment has no R2 binding', async () => {
+  const app = new Hono();
+  app.use('/api/*', async (c, next) => {
+    c.set('session', { userId: 42 });
+    return next();
+  });
+  registerUploadRoutes(app);
+
+  const formData = new FormData();
+  formData.set('file', new File(['hello'], 'hello.txt', { type: 'text/plain' }));
+  const response = await app.request(
+    'https://edgechat.test/api/upload',
+    {
+      method: 'POST',
+      body: formData
+    },
+    {}
+  );
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: '当前部署没有绑定 R2，无法上传附件'
+  });
+});
+
 test('authorized attachment download decrypts bytes and disables shared caching', async () => {
   const objectKey = '42/example.bin';
   const plaintext = Uint8Array.from([1, 2, 3, 4]);
@@ -92,6 +117,22 @@ test('unauthorized attachment download is rejected before reading R2', async () 
 
   assert.equal(response.status, 403);
   assert.equal(r2Read, false);
+});
+
+test('authorized attachment download reports when the deployment has no R2 binding', async () => {
+  const app = new Hono();
+  registerUploadRoutes(app);
+
+  const response = await app.request(
+    'https://edgechat.test/files/42/private.bin',
+    {},
+    { DB: fileDb({ accessible: true }) }
+  );
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: '当前部署没有绑定 R2，无法读取附件'
+  });
 });
 
 test('telegram attachment downloads through message authorization without uploaded file ownership', async () => {

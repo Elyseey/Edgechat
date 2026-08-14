@@ -82,3 +82,18 @@ test("资源确认脚本优先复用生产 SESSIONS KV 且保留显式标题覆�
 	);
 	assert.match(script, /setOutput\("kv_namespace_title", kv\.title\);/);
 });
+
+test("R2 未开通时工作流移除 FILES binding，已开通时保留目标 bucket", () => {
+	const configStep = getStep("Generate wrangler config for CI");
+	assert.match(
+		configStep,
+		/R2_AVAILABLE: \$\{\{ steps\.ensure_resources\.outputs\.r2_available \}\}/,
+	);
+	assert.match(
+		configStep,
+		/R2_BUCKET_NAME: \$\{\{ steps\.ensure_resources\.outputs\.r2_bucket_name \}\}/,
+	);
+	assert.match(configStep, /if \[\[ "\$R2_AVAILABLE" == "true" \]\]/);
+	assert.match(configStep, /bucket_name = \\"\$\{R2_BUCKET_NAME\}\\"/);
+	assert.match(configStep, /\^\\\[\\\[r2_buckets\\\]\\\]\$\/,\/\^\$\/d/);
+});
