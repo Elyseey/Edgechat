@@ -312,12 +312,19 @@ onBeforeUnmount(() => {
     <aside class="right-sidebar">
       <div class="right-sidebar-inner">
         <div class="right-sidebar-section right-sidebar-actions">
-          <button v-if="showAdminEntry" type="button" class="right-sidebar-action tooltip" data-tooltip="后台" @click="openAdmin">
+          <button
+            v-if="showAdminEntry"
+            type="button"
+            class="right-sidebar-action right-sidebar-action--admin tooltip"
+            data-tooltip="管理后台"
+            @click="openAdmin"
+          >
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
-              <title>后台</title>
+              <title>管理后台</title>
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
               <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
             </svg>
+            <span class="right-sidebar-action__label">管理后台</span>
           </button>
         </div>
 
@@ -888,6 +895,20 @@ onBeforeUnmount(() => {
 .right-sidebar-action--danger:hover {
   background: rgba(254, 242, 242, 0.8);
   color: #dc2626;
+}
+
+.right-sidebar-action--admin {
+  width: 52px;
+  height: 56px;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 8px;
+}
+
+.right-sidebar-action__label {
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .tooltip {

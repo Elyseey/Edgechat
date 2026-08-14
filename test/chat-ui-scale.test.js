@@ -84,6 +84,13 @@ test("聊天侧栏跟随全屏根节点且不污染后台根节点", () => {
 	assert.doesNotMatch(chatPage, /(?:html|body|#app|\.admin-page)\s*{[^}]*zoom:/s);
 });
 
+test("桌面端管理后台入口在图标下方显示文字", () => {
+	assert.match(chatPage, /class="right-sidebar-action right-sidebar-action--admin tooltip"/);
+	assert.match(chatPage, /<span class="right-sidebar-action__label">管理后台<\/span>/);
+	assert.match(chatPage, /\.right-sidebar-action--admin\s*{[^}]*flex-direction:\s*column;/s);
+	assert.match(chatPage, /\.right-sidebar-action__label\s*{[^}]*font-size:\s*10px;/s);
+});
+
 test("GitHub 仓库入口位于添加人员左侧并复用相同按钮尺寸", () => {
 	const githubLink = chatPage.indexOf('href="https://github.com/aozorae/Edgechat"');
 	const addConversation = chatPage.indexOf('title="添加人员"');
