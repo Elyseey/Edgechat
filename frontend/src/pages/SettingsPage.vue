@@ -215,6 +215,23 @@ async function confirmCrop() {
   }
 }
 
+async function removeAvatar() {
+  clearMessage();
+  uploadingAvatar.value = true;
+  try {
+    const payload = await api.updateProfile({
+      displayName: profileForm.displayName,
+      avatarKey: null
+    });
+    store.setSession(payload.session);
+    info.value = '头像已移除';
+  } catch (currentError) {
+    error.value = currentError.message;
+  } finally {
+    uploadingAvatar.value = false;
+  }
+}
+
 function cancelCrop() {
   showCropper.value = false;
   cleanupCrop();
@@ -265,7 +282,7 @@ async function changePassword() {
                 size="md"
               />
               <span class="avatar-overlay">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><title>更换头像</title><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
               </span>
             </button>
             <input
@@ -275,7 +292,18 @@ async function changePassword() {
               accept="image/*"
               @change="onAvatarFileSelected"
             />
-            <span class="avatar-hint">{{ uploadingAvatar ? '上传中...' : '点击头像更换' }}</span>
+            <div class="avatar-actions">
+              <span class="avatar-hint">{{ uploadingAvatar ? '处理中...' : '点击头像更换' }}</span>
+              <button
+                v-if="session?.avatarUrl"
+                type="button"
+                class="avatar-remove"
+                :disabled="uploadingAvatar"
+                @click="removeAvatar"
+              >
+                移除头像
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -336,7 +364,7 @@ async function changePassword() {
 
       <nav class="settings-nav">
         <button type="button" class="nav-link" @click="router.push('/')">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           返回聊天
@@ -347,7 +375,7 @@ async function changePassword() {
           class="nav-link"
           @click="router.push('/admin')"
         >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1" />
             <rect x="14" y="3" width="7" height="7" rx="1" />
             <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -479,10 +507,6 @@ async function changePassword() {
   transform: scale(1.05);
 }
 
-.avatar-trigger:hover .avatar-overlay {
-  opacity: 1;
-}
-
 .avatar-overlay {
   position: absolute;
   inset: 0;
@@ -494,6 +518,10 @@ async function changePassword() {
   opacity: 0;
   transition: opacity 0.2s ease;
   border-radius: 16px;
+}
+
+.avatar-trigger:hover .avatar-overlay {
+  opacity: 1;
 }
 
 .avatar-input {
@@ -512,6 +540,27 @@ async function changePassword() {
   font-size: 11px;
   color: #6b8aab;
   white-space: nowrap;
+}
+
+.avatar-actions {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.avatar-remove {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #b34a57;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.avatar-remove:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .info-banner,

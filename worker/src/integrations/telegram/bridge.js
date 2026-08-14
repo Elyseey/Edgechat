@@ -9,7 +9,7 @@ import {
 	deleteImportedTelegramAttachment,
 	importTelegramAttachment,
 	loadEdgeChatAttachment,
-	TELEGRAM_BRIDGE_FILE_LIMIT,
+	TELEGRAM_FILE_SKIP_REASON,
 } from "./files.js";
 
 function logBridgeFailure(message, data) {
@@ -71,29 +71,19 @@ async function sendMessageToTelegram(env, botToken, mapping, message) {
 		return;
 	}
 
-	if (Number(message.attachment.size) > TELEGRAM_BRIDGE_FILE_LIMIT) {
-		logBridgeFailure("telegram outbound attachment skipped: file too large", {
+	const loaded = await loadEdgeChatAttachment(env, message.attachment);
+	if (!loaded.file) {
+		logBridgeFailure("telegram outbound attachment skipped", {
 			roomId: Number(mapping.channelId),
 			mappingId: mapping.id,
-			attachmentSize: Number(message.attachment.size),
+			reason: loaded.skipReason,
 		});
 		if (message.content) {
 			await sendTextMessage(botToken, mapping.telegramChatId, displayName, message.content);
 		}
 		return;
 	}
-
-	const file = await loadEdgeChatAttachment(env, message.attachment);
-	if (!file) {
-		logBridgeFailure("telegram outbound attachment skipped: file too large", {
-			roomId: Number(mapping.channelId),
-			mappingId: mapping.id,
-		});
-		if (message.content) {
-			await sendTextMessage(botToken, mapping.telegramChatId, displayName, message.content);
-		}
-		return;
-	}
+	const file = loaded.file;
 
 	const captions = splitTelegramFormattedMessage(displayName, message.content, 1024);
 	await sendTelegramMedia(botToken, {
@@ -152,7 +142,7 @@ export async function ingestTelegramMessage(env, { mapping, telegramMessage, bot
 	);
 	if (existing) return { ok: true, created: false };
 
-	let imported = { attachment: null, oversized: false };
+	let imported = { attachment: null, skipReason: null };
 	if (telegramMessage.attachment) {
 		if (!botToken) throw new Error("Telegram Bridge 未配置");
 		imported = await importTelegramAttachment(env, {
@@ -163,9 +153,13 @@ export async function ingestTelegramMessage(env, { mapping, telegramMessage, bot
 		});
 	}
 
-	const content = imported.oversized
-		? [telegramMessage.content, "附件超过 16 MB，未同步"].filter(Boolean).join("\n\n")
-		: telegramMessage.content;
+	const attachmentNotice =
+		imported.skipReason === TELEGRAM_FILE_SKIP_REASON.TOO_LARGE
+			? "附件超过 16 MB，未同步"
+			: imported.skipReason === TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE
+				? "当前部署未启用文件存储，附件未同步"
+				: "";
+	const content = [telegramMessage.content, attachmentNotice].filter(Boolean).join("\n\n");
 	try {
 		const response = await submitExternalRoomMessage(env, {
 			room: {

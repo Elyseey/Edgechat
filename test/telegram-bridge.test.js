@@ -17,7 +17,9 @@ import {
 import { sendTelegramMedia } from "../worker/src/integrations/telegram/client.js";
 import {
 	importTelegramAttachment,
+	loadEdgeChatAttachment,
 	TELEGRAM_BRIDGE_FILE_LIMIT,
+	TELEGRAM_FILE_SKIP_REASON,
 } from "../worker/src/integrations/telegram/files.js";
 import worker from "../worker/src/index.js";
 
@@ -197,7 +199,28 @@ test("Telegram 入站附件下载后加密写入 R2，超限时不下载", async
 		telegramMessageId: 10,
 		attachment: { fileId: "large", fileSize: TELEGRAM_BRIDGE_FILE_LIMIT + 1 },
 	});
-	assert.deepEqual(oversized, { attachment: null, oversized: true });
+	assert.deepEqual(oversized, {
+		attachment: null,
+		skipReason: TELEGRAM_FILE_SKIP_REASON.TOO_LARGE,
+	});
+
+	const withoutStorage = await importTelegramAttachment({}, {
+		botToken: "123:token",
+		telegramChatId: "-1001",
+		telegramMessageId: 11,
+		attachment: { fileId: "file-id", fileSize: 4 },
+	});
+	assert.deepEqual(withoutStorage, {
+		attachment: null,
+		skipReason: TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE,
+	});
+	assert.deepEqual(
+		await loadEdgeChatAttachment({}, { key: "missing.bin", size: 4 }),
+		{
+			file: null,
+			skipReason: TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE,
+		},
+	);
 });
 
 test("可信 Telegram 外部消息可以直接引用 Bridge 创建的 R2 附件", async () => {

@@ -19,6 +19,7 @@ import {
 import { getSiteSettings } from './data/site-settings.js';
 import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
+import { resolveAvatarKeyUpdate } from './avatar-policy.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
 import { registerChannelRoutes } from './api/channels.js';
@@ -242,26 +243,34 @@ app.patch('/api/me/profile', async (c) => {
   const session = c.get('session');
   const payload = await parseJsonRequest(c.req.raw);
   const displayName = String(payload.displayName || session.displayName).trim();
-  const avatarKey = payload.avatarKey ? String(payload.avatarKey) : null;
+  const avatarUpdate = await resolveAvatarKeyUpdate(c.env.DB, session.userId, payload);
   if (!displayName) {
     return errorResponse('显示名称不能为空');
   }
 
+  const updates = ['display_name = ?', 'updated_at = CURRENT_TIMESTAMP'];
+  const binds = [displayName];
+  if (avatarUpdate.provided) {
+    updates.splice(1, 0, 'avatar_key = ?');
+    binds.push(avatarUpdate.key);
+  }
   await c.env.DB.prepare(
     `UPDATE users
-     SET display_name = ?,
-         avatar_key = COALESCE(?, avatar_key),
-         updated_at = CURRENT_TIMESTAMP
+     SET ${updates.join(', ')}
      WHERE id = ?`
   )
-    .bind(displayName, avatarKey, session.userId)
+    .bind(...binds, session.userId)
     .run();
 
   const nextSession = await getSession(c.env, session.token);
   const merged = {
     ...nextSession,
     displayName,
-    avatarUrl: avatarKey ? `/files/${encodeURIComponent(avatarKey)}` : nextSession.avatarUrl
+    avatarUrl: avatarUpdate.provided
+      ? avatarUpdate.key
+        ? `/files/${encodeURIComponent(avatarUpdate.key)}`
+        : ''
+      : nextSession.avatarUrl
   };
   await putSession(c.env, merged);
 

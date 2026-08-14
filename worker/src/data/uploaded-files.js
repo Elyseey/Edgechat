@@ -41,6 +41,26 @@ export async function getUploadedFileMetadata(db, key) {
 		: null;
 }
 
+export async function getOwnedUploadedFileMetadata(db, key, userId) {
+	const { results } = await db
+		.prepare(
+			`SELECT filename, content_type, size
+			 FROM uploaded_files
+			 WHERE object_key = ? AND owner_user_id = ?
+			 LIMIT 1`,
+		)
+		.bind(String(key), Number(userId))
+		.all();
+	const row = results[0];
+	return row
+		? {
+				filename: row.filename,
+				contentType: row.content_type,
+				size: Number(row.size || 0),
+			}
+		: null;
+}
+
 export async function fileBelongsToUser(db, key, userId) {
 	const { results } = await db
 		.prepare(

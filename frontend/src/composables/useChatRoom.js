@@ -15,6 +15,8 @@ export function useChatRoom({
 	error,
 	onRoomActivity = () => {},
 	onRoomAccessRevoked = () => {},
+	roomApi = api,
+	openRoomConnection = connectRoomSocket,
 }) {
 	const messages = ref([]);
 	const loading = ref(false);
@@ -24,6 +26,11 @@ export function useChatRoom({
 	const sending = ref(false);
 	const messagesEl = ref(null);
 	const fileInputEl = ref(null);
+	let messageLoadGeneration = 0;
+
+	function roomKey(room = activeRoom.value) {
+		return room?.kind && room?.id ? `${room.kind}:${room.id}` : "";
+	}
 
 		function isOwnMessage(message) {
 			return (
@@ -49,7 +56,7 @@ export function useChatRoom({
 		onRoomActivity({ room: activeRoom.value, message });
 
 		if (!isOwnMessage(message)) {
-			void api
+				void roomApi
 				.markRoomRead(activeRoom.value.kind, activeRoom.value.id, message.id)
 				.catch(() => {});
 		}
@@ -80,7 +87,7 @@ export function useChatRoom({
 
 	const roomSession = createRealtimeSession({
 		openConnection(params, handlers) {
-			return connectRoomSocket({
+			return openRoomConnection({
 				kind: params.kind,
 				roomId: params.roomId,
 				...handlers,
@@ -90,7 +97,10 @@ export function useChatRoom({
 			wsStatus.value = event.status === "reconnecting" ? "connecting" : event.status;
 		},
 		onClose: handleSocketClose,
-		onMessage(payload) {
+		onMessage(payload, connection) {
+			if (connection?.key !== roomKey()) {
+				return;
+			}
 			if (payload.type === "message" && payload.message) {
 				if (messages.value.some((item) => item.id === payload.message.id)) {
 					return;
@@ -112,18 +122,20 @@ export function useChatRoom({
 	});
 
 	async function loadMessages(before = null, append = false) {
-		if (!activeRoom.value) {
-			return;
+		const room = activeRoom.value;
+		const key = roomKey(room);
+		if (!key) {
+			return false;
 		}
 
+		const generation = ++messageLoadGeneration;
 		loading.value = true;
 		error.value = "";
 		try {
-			const payload = await api.getMessages(
-				activeRoom.value.kind,
-				activeRoom.value.id,
-				before,
-			);
+			const payload = await roomApi.getMessages(room.kind, room.id, before);
+			if (generation !== messageLoadGeneration || roomKey() !== key) {
+				return false;
+			}
 			messages.value = append
 				? [...payload.messages, ...messages.value]
 				: payload.messages;
@@ -131,18 +143,39 @@ export function useChatRoom({
 			if (!append) {
 				scrollToBottom();
 			}
+			return true;
 		} catch (currentError) {
-			error.value = currentError.message;
+			if (generation === messageLoadGeneration && roomKey() === key) {
+				error.value = currentError.message;
+			}
+			return false;
 		} finally {
-			loading.value = false;
+			if (generation === messageLoadGeneration) {
+				loading.value = false;
+			}
 		}
+	}
+
+	async function activateRoom() {
+		messageLoadGeneration += 1;
+		messages.value = [];
+		loading.value = false;
+		connectSocket();
+		return loadMessages();
+	}
+
+	function deactivateRoom() {
+		messageLoadGeneration += 1;
+		messages.value = [];
+		loading.value = false;
+		disconnectSocket();
 	}
 
 	function connectSocket() {
 		if (!activeRoom.value) {
 			return;
 		}
-		const key = `${activeRoom.value.kind}:${activeRoom.value.id}`;
+		const key = roomKey();
 		roomSession.connect(key, {
 			kind: activeRoom.value.kind,
 			roomId: activeRoom.value.id,
@@ -219,7 +252,7 @@ export function useChatRoom({
 		}
 
 		try {
-			const payload = await api.uploadFile(file);
+			const payload = await roomApi.uploadFile(file);
 			pendingAttachment.value = payload.file;
 		} catch (currentError) {
 			error.value = currentError.message;
@@ -266,6 +299,8 @@ export function useChatRoom({
 		fileInputEl,
 		isOwnMessage,
 		loadMessages,
+		activateRoom,
+		deactivateRoom,
 		connectSocket,
 		disconnectSocket,
 		sendMessage,

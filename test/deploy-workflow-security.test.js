@@ -27,9 +27,10 @@ test("Cloudflare 生产凭据只注入实际调用 Cloudflare 的步骤", () => 
 
 	for (const name of [
 		"Checkout",
-		"Setup Node.js",
-		"Install dependencies",
-		"Build frontend assets",
+			"Setup Node.js",
+			"Install dependencies",
+			"Run tests",
+			"Build frontend assets",
 		"Generate wrangler config for CI",
 		"Generate admin bootstrap SQL (optional)",
 	]) {
@@ -49,6 +50,14 @@ test("Cloudflare 生产凭据只注入实际调用 Cloudflare 的步骤", () => 
 		assert.match(step, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
 		assert.match(step, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
 	}
+});
+
+test("生产部署在创建或修改云资源前运行完整测试", () => {
+	const testsStart = workflow.indexOf("      - name: Run tests\n");
+	const resourcesStart = workflow.indexOf("      - name: Ensure Cloudflare resources\n");
+	assert.notEqual(testsStart, -1);
+	assert.equal(testsStart < resourcesStart, true);
+	assert.match(getStep("Run tests"), /run: npm test/);
 });
 
 test("首次部署自动创建密钥，普通部署保留密钥，手动轮换才允许更新", () => {

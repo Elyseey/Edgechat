@@ -3,25 +3,26 @@
 ## 🚀 一键启动（推荐）
 
 ```bash
-./docker-start.sh
+EDGECHAT_ADMIN_PASSWORD='请替换为强密码' ./docker-start.sh
 ```
 
 这个脚本会自动：
 - ✅ 构建并启动 Docker 容器
 - ✅ 初始化数据库表
-- ✅ 创建管理员账户
+- ✅ 使用与 GitHub Actions 相同的 PBKDF2 规则创建管理员账户
 - ✅ 显示访问信息
 
 ## 📱 访问应用
 
 启动后访问：**http://localhost:8788**
 
-## 🔐 默认管理员账户
+## 🔐 管理员账户
 
-- **用户名**：`admin`
-- **密码**：`admin`
+- **用户名**：读取 `EDGECHAT_ADMIN_USERNAME`，未设置时使用 `admin`
+- **密码**：必须通过 `EDGECHAT_ADMIN_PASSWORD` 显式传入
+- **显示名称**：读取 `EDGECHAT_ADMIN_DISPLAY_NAME`，未设置时使用 `Administrator`
 
-⚠️ 首次登录后请修改密码！
+脚本不会把密码写入仓库或固定在启动文件中。重复运行会复用已有管理员，不会覆盖现有密码。
 
 ## 🛠️ 手动部署
 
@@ -42,7 +43,12 @@ docker compose exec edgechat wrangler d1 execute cfchat-db --local --file=./work
 ### 3. 创建管理员账户
 
 ```bash
-docker compose exec edgechat wrangler d1 execute cfchat-db --local --command="INSERT INTO users (username, password_hash, password_salt, display_name, is_admin) VALUES ('admin', '\$2a\$10\$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'salt', 'Administrator', 1);"
+docker compose exec \
+  -e EDGECHAT_ADMIN_USERNAME=admin \
+  -e EDGECHAT_ADMIN_PASSWORD='请替换为强密码' \
+  -e EDGECHAT_ADMIN_DISPLAY_NAME=Administrator \
+  edgechat node .github/scripts/generate-admin-bootstrap-sql.mjs
+docker compose exec edgechat wrangler d1 execute cfchat-db --local --file=.tmp/edgechat-admin-upsert.sql
 ```
 
 ## 📊 常用命令

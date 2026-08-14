@@ -75,7 +75,7 @@ function handleRoomAccessRevoked(room) {
 const {
   messages, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, fileInputEl, isOwnMessage,
-  loadMessages, connectSocket, disconnectSocket, sendMessage, deleteMessage, handleComposerKeydown,
+  loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, deleteMessage, handleComposerKeydown,
   openFilePicker, uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
@@ -258,12 +258,16 @@ async function bootstrap() {
 watch(activeRoomKey, async (k) => {
   closeMessageMenu();
   cancelMessageLongPress();
-  if (!k) return;
+  if (!k) {
+    deactivateRoom();
+    return;
+  }
   openConversationView();
-  await loadMessages();
-  connectSocket();
+  const loaded = await activateRoom();
+  if (!loaded || activeRoomKey.value !== k) return;
   for (const delay of [0, 50, 150, 300]) {
     await new Promise(r => setTimeout(r, delay));
+    if (activeRoomKey.value !== k) return;
     if (messagesEl.value) {
       messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
     }
@@ -329,10 +333,10 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="right-sidebar-section right-sidebar-user-group">
-          <button type="button" class="right-sidebar-user tooltip" data-tooltip="个人设置" @click="router.push('/settings')">
+          <button type="button" class="right-sidebar-user tooltip" data-tooltip="个人设置" aria-label="个人设置" @click="router.push('/settings')">
             <UiAvatar :src="session?.avatarUrl" :fallback="session?.displayName?.[0] || 'U'" size="sm" />
           </button>
-          <button type="button" class="right-sidebar-action right-sidebar-action--danger tooltip" data-tooltip="退出" @click="logout">
+          <button type="button" class="right-sidebar-action right-sidebar-action--danger tooltip" data-tooltip="退出" aria-label="退出登录" @click="logout">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
               <title>退出</title>
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
