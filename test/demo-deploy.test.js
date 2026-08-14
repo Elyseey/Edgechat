@@ -6,7 +6,19 @@ const workflow = readFileSync(
   new URL('../.github/workflows/deploy-demo.yml', import.meta.url),
   'utf8'
 );
+const productionWorkflow = readFileSync(
+  new URL('../.github/workflows/deploy-worker.yml', import.meta.url),
+  'utf8'
+);
 const wrangler = readFileSync(new URL('../wrangler.demo.toml', import.meta.url), 'utf8');
+const productionWrangler = readFileSync(
+  new URL('../wrangler.example.toml', import.meta.url),
+  'utf8'
+);
+const productionVite = readFileSync(
+  new URL('../frontend/vite.config.js', import.meta.url),
+  'utf8'
+);
 const packageJson = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 );
@@ -28,4 +40,19 @@ test('demo Wrangler config serves only its isolated static build', () => {
     packageJson.scripts['deploy:demo'],
     'npm run build:demo && wrangler deploy --config wrangler.demo.toml'
   );
+});
+
+test('production Action cannot build or deploy demo assets', () => {
+  assert.match(productionWorkflow, /run: npm run build\s/);
+  assert.doesNotMatch(
+    productionWorkflow,
+    /build:demo|wrangler\.demo\.toml|edgechat-demo|DEMO_CLOUDFLARE/
+  );
+  assert.equal(packageJson.scripts.build, 'npm run build:frontend');
+  assert.equal(packageJson.scripts.deploy, 'npm run build && wrangler deploy');
+  assert.match(productionVite, /outDir: resolve\(dirname, 'dist'\)/);
+  assert.doesNotMatch(productionVite, /demo-dist|src\/demo|vite\.demo/);
+  assert.match(productionWrangler, /name = "cfchat"/);
+  assert.match(productionWrangler, /directory = "\.\/frontend\/dist"/);
+  assert.doesNotMatch(productionWrangler, /demo-dist|edgechat-demo/);
 });
