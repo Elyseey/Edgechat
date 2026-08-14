@@ -21,6 +21,12 @@ This project is licensed under `GPL-3.0-or-later`. See [LICENSE](LICENSE) for de
   </tr>
 </table>
 
+## Online Demo
+
+- Demo site: <https://edgechat-demo.wcjxxgaq.workers.dev>
+
+The demo reuses the production Vue pages, router, state management, and real-time message flow. Its API, WebSocket, uploads, and Telegram round trips are simulated entirely in browser memory. Reload the page or use “Reset demo data” to restore the fixtures. It never contacts the production Worker or writes to D1, KV, or R2.
+
 ## Features
 
 - Admin-created users, with self-registration disabled
@@ -95,10 +101,22 @@ npm install
 npm run dev:frontend
 ```
 
+Run the isolated frontend demo on its own port:
+
+```bash
+npm run dev:demo
+```
+
 ### Local Build
 
 ```bash
 npm run build
+```
+
+Build the demo into its separate output directory:
+
+```bash
+npm run build:demo
 ```
 
 ### Local Manual Release
@@ -106,6 +124,14 @@ npm run build
 ```bash
 npm run deploy
 ```
+
+Deploy the isolated demo Worker:
+
+```bash
+npm run deploy:demo
+```
+
+The demo uses `wrangler.demo.toml` and `.github/workflows/deploy-demo.yml` with the Worker name `edgechat-demo`. Its workflow is manual-only and reads `DEMO_CLOUDFLARE_ACCOUNT_ID` and `DEMO_CLOUDFLARE_API_TOKEN`, leaving the existing production deployment workflow unchanged.
 
 In non-interactive environments, set `CLOUDFLARE_API_TOKEN` before deployment.
 
@@ -132,10 +158,13 @@ edgechat/
 |  |  |- router.js
 |  |  |- store.js
 |  |  |- ws.js
+|  |  |- runtime.js
+|  |  |- demo/
 |  |  |- styles.css
 |  |  |- components/ui/
 |  |  `- pages/
-|  `- vite.config.js
+|  |- vite.config.js
+|  `- vite.demo.config.js
 |- worker/
 |  |- schema.sql
 |  |- migrations/
@@ -148,6 +177,7 @@ edgechat/
 |     |- api/
 |     `- do/
 |- wrangler.toml
+|- wrangler.demo.toml
 |- package.json
 |- README.md
 |- README.en.md

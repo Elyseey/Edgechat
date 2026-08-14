@@ -1,4 +1,5 @@
 import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
+import { getRuntimeFileUrl, isDemoMode, requestRuntime } from './runtime.js';
 
 const API_PREFIX = '/api';
 
@@ -12,6 +13,10 @@ function buildHeaders(extra = {}) {
 }
 
 async function request(path, options = {}) {
+  if (isDemoMode) {
+    return requestRuntime(path, options);
+  }
+
   const response = await fetch(`${API_PREFIX}${path}`, {
     ...options,
     headers: buildHeaders(options.headers),
@@ -175,6 +180,9 @@ export default {
     const raw = String(keyOrUrl || '');
     if (!raw) {
       return '';
+    }
+    if (isDemoMode) {
+      return getRuntimeFileUrl(raw);
     }
 
     const url = raw.startsWith('/files/')

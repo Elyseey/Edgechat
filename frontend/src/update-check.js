@@ -1,3 +1,5 @@
+import { getRuntimeUpdateResult, isDemoMode } from './runtime.js';
+
 const GITHUB_API_BASE = "https://api.github.com";
 
 function normalizeBuildInfo(build) {
@@ -39,6 +41,9 @@ export function getBuildInfo() {
 }
 
 export async function checkForUpdates({ build = getBuildInfo(), fetchImpl = globalThis.fetch } = {}) {
+	if (isDemoMode) {
+		return getRuntimeUpdateResult();
+	}
 	const current = normalizeBuildInfo(build);
 	requireComparableBuild(current);
 	if (typeof fetchImpl !== "function") {

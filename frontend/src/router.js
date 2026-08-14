@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { isDemoMode } from './runtime.js';
 import store from './store.js';
 import LoginPage from './pages/LoginPage.vue';
 import RegisterPage from './pages/RegisterPage.vue';
@@ -97,7 +98,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.public) {
-    if (store.session && to.path === '/login') {
+    if (!isDemoMode && store.session && to.path === '/login') {
       return '/';
     }
     return true;

@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { isDemoMode, runtimeSessionToken } from './runtime.js';
 import api from './api.js';
 import {
   addAuthInvalidListener,
@@ -11,7 +12,7 @@ const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
   ready: false,
-  token: getStoredToken(),
+  token: isDemoMode ? runtimeSessionToken : getStoredToken(),
   session: null,
   site: {
     siteName: 'Edgechat',

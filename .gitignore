@@ -14,5 +14,6 @@ node_modules/
 AGENTS.md
 Agent.md
 frontend/dist/
+frontend/demo-dist/
 .playwright-cli/
 .tmp/

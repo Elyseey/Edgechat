@@ -1,4 +1,10 @@
 <script setup>
+import { defineAsyncComponent } from 'vue';
+import { isDemoMode } from './runtime.js';
+
+const DemoNavigator = isDemoMode
+  ? defineAsyncComponent(() => import('./components/demo/DemoNavigator.vue'))
+  : null;
 </script>
 
 <template>
@@ -7,6 +13,7 @@
       <component :is="Component" :key="route.path" />
     </Transition>
   </router-view>
+  <component :is="DemoNavigator" v-if="DemoNavigator" />
 </template>
 
 <style>

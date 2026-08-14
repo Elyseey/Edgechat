@@ -23,6 +23,12 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
   </tr>
 </table>
 
+## 在线 Demo
+
+- 演示站：<https://edgechat-demo.wcjxxgaq.workers.dev>
+
+演示站复用正式项目的 Vue 页面、路由、状态管理和实时消息逻辑，但所有 API、WebSocket、文件上传与 Telegram 回流都在浏览器内存中模拟。刷新或点击右上角“重置演示数据”即可恢复初始状态，不会访问正式 Worker，也不会写入 D1、KV 或 R2。
+
 ## 功能特性
 
 - 管理员创建用户，不开放自助注册
@@ -97,10 +103,22 @@ npm install
 npm run dev:frontend
 ```
 
+纯前端 demo 使用独立端口和构建目录：
+
+```bash
+npm run dev:demo
+```
+
 ### 本地构建
 
 ```bash
 npm run build
+```
+
+独立构建 demo：
+
+```bash
+npm run build:demo
 ```
 
 ### 本地手动发布
@@ -108,6 +126,14 @@ npm run build
 ```bash
 npm run deploy
 ```
+
+部署独立 demo Worker：
+
+```bash
+npm run deploy:demo
+```
+
+demo 使用 `wrangler.demo.toml` 和 `.github/workflows/deploy-demo.yml`，Worker 名称为 `edgechat-demo`。GitHub Actions 仅支持手动触发，并读取 `DEMO_CLOUDFLARE_ACCOUNT_ID`、`DEMO_CLOUDFLARE_API_TOKEN`，不会改变现有生产部署工作流。
 
 在非交互环境下部署时，需要提前设置 `CLOUDFLARE_API_TOKEN`。
 
@@ -134,10 +160,13 @@ edgechat/
 │  │  ├─ router.js
 │  │  ├─ store.js
 │  │  ├─ ws.js
+│  │  ├─ runtime.js
+│  │  ├─ demo/
 │  │  ├─ styles.css
 │  │  ├─ components/ui/
 │  │  └─ pages/
-│  └─ vite.config.js
+│  ├─ vite.config.js
+│  └─ vite.demo.config.js
 ├─ worker/
 │  ├─ schema.sql
 │  ├─ migrations/
@@ -150,6 +179,7 @@ edgechat/
 │     ├─ api/
 │     └─ do/
 ├─ wrangler.toml
+├─ wrangler.demo.toml
 ├─ package.json
 ├─ README.md
 ├─ README.en.md

@@ -2,6 +2,7 @@
 import { ArrowLeft, Menu, Settings, UsersRound } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { isDemoMode } from '../runtime.js';
 import AddConversationDialog from '../components/chat/AddConversationDialog.vue';
 import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
 import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
@@ -244,7 +245,13 @@ function returnToMobileConversationList() {
 
 async function bootstrap() {
   error.value = '';
-  try { await refreshSidebar(); }
+  try {
+    await refreshSidebar();
+    if (isDemoMode && !activeRoom.value) {
+      const general = conversationItems.value.find((item) => item.isGeneral);
+      if (general) await selectConversation(general);
+    }
+  }
   catch (e) { error.value = e.message; }
 }
 

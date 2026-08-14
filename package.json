@@ -6,13 +6,16 @@
 	"scripts": {
 		"test": "node --test",
 		"dev:frontend": "vite --config frontend/vite.config.js",
+		"dev:demo": "vite --config frontend/vite.demo.config.js",
 		"build:frontend": "vite build --config frontend/vite.config.js",
+		"build:demo": "vite build --config frontend/vite.demo.config.js",
 		"build": "npm run build:frontend",
 		"biome:write": "biome check --write .",
 		"biome:check": "biome check .",
 		"biome:ci": "biome ci .",
 		"check": "npm run biome:ci && npm run build",
 		"deploy": "npm run build && wrangler deploy",
+		"deploy:demo": "npm run build:demo && wrangler deploy --config wrangler.demo.toml",
 		"d1:apply": "wrangler d1 execute cfchat-db --file ./worker/schema.sql"
 	},
 	"dependencies": {
