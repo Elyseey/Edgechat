@@ -610,6 +610,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .chat-layout {
+  position: fixed;
+  top: var(--chat-viewport-offset-top, 0px);
+  left: 0;
   display: flex;
   width: 100%;
   height: var(--chat-viewport-height, 100dvh);
@@ -703,6 +706,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
+  touch-action: pan-y;
 }
 
 .sidebar-list::-webkit-scrollbar { width: 4px; }
@@ -1022,6 +1026,7 @@ onBeforeUnmount(() => {
   padding: 20px 24px;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  touch-action: pan-y;
 }
 
 .chat-messages::-webkit-scrollbar { width: 6px; }
@@ -1141,6 +1146,7 @@ onBeforeUnmount(() => {
 }
 
 .composer-attachment {
+  min-width: 0;
   margin-bottom: 10px;
 }
 
@@ -1155,6 +1161,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .composer-file-input {
@@ -1284,6 +1291,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   background: #f7f9fa;
   border-left: 1px solid #e9edef;
+  touch-action: pan-y;
 }
 
 @media (max-width: 960px) {

@@ -27,7 +27,7 @@ const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || pro
       :alt="displayName"
       loading="lazy"
     />
-    <UiBadge variant="secondary">{{ displayName }}</UiBadge>
-    <UiButton variant="ghost" size="sm" @click="emit('clear')">移除</UiButton>
+    <UiBadge class="pending-attachment__name" variant="secondary">{{ displayName }}</UiBadge>
+    <UiButton class="pending-attachment__clear" variant="ghost" size="sm" @click="emit('clear')">移除</UiButton>
   </div>
 </template>

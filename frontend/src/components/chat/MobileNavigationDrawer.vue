@@ -78,10 +78,13 @@ useOverlayLifecycle({
 .mobile-navigation-drawer {
   width: min(84vw, 320px);
   height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: max(18px, env(safe-area-inset-top)) 12px max(18px, env(safe-area-inset-bottom));
   background: #ffffff;
   box-shadow: 12px 0 32px rgba(11, 20, 26, 0.2);
   outline: none;
+  touch-action: pan-y;
 }
 
 .mobile-navigation-drawer__header {

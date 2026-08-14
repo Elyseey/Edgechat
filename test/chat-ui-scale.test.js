@@ -2,8 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const indexHtml = readFileSync(new URL("../frontend/index.html", import.meta.url), "utf8");
 const chatPage = readFileSync(
 	new URL("../frontend/src/pages/ChatPage.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
+const attachmentStyles = readFileSync(
+	new URL("../frontend/src/styles/chat-attachments.css", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
+const mobileDrawer = readFileSync(
+	new URL("../frontend/src/components/chat/MobileNavigationDrawer.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
 
@@ -20,11 +29,28 @@ test("聊天界面使用原始控件尺寸铺满整个视口", () => {
 	const layout = getStyleRule(chatPage, ".chat-layout");
 	assert.match(layout, /width:\s*100%;/);
 	assert.match(layout, /height:\s*var\(--chat-viewport-height,\s*100dvh\);/);
+	assert.match(layout, /position:\s*fixed;/);
+	assert.match(layout, /top:\s*var\(--chat-viewport-offset-top,\s*0px\);/);
 	assert.match(layout, /overflow:\s*hidden;/);
+	assert.match(indexHtml, /interactive-widget=resizes-content/);
 	assert.doesNotMatch(chatPage, /--chat-interface-scale/);
 	assert.doesNotMatch(chatPage, /zoom\s*:/);
 	assert.doesNotMatch(chatPage, /width:\s*80%;/);
 	assert.doesNotMatch(chatPage, /height:\s*80vh;/);
+});
+
+test("移动端附件预览不会挤出发送按钮", () => {
+	assert.match(chatPage, /\.composer-attachment\s*{[^}]*min-width:\s*0;/s);
+	assert.match(chatPage, /\.composer-row\s*{[^}]*min-width:\s*0;/s);
+	assert.match(chatPage, /\.composer-send\s*{[^}]*flex-shrink:\s*0;/s);
+	assert.match(attachmentStyles, /\.pending-attachment\s*{[^}]*width:\s*100%;[^}]*min-width:\s*0;/s);
+	assert.match(attachmentStyles, /\.pending-attachment__name\s*{[^}]*min-width:\s*0;[^}]*text-overflow:\s*ellipsis;/s);
+});
+
+test("移动端前台滚动区允许纵向触摸滑动", () => {
+	assert.match(chatPage, /\.sidebar-list\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
+	assert.match(chatPage, /\.chat-messages\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
+	assert.match(mobileDrawer, /\.mobile-navigation-drawer\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
 });
 
 test("移动端聊天页只显示会话列表或当前聊天中的一个视图", () => {

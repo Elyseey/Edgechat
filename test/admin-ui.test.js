@@ -22,6 +22,8 @@ const siteAppearanceSource = read('../frontend/src/components/admin/AdminSiteApp
 const telegramSource = read('../frontend/src/pages/AdminTelegramPage.vue');
 const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
+const adminLayout = read('../frontend/src/styles/admin/layout.css');
+const adminSidebarStyles = read('../frontend/src/styles/admin/sidebar.css');
 const legacyTokens = read('../frontend/src/styles/tokens.css');
 const dashboardStyles = read('../frontend/src/styles/admin/dashboard.css');
 const invitesPageStyles = read('../frontend/src/styles/admin/invites-page.css');
@@ -147,4 +149,11 @@ test('后台核心 Vue 文件保持在单一职责的可维护规模', () => {
   ]) {
     assert.ok(source.split('\n').length < 260, `${name} 不应重新膨胀为超大文件`);
   }
+});
+
+test('移动端后台始终保留独立的纵向滚动区域', () => {
+  assert.match(adminLayout, /\.admin-page\s*\{[\s\S]*?height:\s*100dvh;[\s\S]*?overflow:\s*hidden;/);
+  assert.match(adminLayout, /\.admin-workspace\s*\{[\s\S]*?min-height:\s*0;/);
+  assert.match(adminLayout, /\.admin-content\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow-y:\s*auto;[\s\S]*?touch-action:\s*pan-y;/);
+  assert.match(adminSidebarStyles, /\.admin-sidebar__body\s*\{[\s\S]*?overflow-y:\s*auto;[\s\S]*?touch-action:\s*pan-y;/);
 });

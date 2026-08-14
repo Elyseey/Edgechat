@@ -94,6 +94,7 @@
   gap: var(--admin-space-3xs);
   overflow-y: auto;
   padding-block: var(--admin-space-sm);
+  touch-action: pan-y;
 }
 
 .admin-nav-item,
@@ -276,6 +277,8 @@
     display: none;
     max-height: calc(100dvh - 60px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   .admin-sidebar--open .admin-sidebar__body {
