@@ -2,7 +2,7 @@
   <img src="Edgechat.png" alt="Edgechat 标志" />
 </div>
 
-[English README](README.en.md) · [GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://echat.azora.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
+[English README](README.en.md) · [GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://echat.azora.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)· [社区讨论](https://t.me/EdgeChatlounge)
 
 > ***这可能是 1000 万以下最好用的 Cloudflare 聊天室***
 
