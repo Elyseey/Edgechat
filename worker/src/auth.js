@@ -14,6 +14,19 @@ function fromBase64Url(value) {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
+function timingSafeEqual(left, right) {
+  const leftBytes = encoder.encode(left);
+  const rightBytes = encoder.encode(right);
+  let difference = leftBytes.length ^ rightBytes.length;
+
+  // 密码哈希是固定长度的敏感值；始终遍历完整派生结果，避免普通字符串比较随首个差异提前结束。
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    difference |= leftBytes[index] ^ (rightBytes[index] ?? 0);
+  }
+
+  return difference === 0;
+}
+
 export async function hashPassword(password, salt = null) {
   const passwordSalt = salt || toBase64Url(crypto.getRandomValues(new Uint8Array(16)));
   const keyMaterial = await crypto.subtle.importKey(
@@ -41,7 +54,7 @@ export async function hashPassword(password, salt = null) {
 
 export async function verifyPassword(password, passwordHash, passwordSalt) {
   const derived = await hashPassword(password, passwordSalt);
-  return derived.hash === passwordHash;
+  return timingSafeEqual(derived.hash, passwordHash);
 }
 
 function toSessionVersion(value) {
