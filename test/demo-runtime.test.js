@@ -71,6 +71,13 @@ test('demo groups use the signed-in user as their owner', async () => {
 
 test('demo room socket echoes sent messages through the real-time contract', async () => {
   const frames = [];
+  const inboxFrames = [];
+  const inboxSocket = connectDemoInboxSocket({
+    onMessage(frame) {
+      inboxFrames.push(JSON.parse(frame));
+    },
+    onStatus() {}
+  });
   let socket;
   await new Promise((resolve) => {
     socket = connectDemoRoomSocket({
@@ -94,7 +101,9 @@ test('demo room socket echoes sent messages through the real-time contract', asy
 
   const history = await requestDemo('/messages?kind=public&roomId=1');
   assert.equal(history.messages.at(-1).content, '浏览器本地消息');
+  assert.deepEqual(inboxFrames, []);
   socket.close();
+  inboxSocket.close();
 });
 
 test('Telegram replies increment the inbox unread projection', async () => {
@@ -125,6 +134,7 @@ test('Telegram replies increment the inbox unread projection', async () => {
   await new Promise((resolve) => setTimeout(resolve, 720));
 
   assert.equal(inboxFrames.at(-1).unreadCount, 1);
+  assert.equal(inboxFrames.at(-1).room.name, 'Telegram 联动');
   roomSocket.close();
   inboxSocket.close();
 });

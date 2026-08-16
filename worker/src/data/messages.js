@@ -9,6 +9,7 @@ function toNullableNumber(value) {
 
 export function mapMessage(row, content = row.content) {
 	const isExternal = row.sender_kind === "external";
+	const isTelegramExternal = isExternal && row.source === "telegram";
 	return {
 			id: Number(row.id),
 			content,
@@ -20,7 +21,9 @@ export function mapMessage(row, content = row.content) {
 				username: isExternal ? "" : row.sender_username,
 				displayName: isExternal ? row.external_sender_name : row.sender_display_name,
 				avatarUrl: isExternal
-					? row.external_sender_avatar_url || ""
+					? isTelegramExternal
+						? `/api/integrations/telegram/avatar/${row.external_sender_id}`
+						: row.external_sender_avatar_url || ""
 					: row.sender_avatar_key
 						? publicFileUrl(row.sender_avatar_key)
 						: "",
@@ -36,6 +39,22 @@ export function mapMessage(row, content = row.content) {
 				}
 			: null,
 	};
+}
+
+export async function externalSenderExists(db, source, senderId) {
+	const { results } = await db
+		.prepare(
+			`SELECT 1 AS found
+			 FROM messages
+			 WHERE sender_kind = 'external'
+			   AND source = ?
+			   AND external_sender_id = ?
+			   AND deleted_at IS NULL
+			 LIMIT 1`,
+		)
+		.bind(String(source), String(senderId))
+		.all();
+	return Boolean(results[0]);
 }
 
 async function mapDecryptedMessage(env, row) {

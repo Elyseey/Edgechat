@@ -21,7 +21,11 @@ function publishInbox(kind, roomId, message, { incrementUnread = false } = {}) {
   }
   const payload = {
     type: 'room_message',
-    room: { kind, id: Number(roomId) },
+    room: {
+      kind,
+      id: Number(roomId),
+      name: kind === 'dm' ? room?.otherUser?.displayName : room?.name
+    },
     messageId: message.id,
     createdAt: message.createdAt,
     unreadCount: Number(room?.unreadCount || 0)
@@ -68,7 +72,6 @@ function handleRoomFrame(socket, frame) {
       sender: currentSender()
     });
     publishRoom(socket.kind, socket.roomId, { type: 'message', message: cloneDemo(message) });
-    publishInbox(socket.kind, socket.roomId, message);
 
     if (hasEnabledTelegramMapping(socket.kind, socket.roomId)) {
       globalThis.setTimeout(() => {

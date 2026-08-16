@@ -63,6 +63,14 @@ export function getTelegramChat(botToken, chatId) {
 	return callTelegramApi(botToken, "getChat", { chat_id: String(chatId) });
 }
 
+export function getTelegramUserProfilePhotos(botToken, userId) {
+	return callTelegramApi(botToken, "getUserProfilePhotos", {
+		user_id: Number(userId),
+		offset: 0,
+		limit: 1,
+	});
+}
+
 export function sendTelegramText(botToken, { chatId, text, parseMode = "HTML" }) {
 	return callTelegramApi(botToken, "sendMessage", {
 		chat_id: String(chatId),

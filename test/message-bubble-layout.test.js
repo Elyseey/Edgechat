@@ -6,6 +6,10 @@ const chatPage = readFileSync(
 	new URL("../frontend/src/pages/ChatPage.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
+const avatarComponent = readFileSync(
+	new URL("../frontend/src/components/ui/Avatar.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
 
 function getStyleRule(selector) {
 	const marker = `${selector} {`;
@@ -37,4 +41,25 @@ test("短文本消息为右下角时间戳预留末行空间", () => {
 	);
 	assert.match(reserve, /display:\s*inline-block;/);
 	assert.match(reserve, /width:\s*3\.5em;/);
+});
+
+test("非本人消息在气泡前显示圆形发送者头像", () => {
+	assert.match(chatPage, /<UiAvatar\s+v-if="!isOwnMessage\(msg\)"/);
+	assert.match(chatPage, /:src="msg\.sender\.avatarUrl"/);
+	assert.match(chatPage, /:fallback="msg\.sender\.displayName"/);
+
+	const row = getStyleRule(".message-row");
+	assert.match(row, /align-items:\s*flex-end;/);
+	assert.match(row, /gap:\s*8px;/);
+
+	const avatar = getStyleRule(".message-avatar");
+	assert.match(avatar, /width:\s*34px;/);
+	assert.match(avatar, /height:\s*34px;/);
+	assert.match(avatar, /border-radius:\s*50%;/);
+});
+
+test("远程头像加载失败时显示姓名缩写", () => {
+	assert.match(avatarComponent, /const showImage = computed/);
+	assert.match(avatarComponent, /failedSrc\.value !== props\.src/);
+	assert.match(avatarComponent, /@error="handleImageError"/);
 });

@@ -28,7 +28,7 @@ import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
 import {
   registerTelegramAdminRoutes,
-  registerTelegramWebhookRoute
+  registerTelegramPublicRoutes
 } from './api/telegram.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
@@ -65,7 +65,7 @@ app.get('/api/site', async (c) => {
   return c.json({ site });
 });
 
-registerTelegramWebhookRoute(app);
+registerTelegramPublicRoutes(app);
 
 app.get('/api/register-links/:token', async (c) => {
   const token = String(c.req.param('token') || '').trim();

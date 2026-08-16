@@ -1,5 +1,5 @@
 <script setup>
-import { LayoutDashboard, LogOut, Settings, X } from '@lucide/vue';
+import { Bell, BellOff, LayoutDashboard, LogOut, Settings, X } from '@lucide/vue';
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
 import UiAvatar from '../ui/Avatar.vue';
@@ -7,10 +7,13 @@ import UiAvatar from '../ui/Avatar.vue';
 const props = defineProps({
   show: { type: Boolean, default: false },
   session: { type: Object, default: null },
-  showAdmin: { type: Boolean, default: false }
+  showAdmin: { type: Boolean, default: false },
+  notificationsEnabled: { type: Boolean, default: false },
+  notificationLabel: { type: String, default: '开启通知' },
+  notificationDisabled: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['close', 'settings', 'admin', 'logout']);
+const emit = defineEmits(['close', 'settings', 'admin', 'notification', 'logout']);
 const drawerEl = ref(null);
 
 useOverlayLifecycle({
@@ -47,6 +50,16 @@ useOverlayLifecycle({
             <button type="button" @click="emit('settings')">
               <Settings :size="21" aria-hidden="true" />
               <span>个人设置</span>
+            </button>
+            <button
+              type="button"
+              :disabled="notificationDisabled"
+              :aria-pressed="notificationsEnabled"
+              @click="emit('notification')"
+            >
+              <Bell v-if="notificationsEnabled" :size="21" aria-hidden="true" />
+              <BellOff v-else :size="21" aria-hidden="true" />
+              <span>{{ notificationLabel }}</span>
             </button>
             <button v-if="showAdmin" type="button" @click="emit('admin')">
               <LayoutDashboard :size="21" aria-hidden="true" />
@@ -159,6 +172,12 @@ useOverlayLifecycle({
 .mobile-navigation-drawer__actions a:active,
 .mobile-navigation-drawer__close:active {
   background: #f0f2f5;
+}
+
+.mobile-navigation-drawer__actions button:disabled {
+  color: #8696a0;
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .mobile-navigation-drawer__actions .mobile-navigation-drawer__danger {

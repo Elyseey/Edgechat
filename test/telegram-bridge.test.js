@@ -109,16 +109,16 @@ test("Telegram 图片、视频与普通文件保留原始元数据", () => {
 	assert.equal(document.content, "说明");
 });
 
-test("EdgeChat 出站消息使用粗体用户名、空行和 HTML 转义", () => {
+test("EdgeChat 出站消息使用粗体用户名、紧邻正文的换行和 HTML 转义", () => {
 	assert.equal(
 		formatTelegramMessage('Alice & Bob', '<hello> "world"'),
-		'<b>Alice &amp; Bob:</b>\n\n&lt;hello&gt; &quot;world&quot;',
+		'<b>Alice &amp; Bob:</b>\n&lt;hello&gt; &quot;world&quot;',
 	);
-	const chunks = splitTelegramFormattedMessage("Alice", `${"a".repeat(4080)}👋b`, 4096);
+	const chunks = splitTelegramFormattedMessage("Alice", `${"a".repeat(4081)}👋b`, 4096);
 	assert.equal(chunks.length, 2);
 	assert.equal(Array.from(chunks[0]).length <= 4096, true);
 	assert.equal(chunks[0].endsWith("👋"), true);
-	assert.equal(chunks[1], "<b>Alice:</b>\n\nb");
+	assert.equal(chunks[1], "<b>Alice:</b>\nb");
 });
 
 test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
@@ -135,7 +135,7 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 			bytes: Uint8Array.from([1, 2, 3]),
 			filename: "clip.mp4",
 			contentType: "video/mp4",
-			caption: "<b>Alice:</b>\n\nhello",
+			caption: "<b>Alice:</b>\nhello",
 		});
 	} finally {
 		globalThis.fetch = originalFetch;
@@ -145,7 +145,7 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 	assert.equal(captured.init.headers, undefined);
 	assert.equal(captured.init.body.get("chat_id"), "-1001");
 	assert.equal(captured.init.body.get("parse_mode"), "HTML");
-	assert.equal(captured.init.body.get("caption"), "<b>Alice:</b>\n\nhello");
+	assert.equal(captured.init.body.get("caption"), "<b>Alice:</b>\nhello");
 	assert.equal(captured.init.body.get("video").name, "clip.mp4");
 });
 
@@ -345,7 +345,7 @@ test("消息 projection 保留 Telegram 来源而不伪造 EdgeChat 账号", () 
 				id: "42",
 				username: "",
 				displayName: "Alice",
-				avatarUrl: "",
+					avatarUrl: "/api/integrations/telegram/avatar/42",
 				source: "telegram",
 			},
 			attachment: null,

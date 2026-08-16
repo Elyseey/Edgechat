@@ -5,7 +5,13 @@ import { connectInboxSocket } from "../ws.js";
 export function useUnreadInbox({
   activeRoom,
   applyConversationActivity,
-  markConversationRead
+  markConversationRead,
+	roomApi = api,
+	openInboxConnection = connectInboxSocket,
+	notifyRoom = () => {},
+	isPageActive = () =>
+		globalThis.document?.visibilityState === "visible" &&
+		globalThis.document.hasFocus()
 }) {
   function isActiveRoom(room) {
     return (
@@ -15,20 +21,20 @@ export function useUnreadInbox({
     );
   }
 
-	const inboxSession = createRealtimeSession({
-		openConnection(_params, handlers) {
-			return connectInboxSocket(handlers);
-		},
-		onMessage(payload) {
+		const inboxSession = createRealtimeSession({
+			openConnection(_params, handlers) {
+				return openInboxConnection(handlers);
+			},
+			onMessage(payload) {
         if (payload.type !== 'room_message' || !payload.room) {
           return;
         }
 
-		if (isActiveRoom(payload.room)) {
-			markConversationRead(payload.room.kind, payload.room.id);
-			void api
-				.markRoomRead(payload.room.kind, payload.room.id, payload.messageId)
-				.catch(() => {});
+			if (isActiveRoom(payload.room) && isPageActive()) {
+				markConversationRead(payload.room.kind, payload.room.id);
+				void roomApi
+					.markRoomRead(payload.room.kind, payload.room.id, payload.messageId)
+					.catch(() => {});
 			return;
 		}
 
@@ -38,8 +44,9 @@ export function useUnreadInbox({
           lastMessageAt: payload.createdAt,
           unreadCount: payload.unreadCount
         });
-		},
-	});
+			notifyRoom(payload.room);
+			},
+		});
 
 	function connectUnreadInbox() {
 		inboxSession.connect("inbox");

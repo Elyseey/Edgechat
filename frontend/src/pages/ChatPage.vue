@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowLeft, Menu, Settings, UsersRound } from '@lucide/vue';
+import { ArrowLeft, Bell, BellOff, Menu, Settings, UsersRound } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { isDemoMode } from '../runtime.js';
@@ -15,6 +15,7 @@ import PendingAttachmentPreview from '../components/chat/PendingAttachmentPrevie
 import UiAvatar from '../components/ui/Avatar.vue';
 import UiTextarea from '../components/ui/Textarea.vue';
 import { useActiveRoom } from '../composables/useActiveRoom.js';
+import { useBrowserNotifications } from '../composables/useBrowserNotifications.js';
 import { useChatRoom } from '../composables/useChatRoom.js';
 import { useChatSidebar } from '../composables/useChatSidebar.js';
 import { useChatViewport } from '../composables/useChatViewport.js';
@@ -52,6 +53,22 @@ const {
   refreshSidebar, openConversation, markConversationRead, applyConversationActivity
 } = useChatSidebar({ applyActiveChannel, selectDm });
 
+const {
+  notificationsEnabled,
+  notificationStateLabel,
+  notificationActionLabel,
+  notificationToggleDisabled,
+  syncNotificationPermission,
+  toggleNotifications,
+  isRoomMuted,
+  toggleRoomMuted,
+  notifyRoom
+} = useBrowserNotifications({
+  userId: session.value?.userId,
+  onOpenRoom: openRoomFromNotification
+});
+const activeRoomMuted = computed(() => isRoomMuted(activeRoom.value));
+
 function handleRoomActivity({ room, message }) {
   applyConversationActivity({
     kind: room.kind,
@@ -88,7 +105,8 @@ const {
 const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
   activeRoom,
   markConversationRead,
-  applyConversationActivity
+  applyConversationActivity,
+  notifyRoom
 });
 
 const wsConnected = computed(() => wsStatus.value === 'open');
@@ -229,6 +247,17 @@ async function selectConversation(item) {
   }
 }
 
+function openRoomFromNotification(room) {
+  const item = conversationItems.value.find(
+    (conversation) => conversation.kind === room.kind && Number(conversation.id) === Number(room.id)
+  );
+  if (item) void selectConversation(item);
+}
+
+function toggleActiveRoomMute() {
+  if (activeRoom.value) toggleRoomMuted(activeRoom.value);
+}
+
 function logout() { store.logout(); router.push('/login'); }
 function openAdmin() { router.push('/admin'); }
 function openSettings() { router.push('/settings'); }
@@ -285,6 +314,7 @@ function confirmDeleteMessage() {
 
 onMounted(() => {
   startViewportSync();
+  window.addEventListener('focus', syncNotificationPermission);
   void bootstrap().then(connectUnreadInbox);
 });
 function formatBubbleTime(value) {
@@ -297,6 +327,7 @@ function formatBubbleTime(value) {
 
 onBeforeUnmount(() => {
   cancelMessageLongPress();
+  window.removeEventListener('focus', syncNotificationPermission);
   disconnectUnreadInbox();
   disconnectSocket();
   stopViewportSync();
@@ -316,6 +347,20 @@ onBeforeUnmount(() => {
     <aside class="right-sidebar">
       <div class="right-sidebar-inner">
         <div class="right-sidebar-section right-sidebar-actions">
+          <button
+            type="button"
+            class="right-sidebar-action right-sidebar-action--labeled tooltip"
+            :class="{ 'right-sidebar-action--notification-active': notificationsEnabled }"
+            :data-tooltip="notificationActionLabel"
+            :aria-label="notificationActionLabel"
+            :aria-pressed="notificationsEnabled"
+            :disabled="notificationToggleDisabled"
+            @click="toggleNotifications"
+          >
+            <Bell v-if="notificationsEnabled" :size="20" aria-hidden="true" />
+            <BellOff v-else :size="20" aria-hidden="true" />
+            <span class="right-sidebar-action__label">{{ notificationStateLabel }}</span>
+          </button>
           <button
             v-if="showAdminEntry"
             type="button"
@@ -408,6 +453,14 @@ onBeforeUnmount(() => {
               </div>
               <div class="sidebar-item__bottom">
                 <p class="sidebar-label sidebar-item__preview">{{ item.subtitle }}</p>
+                <span
+                  v-if="isRoomMuted(item)"
+                  class="sidebar-muted-indicator"
+                  title="已设为免打扰"
+                  aria-label="已设为免打扰"
+                >
+                  <BellOff :size="14" aria-hidden="true" />
+                </span>
                 <span v-if="item.unreadCount > 0" class="sidebar-unread-badge">
                   {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
                 </span>
@@ -449,6 +502,19 @@ onBeforeUnmount(() => {
               role="status"
             ></div>
             <button
+              type="button"
+              class="chat-header__button"
+              :class="{ 'chat-header__button--active': activeRoomMuted }"
+              :title="activeRoomMuted ? '关闭当前会话免打扰' : '开启当前会话免打扰'"
+              :aria-label="activeRoomMuted ? '关闭当前会话免打扰' : '开启当前会话免打扰'"
+              :aria-pressed="activeRoomMuted"
+              @click="toggleActiveRoomMute"
+            >
+              <BellOff v-if="activeRoomMuted" :size="19" aria-hidden="true" />
+              <Bell v-else :size="19" aria-hidden="true" />
+              <span>{{ activeRoomMuted ? '已免打扰' : '免打扰' }}</span>
+            </button>
+            <button
               v-if="activeRoom.kind !== 'dm'"
               type="button"
               class="chat-header__button"
@@ -485,6 +551,14 @@ onBeforeUnmount(() => {
               'message-row--moderatable': canModerateMessages
             }"
           >
+            <UiAvatar
+              v-if="!isOwnMessage(msg)"
+              class="message-avatar"
+              :src="msg.sender.avatarUrl"
+              :alt="msg.sender.displayName"
+              :fallback="msg.sender.displayName"
+              size="sm"
+            />
             <div
               class="message-bubble"
               :class="{ 'message-bubble--with-attachment': msg.attachment }"
@@ -587,9 +661,13 @@ onBeforeUnmount(() => {
       :show="showMobileNavigation"
       :session="session"
       :show-admin="showAdminEntry"
+      :notifications-enabled="notificationsEnabled"
+      :notification-label="notificationActionLabel"
+      :notification-disabled="notificationToggleDisabled"
       @close="closeMobileNavigation"
       @settings="navigateFromMobileDrawer(openSettings)"
       @admin="navigateFromMobileDrawer(openAdmin)"
+      @notification="toggleNotifications"
       @logout="navigateFromMobileDrawer(logout)"
     />
 
@@ -890,6 +968,14 @@ onBeforeUnmount(() => {
   touch-action: manipulation;
 }
 
+.sidebar-muted-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #8696a0;
+}
+
 .right-sidebar-action:hover,
 .right-sidebar-user:hover {
   background: rgba(0, 0, 0, 0.05);
@@ -901,12 +987,30 @@ onBeforeUnmount(() => {
   color: #dc2626;
 }
 
-.right-sidebar-action--admin {
+.right-sidebar-action--admin,
+.right-sidebar-action--labeled {
   width: 52px;
   height: 56px;
-  flex-direction: column;
   gap: 4px;
   border-radius: 8px;
+}
+
+.right-sidebar-action--admin {
+  flex-direction: column;
+}
+
+.right-sidebar-action--labeled {
+  flex-direction: column;
+}
+
+.right-sidebar-action--notification-active {
+  background: rgba(0, 128, 105, 0.1);
+  color: #008069;
+}
+
+.right-sidebar-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .right-sidebar-action__label {
@@ -1016,6 +1120,12 @@ onBeforeUnmount(() => {
   color: #111b21;
 }
 
+.chat-header__button--active {
+  border-color: rgba(0, 128, 105, 0.28);
+  background: rgba(0, 128, 105, 0.08);
+  color: #008069;
+}
+
 .header-action:focus-visible {
   outline: 2px solid #008069;
   outline-offset: 2px;
@@ -1093,6 +1203,8 @@ onBeforeUnmount(() => {
 
 .message-row {
   display: flex;
+  align-items: flex-end;
+  gap: 8px;
   margin-bottom: 12px;
   width: 100%;
   justify-content: flex-start;
@@ -1100,6 +1212,13 @@ onBeforeUnmount(() => {
 
 .message-row--own {
   justify-content: flex-end;
+}
+
+.message-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  box-shadow: none;
 }
 
 .message-bubble {

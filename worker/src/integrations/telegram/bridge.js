@@ -27,14 +27,14 @@ function escapeTelegramHtml(value) {
 export function formatTelegramMessage(displayName, content = "") {
 	const sender = `<b>${escapeTelegramHtml(displayName)}:</b>`;
 	const body = escapeTelegramHtml(content);
-	return body ? `${sender}\n\n${body}` : sender;
+	return body ? `${sender}\n${body}` : sender;
 }
 
 export function splitTelegramFormattedMessage(displayName, content, limit) {
 	const characters = Array.from(String(content || ""));
 	if (!characters.length) return [formatTelegramMessage(displayName)];
 	const sender = formatTelegramMessage(displayName);
-	const prefix = `${sender}\n\n`;
+	const prefix = `${sender}\n`;
 	const chunks = [];
 	let current = "";
 	for (const character of characters) {
