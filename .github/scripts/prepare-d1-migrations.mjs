@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { D1_MIGRATIONS } from "./d1-migration-manifest.mjs";
 import { buildD1MigrationPlan, D1_MIGRATION_LEDGER } from "./d1-migration-plan.mjs";
+import { D1_REPAIRS } from "./d1-repair-manifest.mjs";
 
 const API_BASE_URL = "https://api.cloudflare.com/client/v4";
 const OUTPUT_PATH = ".tmp/edgechat-d1-migrations.sql";
@@ -94,6 +95,7 @@ async function main() {
   const appliedMigrations = await collectAppliedMigrations(artifacts);
   const plan = await buildD1MigrationPlan({
     migrations: D1_MIGRATIONS,
+    repairs: D1_REPAIRS,
     appliedMigrations,
     artifacts,
     readSql(file) {

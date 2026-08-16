@@ -68,6 +68,8 @@ export const D1_MIGRATIONS = [
     artifacts: [
       "column:messages.sender_kind",
       "column:messages.external_sender_id",
+      "column:messages.external_sender_name",
+      "column:messages.external_sender_avatar_url",
       "column:messages.source",
       "column:messages.source_message_id",
       "table:telegram_bridge_config",

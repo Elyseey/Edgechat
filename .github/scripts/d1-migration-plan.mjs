@@ -27,7 +27,13 @@ function ledgerInsert(migration, checksum) {
 VALUES (${sqlString(migration.id)}, ${sqlString(checksum)});`;
 }
 
-export async function buildD1MigrationPlan({ migrations, appliedMigrations, artifacts, readSql }) {
+export async function buildD1MigrationPlan({
+  migrations,
+  repairs = [],
+  appliedMigrations,
+  artifacts,
+  readSql,
+}) {
   const chunks = [
     `CREATE TABLE IF NOT EXISTS ${D1_MIGRATION_LEDGER} (
   migration_id TEXT PRIMARY KEY,
@@ -36,6 +42,17 @@ export async function buildD1MigrationPlan({ migrations, appliedMigrations, arti
 );`,
   ];
   const decisions = [];
+
+  for (const repair of repairs) {
+    const shouldApply = repair.whenArtifacts.every((artifact) => artifacts.has(artifact));
+    if (!shouldApply) {
+      continue;
+    }
+
+    chunks.push(`-- 执行遗留数据库修复 ${repair.id}。`);
+    chunks.push((await readSql(repair.file)).trim());
+    decisions.push({ id: repair.id, action: "repair" });
+  }
 
   for (const migration of migrations) {
     const sql = await readSql(migration.file);
