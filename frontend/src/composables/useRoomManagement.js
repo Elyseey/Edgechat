@@ -17,7 +17,11 @@ export function useRoomManagement({
 }) {
 	const showCreateGroup = ref(false);
 	const creatingGroup = ref(false);
-	const createGroupForm = reactive({ name: "", memberUserIds: [] });
+	const createGroupForm = reactive({
+		name: "",
+		kind: "private",
+		memberUserIds: [],
+	});
 	const groupMembers = ref([]);
 	const memberLoading = ref(false);
 	const inviteSubmitting = ref(false);
@@ -52,6 +56,7 @@ export function useRoomManagement({
 	function closeCreateGroup() {
 		showCreateGroup.value = false;
 		createGroupForm.name = "";
+		createGroupForm.kind = "private";
 		createGroupForm.memberUserIds = [];
 	}
 
@@ -74,7 +79,7 @@ export function useRoomManagement({
 		try {
 			const payload = await roomApi.createGroup({
 				name: createGroupForm.name.trim(),
-				kind: "private",
+				kind: createGroupForm.kind,
 				memberUserIds: createGroupForm.memberUserIds,
 			});
 			await refreshSidebar();

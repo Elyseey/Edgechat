@@ -6,6 +6,7 @@ wrangler.toml
 项目文档.md
 本地部署说明.md
 TECHNICAL.md
+导览.md
 
 # Dependencies
 node_modules/

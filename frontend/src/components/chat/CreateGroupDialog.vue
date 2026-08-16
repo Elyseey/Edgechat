@@ -1,4 +1,5 @@
 <script setup>
+import { Globe2, LockKeyhole } from '@lucide/vue';
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
 import UiAvatar from '../ui/Avatar.vue';
@@ -30,8 +31,30 @@ useOverlayLifecycle({
           <input ref="nameInputEl" v-model="form.name" type="text" class="room-dialog__input" autocomplete="off" />
         </label>
 
+		<div class="room-dialog__type-field">
+		  <span>群组类型</span>
+		  <div class="room-dialog__type-switch" role="radiogroup" aria-label="群组类型">
+			<label
+			  :class="{ 'room-dialog__type-option--active': form.kind === 'public' }"
+			  class="room-dialog__type-option"
+			>
+			  <input v-model="form.kind" type="radio" name="group-kind" value="public" />
+			  <Globe2 :size="17" aria-hidden="true" />
+			  <span>公开群组</span>
+			</label>
+			<label
+			  :class="{ 'room-dialog__type-option--active': form.kind === 'private' }"
+			  class="room-dialog__type-option"
+			>
+			  <input v-model="form.kind" type="radio" name="group-kind" value="private" />
+			  <LockKeyhole :size="17" aria-hidden="true" />
+			  <span>私有群组</span>
+			</label>
+		  </div>
+		</div>
+
         <div class="room-dialog__members">
-          <label>选择成员</label>
+		  <label>{{ form.kind === 'public' ? '邀请成员（可选）' : '选择成员' }}</label>
           <div class="room-dialog__member-list">
             <button
               v-for="user in users"
@@ -92,6 +115,12 @@ useOverlayLifecycle({
 .room-dialog h2 { margin: 0 0 20px; font-size: 18px; color: #111b21; }
 .room-dialog__field { display: grid; gap: 8px; color: #6b7c93; font-size: 13px; }
 .room-dialog__input { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid #e8ecf0; border-radius: 8px; background: #f9fafb; font-size: 16px; }
+.room-dialog__type-field { display: grid; gap: 8px; margin-top: 20px; color: #6b7c93; font-size: 13px; }
+.room-dialog__type-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #e1e7ea; border-radius: 8px; background: #f5f7f8; }
+.room-dialog__type-option { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: #667781; font-size: 13px; cursor: pointer; }
+.room-dialog__type-option input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.room-dialog__type-option:focus-within { outline: 3px solid rgba(0, 128, 105, 0.24); outline-offset: 2px; }
+.room-dialog__type-option--active { background: #ffffff; color: #008069; box-shadow: 0 1px 3px rgba(11, 20, 26, 0.12); }
 .room-dialog__members { margin-top: 20px; }
 .room-dialog__members > label { display: block; margin-bottom: 8px; font-size: 13px; color: #6b7c93; }
 .room-dialog__member-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; }
@@ -102,6 +131,7 @@ useOverlayLifecycle({
 .room-dialog__secondary { border: 1px solid #e8ecf0; background: #fff; }
 .room-dialog__primary { border: 0; background: #008069; color: #fff; }
 .room-dialog__primary:disabled { cursor: not-allowed; opacity: 0.55; }
+.room-dialog button:focus-visible { outline: 3px solid rgba(0, 128, 105, 0.24); outline-offset: 2px; }
 .modal-fade-enter-active { transition: opacity 200ms; }
 .modal-fade-leave-active { transition: opacity 150ms; }
 .modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }

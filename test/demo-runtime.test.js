@@ -32,7 +32,7 @@ test('demo backend exposes chat, admin and Telegram fixture data', async () => {
 test('demo backend keeps group and admin mutations in browser memory', async () => {
   const created = await requestDemo('/channels', {
     method: 'POST',
-    body: { name: '演示项目组', memberUserIds: [2] }
+    body: { name: '演示项目组', kind: 'private', memberUserIds: [2] }
   });
   const invited = await requestDemo(`/channels/${created.channel.id}/invite`, {
     method: 'POST',
@@ -60,13 +60,33 @@ test('demo groups use the signed-in user as their owner', async () => {
   });
   const created = await requestDemo('/channels', {
     method: 'POST',
-    body: { name: 'Alice 的项目组', memberUserIds: [3] }
+    body: { name: 'Alice 的项目组', kind: 'private', memberUserIds: [3] }
   });
   const members = await requestDemo(`/channels/${created.channel.id}/members`);
 
   assert.deepEqual(members.members.map((member) => member.id), [2, 3]);
   assert.equal(members.members[0].role, 'owner');
   assert.equal(created.channel.ownerDisplayName, 'Alice');
+});
+
+test('demo public groups can be created, discovered and joined', async () => {
+  const created = await requestDemo('/channels', {
+    method: 'POST',
+    body: { name: '公开演示群', kind: 'public', memberUserIds: [] }
+  });
+  const beforeJoin = await requestDemo('/bootstrap');
+  const discoverable = beforeJoin.channels.find((channel) => channel.id === 4);
+  const joined = await requestDemo('/channels/4/join', { method: 'POST' });
+
+  assert.equal(created.channel.kind, 'public');
+  assert.equal(discoverable.isMember, false);
+  assert.equal(joined.channel.isMember, true);
+  assert.equal(joined.channel.memberCount, 3);
+
+  await assert.rejects(
+    requestDemo('/channels/2/join', { method: 'POST' }),
+    /公开群组不存在/
+  );
 });
 
 test('demo room socket echoes sent messages through the real-time contract', async () => {

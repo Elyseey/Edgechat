@@ -22,7 +22,7 @@ function createHarness(overrides = {}) {
 	const roomApi = {
 		async createGroup(payload) {
 			calls.push(["createGroup", payload]);
-			return { channel: { id: 9, kind: "private" } };
+			return { channel: { id: 9, kind: payload.kind } };
 		},
 		async getChannelMembers(id) {
 			calls.push(["getChannelMembers", id]);
@@ -54,7 +54,10 @@ function createHarness(overrides = {}) {
 		},
 		...overrides.roomApi,
 	};
-	const conversationItems = ref([{ id: 9, kind: "private" }]);
+	const conversationItems = ref([
+		{ id: 9, kind: "private" },
+		{ id: 9, kind: "public" },
+	]);
 	const refreshSidebar = async () => calls.push(["refreshSidebar"]);
 	const openConversation = async (item) => calls.push(["openConversation", item]);
 	const management = useRoomManagement({
@@ -90,7 +93,25 @@ test("创建群组状态和导航由 room management module 统一拥有", async
 		["openConversation", { id: 9, kind: "private" }],
 	]);
 	assert.equal(management.creation.show.value, false);
-	assert.deepEqual(management.creation.form, { name: "", memberUserIds: [] });
+	assert.deepEqual(management.creation.form, {
+		name: "",
+		kind: "private",
+		memberUserIds: [],
+	});
+});
+
+test("公开群组创建会保留类型并允许不预先邀请成员", async () => {
+	const { management, calls } = createHarness();
+	management.creation.open();
+	management.creation.form.name = "公开讨论";
+	management.creation.form.kind = "public";
+	await management.creation.submit();
+
+	assert.deepEqual(calls, [
+		["createGroup", { name: "公开讨论", kind: "public", memberUserIds: [] }],
+		["refreshSidebar"],
+		["openConversation", { id: 9, kind: "public" }],
+	]);
 });
 
 test("成员加载、邀请和移除通过同一 module 接口更新状态", async () => {

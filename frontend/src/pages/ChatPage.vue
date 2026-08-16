@@ -12,6 +12,8 @@ import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
 import MobileNavigationDrawer from '../components/chat/MobileNavigationDrawer.vue';
 import SenderSourceBadge from '../components/chat/SenderSourceBadge.vue';
 import PendingAttachmentPreview from '../components/chat/PendingAttachmentPreview.vue';
+import PublicGroupDiscovery from '../components/chat/PublicGroupDiscovery.vue';
+import PublicGroupJoinDialog from '../components/chat/PublicGroupJoinDialog.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import UiTextarea from '../components/ui/Textarea.vue';
 import { useActiveRoom } from '../composables/useActiveRoom.js';
@@ -28,6 +30,8 @@ const router = useRouter();
 const error = ref('');
 const activeRoom = ref(null);
 const showMobileNavigation = ref(false);
+const publicGroupPreview = ref(null);
+const joiningPublicGroup = ref(false);
 const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
 
@@ -49,8 +53,8 @@ const activeRoomAvatar = computed(() => {
 });
 
 const {
-  channels, dms, users, sidebarLoading, conversationItems, formatListTime,
-  refreshSidebar, openConversation, markConversationRead, applyConversationActivity
+  channels, dms, users, sidebarLoading, conversationItems, publicGroupItems, formatListTime,
+  refreshSidebar, openConversation, joinPublicChannel, markConversationRead, applyConversationActivity
 } = useChatSidebar({ applyActiveChannel, selectDm });
 
 const {
@@ -244,6 +248,34 @@ async function selectConversation(item) {
     openConversationView();
   } catch (currentError) {
     error.value = currentError.message;
+  }
+}
+
+function openPublicGroupPreview(item) {
+  publicGroupPreview.value = item.source;
+}
+
+function closePublicGroupPreview() {
+  if (!joiningPublicGroup.value) publicGroupPreview.value = null;
+}
+
+async function confirmPublicGroupJoin() {
+  const channel = publicGroupPreview.value;
+  if (!channel) return;
+
+  joiningPublicGroup.value = true;
+  error.value = '';
+  try {
+    await joinPublicChannel(channel);
+    const item = conversationItems.value.find(
+      (conversation) => conversation.kind === channel.kind && Number(conversation.id) === Number(channel.id)
+    );
+    publicGroupPreview.value = null;
+    if (item) await selectConversation(item);
+  } catch (currentError) {
+    error.value = currentError.message;
+  } finally {
+    joiningPublicGroup.value = false;
   }
 }
 
@@ -468,6 +500,8 @@ onBeforeUnmount(() => {
             </div>
           </button>
         </div>
+
+		<PublicGroupDiscovery :items="publicGroupItems" @select="openPublicGroupPreview" />
       </div>
     </aside>
 
@@ -689,6 +723,14 @@ onBeforeUnmount(() => {
       @close="closeCreateGroup"
       @toggle-member="toggleCreateGroupMember"
       @submit="createGroup"
+    />
+
+    <PublicGroupJoinDialog
+      :show="Boolean(publicGroupPreview)"
+      :channel="publicGroupPreview"
+      :joining="joiningPublicGroup"
+      @close="closePublicGroupPreview"
+      @join="confirmPublicGroupJoin"
     />
 
     <GroupSettingsDialog

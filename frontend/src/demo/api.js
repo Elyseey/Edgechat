@@ -129,12 +129,13 @@ function getChannelRoom(channel) {
 function createGroup(body) {
   const id = demoState.nextChannelId++;
   const ownerId = Number(demoState.session.userId);
+  const kind = String(body.kind || 'public').trim();
   const memberIds = [ownerId, ...(body.memberUserIds || []).map(Number)].filter(
     (userId, index, values) => values.indexOf(userId) === index
   );
   const channel = {
     id,
-    kind: 'private',
+    kind,
     name: String(body.name || '').trim(),
     description: '',
     avatarKey: '',
@@ -224,13 +225,14 @@ export async function requestDemo(path, options = {}) {
   }
   if (method === 'POST' && pathname === '/channels') {
     if (!String(body.name || '').trim()) fail('请输入群组名称');
+    if (!['public', 'private'].includes(String(body.kind || 'public').trim())) fail('群组类型无效');
     return { channel: createGroup(body) };
   }
 
   let match = pathname.match(/^\/channels\/(\d+)\/join$/);
   if (method === 'POST' && match) {
     const channel = findDemoChannel(match[1]);
-    if (!channel) fail('群组不存在', 404);
+    if (!channel || channel.kind !== 'public') fail('公开群组不存在', 404);
     if (!channel.memberIds.includes(demoState.session.userId)) {
       channel.memberIds.push(demoState.session.userId);
       channel.memberCount = channel.memberIds.length;
