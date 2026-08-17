@@ -1,4 +1,4 @@
-import { Gauge, Send, Settings, UserCog, UserPlus } from '@lucide/vue';
+import { Database, Gauge, Send, Settings, UserCog, UserPlus } from '@lucide/vue';
 
 export const adminNavigation = [
   {
@@ -14,6 +14,13 @@ export const adminNavigation = [
     description: '维护现有账号与权限',
     to: '/admin/users',
     icon: UserCog
+  },
+  {
+    id: 'storage',
+    label: '存储统计',
+    description: '查看每个用户的 R2 存储占用',
+    to: '/admin/storage',
+    icon: Database
   },
   {
     id: 'invites',
@@ -49,6 +56,7 @@ export const adminNavigation = [
 export const adminRouteIcons = {
   dashboard: Gauge,
   users: UserCog,
+  storage: Database,
   invites: UserPlus,
   telegram: Send,
   site: Settings
