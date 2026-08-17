@@ -7,6 +7,7 @@ import ChatPage from './pages/ChatPage.vue';
 import AdminPage from './pages/AdminPage.vue';
 import AdminDashboardPage from './pages/AdminDashboardPage.vue';
 import AdminUsersPage from './pages/AdminUsersPage.vue';
+import AdminStoragePage from './pages/AdminStoragePage.vue';
 import AdminInvitesPage from './pages/AdminInvitesPage.vue';
 import AdminSitePage from './pages/AdminSitePage.vue';
 import AdminTelegramPage from './pages/AdminTelegramPage.vue';
@@ -54,6 +55,12 @@ const router = createRouter({
           name: 'admin-users',
           component: AdminUsersPage,
           meta: { admin: true, adminTitle: '用户管理', adminIcon: 'users', transition: 'page' }
+        },
+        {
+          path: 'storage',
+          name: 'admin-storage',
+          component: AdminStoragePage,
+          meta: { admin: true, adminTitle: '存储统计', adminIcon: 'storage', transition: 'page' }
         },
         {
           path: 'invites',

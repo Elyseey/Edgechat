@@ -14,6 +14,7 @@ const navigationSource = read('../frontend/src/admin/navigation.js');
 const sidebarSource = read('../frontend/src/components/admin/AdminSidebar.vue');
 const dashboardSource = read('../frontend/src/pages/AdminDashboardPage.vue');
 const usersSource = read('../frontend/src/pages/AdminUsersPage.vue');
+const storageSource = read('../frontend/src/pages/AdminStoragePage.vue');
 const invitesSource = read('../frontend/src/pages/AdminInvitesPage.vue');
 const userCreatorSource = read('../frontend/src/components/admin/AdminUserCreator.vue');
 const inviteManagerSource = read('../frontend/src/components/admin/RegistrationInviteManager.vue');
@@ -40,9 +41,9 @@ test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
   assert.match(routerSource, /meta: \{ admin: true/);
 });
 
-test('侧栏保留五个管理分类并移除消息查看入口', () => {
+test('侧栏包含存储统计并移除消息查看入口', () => {
   assert.match(sidebarSource, /Edgecht 管理后台/);
-  for (const id of ['dashboard', 'users', 'invites', 'telegram', 'site']) {
+  for (const id of ['dashboard', 'users', 'storage', 'invites', 'telegram', 'site']) {
     assert.match(navigationSource, new RegExp(`id: '${id}'`));
   }
   assert.match(navigationSource, /label: '创建用户'/);
@@ -53,6 +54,22 @@ test('侧栏保留五个管理分类并移除消息查看入口', () => {
   assert.match(sidebarSource, /v-if="!item\.children"/);
   assert.match(sidebarSource, /:aria-expanded="isGroupOpen\(item\)"/);
   assert.match(sidebarSource, /v-show="isGroupOpen\(item\)"/);
+});
+
+test('存储统计由按钮手动刷新且四个统计列均可排序', () => {
+  assert.match(routerSource, /import AdminStoragePage/);
+  assert.match(routerSource, /path: 'storage'/);
+  assert.match(apiSource, /adminStorageScan/);
+  assert.match(adminApiSource, /\/api\/admin\/storage\/scan/);
+  assert.match(adminApiSource, /FILES\.list/);
+  assert.match(adminApiSource, /没有绑定 R2，无法统计存储空间/);
+  assert.match(storageSource, /@click="refreshStorage"/);
+  assert.doesNotMatch(storageSource, /onMounted\(refreshStorage\)/);
+  assert.doesNotMatch(storageSource, /尚未统计|10 GB|免费存储/);
+  for (const key of ['objectCount', 'bytes', 'share', 'latestUploadedAt']) {
+    assert.match(storageSource, new RegExp(`key: '${key}'`));
+  }
+  assert.match(storageSource, /@click="changeSort\(column\.key\)"/);
 });
 
 test('用户管理只维护用户列表，创建用户和注册链接集中在注册邀请页', () => {
@@ -144,6 +161,7 @@ test('后台核心 Vue 文件保持在单一职责的可维护规模', () => {
     ['AdminSidebar', sidebarSource],
     ['AdminDashboardPage', dashboardSource],
     ['AdminUsersPage', usersSource],
+    ['AdminStoragePage', storageSource],
     ['AdminTelegramPage', telegramSource],
     ['AdminSitePage', siteSource]
   ]) {

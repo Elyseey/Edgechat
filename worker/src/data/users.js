@@ -72,3 +72,19 @@ export async function listAdminUsers(db) {
 		.all();
 	return results.map(mapAdminUser);
 }
+
+export async function listStorageOwners(db) {
+	const { results } = await db
+		.prepare(
+			`SELECT id, username, display_name, deleted_at
+			 FROM users
+			 ORDER BY id ASC`,
+		)
+		.all();
+	return results.map((row) => ({
+		id: Number(row.id),
+		username: row.username,
+		displayName: row.display_name,
+		isDeleted: Boolean(row.deleted_at),
+	}));
+}

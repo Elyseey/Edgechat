@@ -9,11 +9,40 @@ import {
   revokeRegistrationInvite
 } from '../data/registration-invites.js';
 import { getSiteSettings, updateSiteSettings } from '../data/site-settings.js';
-import { listAdminUsers } from '../data/users.js';
+import { listAdminUsers, listStorageOwners } from '../data/users.js';
 import { ApiError } from '../errors.js';
+import { summarizeR2Objects } from '../storage-statistics.js';
 import { errorResponse, parseJsonRequest, randomToken } from '../utils.js';
 
+const STORAGE_SCAN_PAGE_SIZE = 1000;
+
 export function registerAdminRoutes(app) {
+  app.get('/api/admin/storage/scan', async (c) => {
+    if (!c.env.FILES) {
+      return errorResponse('当前部署没有绑定 R2，无法统计存储空间', 503);
+    }
+
+    const cursor = new URL(c.req.url).searchParams.get('cursor') || undefined;
+    const listed = await c.env.FILES.list({
+      limit: STORAGE_SCAN_PAGE_SIZE,
+      ...(cursor ? { cursor } : {}),
+      include: []
+    });
+    const response = {
+      items: summarizeR2Objects(listed.objects),
+      scannedObjects: listed.objects.length,
+      truncated: listed.truncated,
+      cursor: listed.truncated ? listed.cursor : null
+    };
+
+    if (!cursor) {
+      response.users = await listStorageOwners(c.env.DB);
+    }
+
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(response);
+  });
+
   app.get('/api/admin/overview', async (c) => {
     const [users, channels, dms, site] = await Promise.all([
       listAdminUsers(c.env.DB),
