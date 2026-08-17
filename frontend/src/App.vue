@@ -1,8 +1,7 @@
 <script setup>
 import { defineAsyncComponent } from 'vue';
-import { isDemoMode } from './runtime.js';
 
-const DemoNavigator = isDemoMode
+const DemoNavigator = globalThis.__EDGECHAT_DEMO__
   ? defineAsyncComponent(() => import('./components/demo/DemoNavigator.vue'))
   : null;
 </script>

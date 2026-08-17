@@ -6,6 +6,9 @@ import baseConfig from './vite.config.js';
 const dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default mergeConfig(baseConfig, {
+  define: {
+    'globalThis.__EDGECHAT_DEMO__': 'true'
+  },
   resolve: {
     alias: [
       {

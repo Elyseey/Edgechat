@@ -19,6 +19,11 @@ const productionVite = readFileSync(
   new URL('../frontend/vite.config.js', import.meta.url),
   'utf8'
 );
+const demoVite = readFileSync(
+  new URL('../frontend/vite.demo.config.js', import.meta.url),
+  'utf8'
+);
+const appSource = readFileSync(new URL('../frontend/src/App.vue', import.meta.url), 'utf8');
 const packageJson = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 );
@@ -51,6 +56,10 @@ test('production Action cannot build or deploy demo assets', () => {
   assert.equal(packageJson.scripts.build, 'npm run build:frontend');
   assert.equal(packageJson.scripts.deploy, 'npm run build && wrangler deploy');
   assert.match(productionVite, /outDir: resolve\(dirname, 'dist'\)/);
+  assert.match(productionVite, /'globalThis\.__EDGECHAT_DEMO__': 'false'/);
+  assert.match(demoVite, /'globalThis\.__EDGECHAT_DEMO__': 'true'/);
+  assert.match(appSource, /globalThis\.__EDGECHAT_DEMO__/);
+  assert.doesNotMatch(appSource, /import \{ isDemoMode \} from '\.\/runtime\.js'/);
   assert.doesNotMatch(productionVite, /demo-dist|src\/demo|vite\.demo/);
   assert.match(productionWrangler, /name = "cfchat"/);
   assert.match(productionWrangler, /directory = "\.\/frontend\/dist"/);
