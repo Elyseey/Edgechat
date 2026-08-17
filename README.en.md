@@ -77,7 +77,7 @@ Admins can bind any group in EdgeChat to a Telegram group. Once bound, messages 
 
 <div align="center">
   <img
-    src="https://github.com/user-attachments/assets/eb5d6b5a-4664-41c6-a760-02c4a1398b36"
+    src="./assets/previews/telegram-bridge-en.jpg"
     alt="EdgeChat to Telegram two-way message bridge demo"
     width="90%"
   />
