@@ -296,7 +296,7 @@ edgechat/
  </picture>
 </a>
 
-给个star吧！
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=24&duration=2500&pause=1000&color=F7D747&width=435&lines=%E2%AD%90+star+%E7%82%B9%E8%B5%B7%E6%9D%A5%EF%BC%81)](https://git.io/typing-svg)
 
 ## 协议说明
 
