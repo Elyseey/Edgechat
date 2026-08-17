@@ -23,6 +23,7 @@
   <p>
     <a href="README.md"><b>中文</b></a> ·
     <a href="README.en.md">English</a> ·
+    <a href="README.ja.md">日本語</a> ·
     <a href="https://edgechat-demo.wcjxxgaq.workers.dev">在线 Demo</a> ·
     <a href="https://echat.azora.top/">项目文档</a> ·
     <a href="https://t.me/EdgeChatlounge">Telegram 社区</a>
@@ -43,6 +44,7 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
 - [为什么是 EdgeChat](#为什么是-edgechat)
 - [功能特性](#功能特性)
 - [技术栈](#技术栈)
+- *[Telegram 社区](#telegram-社区)*
 - [部署](#部署)
 - [快速开始](#快速开始)
 - [项目结构](#项目结构)
@@ -129,6 +131,10 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
   <br />
   <img src="https://img.shields.io/badge/Deploy-Wrangler_·_GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white" alt="deploy" />
 </p>
+
+## Telegram 社区
+
+欢迎加入我们的 [Telegram 社区](https://t.me/EdgeChatlounge)，与其他用户和开发者交流讨论、反馈问题，第一时间获取项目动态。
 
 ## 部署
 
@@ -264,6 +270,7 @@ edgechat/
 ├─ package.json
 ├─ README.md
 ├─ README.en.md
+├─ README.ja.md
 └─ LICENSE
 ```
 
