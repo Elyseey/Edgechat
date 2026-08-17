@@ -11,12 +11,13 @@ test.beforeEach(() => {
   resetDemoState();
 });
 
-test('demo backend exposes chat, admin and Telegram fixture data', async () => {
-  const [site, session, bootstrap, overview, telegram] = await Promise.all([
+test('demo backend exposes chat, admin, storage and Telegram fixture data', async () => {
+  const [site, session, bootstrap, overview, storage, telegram] = await Promise.all([
     requestDemo('/site'),
     requestDemo('/auth/session'),
     requestDemo('/bootstrap'),
     requestDemo('/admin/overview'),
+    requestDemo('/admin/storage/scan'),
     requestDemo('/admin/telegram')
   ]);
 
@@ -25,6 +26,8 @@ test('demo backend exposes chat, admin and Telegram fixture data', async () => {
   assert.equal(bootstrap.channels.some((channel) => channel.isGeneral), true);
   assert.equal(bootstrap.dms.length, 1);
   assert.equal(overview.channels.length, 4);
+  assert.equal(storage.scannedObjects, 4);
+  assert.equal(storage.items.some((item) => item.ownerType === 'telegram'), true);
   assert.equal(telegram.config.configured, true);
   assert.equal(telegram.mappings[0].enabled, true);
 });

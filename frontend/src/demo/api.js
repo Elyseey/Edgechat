@@ -94,6 +94,46 @@ function adminOverviewPayload() {
   };
 }
 
+function adminStoragePayload() {
+  return {
+    users: demoState.users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      isDeleted: false
+    })),
+    items: [
+      {
+        ownerKey: 'user:1',
+        ownerType: 'user',
+        ownerId: 1,
+        objectCount: 2,
+        bytes: 2734080,
+        latestUploadedAt: '2026-08-14T09:58:00.000Z'
+      },
+      {
+        ownerKey: 'user:3',
+        ownerType: 'user',
+        ownerId: 3,
+        objectCount: 1,
+        bytes: 8420,
+        latestUploadedAt: '2026-08-14T09:36:00.000Z'
+      },
+      {
+        ownerKey: 'system:telegram',
+        ownerType: 'telegram',
+        ownerId: null,
+        objectCount: 1,
+        bytes: 524288,
+        latestUploadedAt: '2026-08-14T09:50:00.000Z'
+      }
+    ],
+    scannedObjects: 4,
+    truncated: false,
+    cursor: null
+  };
+}
+
 function createInvite(body) {
   const maxUses = Number(body.maxUses || 1);
   const invite = {
@@ -330,6 +370,9 @@ export async function requestDemo(path, options = {}) {
 
   if (method === 'GET' && pathname === '/admin/overview') {
     return cloneDemo(adminOverviewPayload());
+  }
+  if (method === 'GET' && pathname === '/admin/storage/scan') {
+    return cloneDemo(adminStoragePayload());
   }
   if (method === 'GET' && pathname === '/admin/users') {
     return { users: cloneDemo(demoState.users.map(projectDemoUser)) };

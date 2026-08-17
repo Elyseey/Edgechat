@@ -18,6 +18,10 @@ const STORAGE_SCAN_PAGE_SIZE = 1000;
 
 export function registerAdminRoutes(app) {
   app.get('/api/admin/storage/scan', async (c) => {
+    if (!c.env.FILES) {
+      return errorResponse('当前部署没有绑定 R2，无法统计存储空间', 503);
+    }
+
     const cursor = new URL(c.req.url).searchParams.get('cursor') || undefined;
     const listed = await c.env.FILES.list({
       limit: STORAGE_SCAN_PAGE_SIZE,

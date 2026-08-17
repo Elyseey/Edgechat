@@ -62,6 +62,7 @@ test('存储统计由按钮手动刷新且四个统计列均可排序', () => {
   assert.match(apiSource, /adminStorageScan/);
   assert.match(adminApiSource, /\/api\/admin\/storage\/scan/);
   assert.match(adminApiSource, /FILES\.list/);
+  assert.match(adminApiSource, /没有绑定 R2，无法统计存储空间/);
   assert.match(storageSource, /@click="refreshStorage"/);
   assert.doesNotMatch(storageSource, /onMounted\(refreshStorage\)/);
   assert.doesNotMatch(storageSource, /尚未统计|10 GB|免费存储/);
