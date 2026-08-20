@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 
 import {
 	browserNotificationRoomKey,
 	useBrowserNotifications,
 } from "../frontend/src/composables/useBrowserNotifications.js";
+import { CHINESE_LOCALE, setLocale } from "../frontend/src/i18n.js";
+
+beforeEach(() => {
+	setLocale(CHINESE_LOCALE);
+});
 
 function createStorage() {
 	const values = new Map();
