@@ -3,6 +3,8 @@ import api from "../api.js";
 import { dispatchAuthInvalid } from "../auth-storage.js";
 import { createRealtimeSession } from "../realtime-session.js";
 import { connectRoomSocket } from "../ws.js";
+import { t } from "../i18n.js";
+import { localizeErrorMessage } from "../localized-error.js";
 
 const WS_CLOSE_UNAUTHORIZED = 4401;
 const WS_CLOSE_FORBIDDEN = 4403;
@@ -77,7 +79,7 @@ export function useChatRoom({
 		const code = Number(event?.code || 0);
 		const reason = String(event?.reason || "");
 		if (code === WS_CLOSE_UNAUTHORIZED || reason === WS_REASON_UNAUTHORIZED) {
-			dispatchAuthInvalid("Your session is no longer valid. Please sign in again.");
+				dispatchAuthInvalid(t('chat.sessionInvalid'));
 			return;
 		}
 		if (code === WS_CLOSE_FORBIDDEN || reason === WS_REASON_FORBIDDEN) {
@@ -116,7 +118,7 @@ export function useChatRoom({
 				);
 			}
 			if (payload.type === "error") {
-				error.value = payload.error;
+					error.value = localizeErrorMessage(payload.error);
 			}
 		},
 	});
@@ -191,7 +193,7 @@ export function useChatRoom({
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
 			: "";
 		if (!roomSession.isOpenFor(key)) {
-			error.value = "Real-time connection is not ready. Please try again in a moment.";
+				error.value = t('chat.realtimeNotReady');
 			return;
 		}
 		if (!composerText.value.trim() && !pendingAttachment.value) {
@@ -223,7 +225,7 @@ export function useChatRoom({
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
 			: "";
 		if (!roomSession.isOpenFor(key)) {
-			error.value = "实时连接尚未就绪，请稍后重试";
+				error.value = t('chat.realtimeNotReady');
 			return false;
 		}
 

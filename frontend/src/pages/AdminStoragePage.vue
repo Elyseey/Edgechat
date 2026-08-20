@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import api from '../api.js';
 import UiButton from '../components/ui/Button.vue';
 import UiSurface from '../components/ui/Surface.vue';
+import { t } from '../i18n.js';
 import {
   buildStorageRows,
   formatByteSize,
@@ -28,12 +29,12 @@ const occupiedUsers = computed(
   () => rows.value.filter((row) => row.ownerKey.startsWith('user:') && row.bytes > 0).length
 );
 
-const columns = [
-  { key: 'objectCount', label: '文件数量' },
-  { key: 'bytes', label: '实际占用' },
-  { key: 'share', label: '占总量比例' },
-  { key: 'latestUploadedAt', label: '最近上传' }
-];
+const columns = computed(() => [
+  { key: 'objectCount', label: t('storage.columns.fileCount') },
+  { key: 'bytes', label: t('storage.columns.bytes') },
+  { key: 'share', label: t('storage.columns.share') },
+  { key: 'latestUploadedAt', label: t('storage.columns.latestUpload') }
+]);
 
 async function refreshStorage() {
   loading.value = true;
@@ -56,7 +57,7 @@ async function refreshStorage() {
         break;
       }
       if (!payload.cursor || seenCursors.has(payload.cursor)) {
-        throw new Error('R2 分页游标异常，请重试');
+        throw new Error(t('storage.errors.invalidCursor'));
       }
       seenCursors.add(payload.cursor);
       cursor = payload.cursor;
@@ -99,12 +100,12 @@ function formatShare(value) {
   <div class="admin-section admin-storage-page">
     <header class="admin-section__header">
       <div class="admin-section__heading">
-        <h2>存储统计</h2>
-        <p>按用户统计 R2 中当前实际存在的文件与占用空间。</p>
+        <h2>{{ t('storage.title') }}</h2>
+        <p>{{ t('storage.description') }}</p>
       </div>
       <UiButton variant="secondary" :disabled="loading" @click="refreshStorage">
         <RefreshCw :size="17" aria-hidden="true" :class="{ 'admin-spin': loading }" />
-        {{ loading ? '刷新中...' : '刷新' }}
+        {{ loading ? t('common.refreshing') : t('common.refresh') }}
       </UiButton>
     </header>
 
@@ -112,21 +113,21 @@ function formatShare(value) {
       <p v-if="error" class="error-text">{{ error }}</p>
 
       <template v-if="hasResult">
-        <section class="admin-metric-grid" aria-label="R2 存储汇总">
+        <section class="admin-metric-grid" :aria-label="t('storage.summary')">
           <UiSurface class="admin-metric-card">
-            <span>当前总占用</span>
+            <span>{{ t('storage.totalUsed') }}</span>
             <strong>{{ formatByteSize(totalBytes) }}</strong>
           </UiSurface>
           <UiSurface class="admin-metric-card">
-            <span>文件总数</span>
+            <span>{{ t('storage.totalFiles') }}</span>
             <strong>{{ totalObjects }}</strong>
           </UiSurface>
           <UiSurface class="admin-metric-card">
-            <span>有占用用户</span>
+            <span>{{ t('storage.usersWithUsage') }}</span>
             <strong>{{ occupiedUsers }}</strong>
           </UiSurface>
           <UiSurface class="admin-metric-card">
-            <span>最后刷新</span>
+            <span>{{ t('storage.lastRefreshed') }}</span>
             <strong class="admin-storage-page__refresh-time">
               {{ formatStorageDateTime(refreshedAt) }}
             </strong>
@@ -134,12 +135,12 @@ function formatShare(value) {
         </section>
 
         <UiSurface class="panel panel--table">
-          <h3 class="panel-title">用户存储情况</h3>
+          <h3 class="panel-title">{{ t('storage.byUser') }}</h3>
           <div class="admin-table-wrap">
             <table class="list-table admin-storage-table">
               <thead>
                 <tr>
-                  <th>用户</th>
+                  <th>{{ t('storage.user') }}</th>
                   <th v-for="column in columns" :key="column.key" :aria-sort="ariaSort(column.key)">
                     <button type="button" class="admin-sort-button" @click="changeSort(column.key)">
                       {{ column.label }}
@@ -153,7 +154,7 @@ function formatShare(value) {
                   <td>
                     <strong>{{ row.displayName }}</strong>
                     <div v-if="row.username" class="muted">
-                      @{{ row.username }}<span v-if="row.isDeleted"> · 已删除</span>
+                      @{{ row.username }}<span v-if="row.isDeleted"> · {{ t('common.deleted') }}</span>
                     </div>
                   </td>
                   <td>{{ row.objectCount }}</td>

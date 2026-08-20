@@ -4,8 +4,11 @@ import { useRouter } from 'vue-router';
 import api from '../api.js';
 import store from '../store.js';
 import UiAvatar from '../components/ui/Avatar.vue';
+import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
+import { useI18n } from '../i18n.js';
 
 const router = useRouter();
+const { t } = useI18n();
 const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
 
@@ -57,7 +60,7 @@ async function saveProfile() {
       localStorage.removeItem('customBackground');
       document.body.style.background = '';
     }
-    info.value = '资料已更新';
+    info.value = t('settings.profileUpdated');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -206,7 +209,7 @@ async function confirmCrop() {
       avatarKey: upload.file.key
     });
     store.setSession(payload.session);
-    info.value = '头像已更新';
+    info.value = t('settings.avatarUpdated');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -224,7 +227,7 @@ async function removeAvatar() {
       avatarKey: null
     });
     store.setSession(payload.session);
-    info.value = '头像已移除';
+    info.value = t('settings.avatarRemoved');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -256,7 +259,7 @@ async function changePassword() {
     await api.changePassword(passwordForm);
     passwordForm.currentPassword = '';
     passwordForm.newPassword = '';
-    info.value = '密码修改成功';
+    info.value = t('settings.passwordUpdated');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -270,19 +273,21 @@ async function changePassword() {
     <div class="settings-container">
       <header class="settings-header">
         <div class="settings-header__left">
-          <h1>设置</h1>
-          <span class="settings-kicker">个人中心</span>
+          <h1>{{ t('settings.title') }}</h1>
+          <span class="settings-kicker">{{ t('settings.profileKicker') }}</span>
         </div>
         <div class="settings-header__right">
+          <LanguageSwitch />
           <div class="avatar-block">
-            <button type="button" class="avatar-trigger" @click="openAvatarPicker" title="点击更换头像">
+            <button type="button" class="avatar-trigger" @click="openAvatarPicker" :title="t('settings.changeAvatarTitle')">
               <UiAvatar
                 :src="session?.avatarUrl"
+                :alt="t('settings.avatarAlt')"
                 :fallback="session?.displayName || session?.username || 'U'"
                 size="md"
               />
               <span class="avatar-overlay">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><title>更换头像</title><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><title>{{ t('settings.changeAvatar') }}</title><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
               </span>
             </button>
             <input
@@ -293,7 +298,7 @@ async function changePassword() {
               @change="onAvatarFileSelected"
             />
             <div class="avatar-actions">
-              <span class="avatar-hint">{{ uploadingAvatar ? '处理中...' : '点击头像更换' }}</span>
+              <span class="avatar-hint">{{ uploadingAvatar ? t('common.processing') : t('settings.changeAvatarHint') }}</span>
               <button
                 v-if="session?.avatarUrl"
                 type="button"
@@ -301,7 +306,7 @@ async function changePassword() {
                 :disabled="uploadingAvatar"
                 @click="removeAvatar"
               >
-                移除头像
+                {{ t('settings.removeAvatar') }}
               </button>
             </div>
           </div>
@@ -317,31 +322,31 @@ async function changePassword() {
 
       <div class="settings-grid">
         <section class="settings-section">
-          <h2>个人资料</h2>
+          <h2>{{ t('settings.profileSection') }}</h2>
           <label class="field-compact">
-            <span>显示名称</span>
+            <span>{{ t('auth.displayName') }}</span>
             <input
               v-model.trim="profileForm.displayName"
-              placeholder="将展示给其他用户"
+              :placeholder="t('settings.displayNameHint')"
               autocomplete="nickname"
             />
           </label>
           <label class="field-compact">
-            <span>自定义背景</span>
+            <span>{{ t('settings.customBackground') }}</span>
             <input
               v-model.trim="profileForm.customBackground"
-              placeholder="CSS 渐变、纯色或图片 URL"
+              :placeholder="t('settings.customBackgroundHint')"
             />
           </label>
           <button type="button" class="save-btn" :disabled="savingProfile" @click="saveProfile">
-            {{ savingProfile ? '保存中' : '保存资料' }}
+            {{ savingProfile ? t('settings.savingProfile') : t('settings.saveProfile') }}
           </button>
         </section>
 
         <section class="settings-section">
-          <h2>安全设置</h2>
+          <h2>{{ t('settings.securitySection') }}</h2>
           <label class="field-compact">
-            <span>当前密码</span>
+            <span>{{ t('settings.currentPassword') }}</span>
             <input
               v-model="passwordForm.currentPassword"
               type="password"
@@ -349,7 +354,7 @@ async function changePassword() {
             />
           </label>
           <label class="field-compact">
-            <span>新密码</span>
+            <span>{{ t('settings.newPassword') }}</span>
             <input
               v-model="passwordForm.newPassword"
               type="password"
@@ -357,7 +362,7 @@ async function changePassword() {
             />
           </label>
           <button type="button" class="save-btn" :disabled="savingPassword" @click="changePassword">
-            {{ savingPassword ? '更新中' : '更新密码' }}
+            {{ savingPassword ? t('settings.updatingPassword') : t('settings.updatePassword') }}
           </button>
         </section>
       </div>
@@ -367,7 +372,7 @@ async function changePassword() {
           <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          返回聊天
+          {{ t('settings.backToChat') }}
         </button>
         <button
           v-if="showAdminEntry"
@@ -381,7 +386,7 @@ async function changePassword() {
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          管理后台
+          {{ t('settings.adminConsole') }}
         </button>
       </nav>
     </div>
@@ -389,7 +394,7 @@ async function changePassword() {
     <Transition name="modal">
       <div v-if="showCropper" class="crop-modal" @click.self="cancelCrop">
         <div class="crop-panel">
-          <h3>裁剪头像</h3>
+          <h3>{{ t('settings.cropAvatar') }}</h3>
           <div class="crop-stage">
             <canvas
               ref="cropperCanvas"
@@ -403,7 +408,7 @@ async function changePassword() {
             />
           </div>
           <div class="crop-controls">
-            <span>缩放</span>
+            <span>{{ t('settings.zoom') }}</span>
             <input
               v-model.number="cropZoom"
               type="range"
@@ -413,10 +418,10 @@ async function changePassword() {
               class="crop-zoom"
             />
           </div>
-          <p class="crop-hint">拖动图片调整位置，滑动缩放选择范围</p>
+          <p class="crop-hint">{{ t('settings.cropHint') }}</p>
           <div class="crop-actions">
-            <button type="button" class="crop-cancel" @click="cancelCrop">取消</button>
-            <button type="button" class="crop-confirm" @click="confirmCrop">确认裁剪</button>
+            <button type="button" class="crop-cancel" @click="cancelCrop">{{ t('common.cancel') }}</button>
+            <button type="button" class="crop-confirm" @click="confirmCrop">{{ t('settings.confirmCrop') }}</button>
           </div>
         </div>
       </div>
@@ -518,6 +523,12 @@ async function changePassword() {
   opacity: 0;
   transition: opacity 0.2s ease;
   border-radius: 16px;
+}
+
+.settings-header__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .avatar-trigger:hover .avatar-overlay {
@@ -950,6 +961,11 @@ async function changePassword() {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .settings-header__right {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .avatar-compact {

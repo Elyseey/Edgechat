@@ -20,6 +20,8 @@ export function createDemoFixtures() {
       avatarUrl: '',
       isAdmin: true,
       isDisabled: false,
+      isPermanentlyDisabled: false,
+      disabledUntil: null,
       createdAt: '2026-05-18T08:00:00.000Z'
     },
     {
@@ -29,6 +31,8 @@ export function createDemoFixtures() {
       avatarUrl: '',
       isAdmin: false,
       isDisabled: false,
+      isPermanentlyDisabled: false,
+      disabledUntil: null,
       createdAt: '2026-06-02T09:30:00.000Z'
     },
     {
@@ -38,6 +42,8 @@ export function createDemoFixtures() {
       avatarUrl: '',
       isAdmin: false,
       isDisabled: false,
+      isPermanentlyDisabled: false,
+      disabledUntil: null,
       createdAt: '2026-06-12T03:20:00.000Z'
     },
     {
@@ -47,6 +53,8 @@ export function createDemoFixtures() {
       avatarUrl: '',
       isAdmin: false,
       isDisabled: false,
+      isPermanentlyDisabled: false,
+      disabledUntil: null,
       createdAt: '2026-07-01T13:10:00.000Z'
     },
     {
@@ -56,6 +64,8 @@ export function createDemoFixtures() {
       avatarUrl: '',
       isAdmin: false,
       isDisabled: true,
+      isPermanentlyDisabled: true,
+      disabledUntil: null,
       createdAt: '2026-07-20T05:45:00.000Z'
     }
   ];

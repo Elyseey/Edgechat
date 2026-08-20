@@ -2,14 +2,16 @@
 import { Bell, BellOff, LayoutDashboard, LogOut, Settings, X } from '@lucide/vue';
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
+import LanguageSwitch from '../ui/LanguageSwitch.vue';
 
 const props = defineProps({
   show: { type: Boolean, default: false },
   session: { type: Object, default: null },
   showAdmin: { type: Boolean, default: false },
   notificationsEnabled: { type: Boolean, default: false },
-  notificationLabel: { type: String, default: '开启通知' },
+  notificationLabel: { type: String, default: '' },
   notificationDisabled: { type: Boolean, default: false }
 });
 
@@ -32,24 +34,25 @@ useOverlayLifecycle({
           class="mobile-navigation-drawer"
           role="dialog"
           aria-modal="true"
-          aria-label="导航菜单"
+          :aria-label="t('mobile.navigationMenu')"
           tabindex="-1"
         >
           <header class="mobile-navigation-drawer__header">
             <UiAvatar :src="session?.avatarUrl" :fallback="session?.displayName?.[0] || 'U'" />
             <div class="mobile-navigation-drawer__identity">
-              <strong>{{ session?.displayName || 'EdgeChat 用户' }}</strong>
+              <strong>{{ session?.displayName || t('mobile.edgechatUser') }}</strong>
               <span v-if="session?.username">@{{ session.username }}</span>
             </div>
-            <button type="button" class="mobile-navigation-drawer__close" aria-label="关闭导航" @click="emit('close')">
+            <LanguageSwitch />
+            <button type="button" class="mobile-navigation-drawer__close" :aria-label="t('mobile.closeNavigation')" @click="emit('close')">
               <X :size="22" aria-hidden="true" />
             </button>
           </header>
 
-          <nav class="mobile-navigation-drawer__actions" aria-label="应用导航">
+          <nav class="mobile-navigation-drawer__actions" :aria-label="t('mobile.appNavigation')">
             <button type="button" @click="emit('settings')">
               <Settings :size="21" aria-hidden="true" />
-              <span>个人设置</span>
+              <span>{{ t('nav.personalSettings') }}</span>
             </button>
             <button
               type="button"
@@ -63,15 +66,15 @@ useOverlayLifecycle({
             </button>
             <button v-if="showAdmin" type="button" @click="emit('admin')">
               <LayoutDashboard :size="21" aria-hidden="true" />
-              <span>管理后台</span>
+              <span>{{ t('nav.admin') }}</span>
             </button>
             <a href="https://github.com/aozorae/Edgechat" target="_blank" rel="noopener noreferrer">
               <img src="/github.svg" width="21" height="21" alt="" />
-              <span>GitHub 仓库</span>
+              <span>{{ t('nav.githubRepository') }}</span>
             </a>
             <button type="button" class="mobile-navigation-drawer__danger" @click="emit('logout')">
               <LogOut :size="21" aria-hidden="true" />
-              <span>退出登录</span>
+              <span>{{ t('auth.signOut') }}</span>
             </button>
           </nav>
         </aside>
@@ -102,7 +105,7 @@ useOverlayLifecycle({
 
 .mobile-navigation-drawer__header {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 44px;
+  grid-template-columns: 48px minmax(0, 1fr) 44px 44px;
   align-items: center;
   gap: 12px;
   padding: 4px 4px 18px;

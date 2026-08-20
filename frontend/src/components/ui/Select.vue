@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { t } from '../../i18n.js';
 
 const props = defineProps({
   modelValue: {
@@ -12,7 +13,7 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: '请选择'
+    default: ''
   },
   disabled: {
     type: Boolean,
@@ -57,7 +58,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', handleWindowPoin
   <div ref="rootEl" class="ui-select" :class="{ 'ui-select--open': isOpen, 'ui-select--disabled': disabled }">
     <button type="button" class="ui-select__trigger" :disabled="disabled" @click="toggle">
       <span class="ui-select__text">
-        <strong>{{ selectedOption?.label || placeholder }}</strong>
+        <strong>{{ selectedOption?.label || placeholder || t('common.select') }}</strong>
         <small v-if="selectedOption?.description">{{ selectedOption.description }}</small>
       </span>
       <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -17,6 +17,7 @@ import {
 import { ApiError } from '../errors.js';
 import { resolveAvatarKeyUpdate } from '../avatar-policy.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
+import { activeUserSql } from '../user-status.js';
 
 function normalizeMemberIds(payload) {
   const source = Array.isArray(payload.memberUserIds)
@@ -39,7 +40,7 @@ async function ensureValidInvitees(db, userIds) {
       `SELECT id
        FROM users
        WHERE deleted_at IS NULL
-         AND is_disabled = 0
+         AND ${activeUserSql()}
          AND id IN (${placeholders})`
     )
     .bind(...userIds)

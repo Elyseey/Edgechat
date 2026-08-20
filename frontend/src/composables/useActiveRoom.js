@@ -1,4 +1,5 @@
 import { computed } from "vue";
+import { t } from "../i18n.js";
 
 export function useActiveRoom({ activeRoom }) {
 	const activeRoomKey = computed(() =>
@@ -20,27 +21,29 @@ export function useActiveRoom({ activeRoom }) {
 
 	const activeRoomSubtitle = computed(() => {
 		if (!activeRoom.value) {
-			return "从左侧会话列表中选择联系人或群组开始聊天。";
+				return t('chat.selectConversation');
 		}
 
 			if (activeRoom.value.kind === "dm") {
-				return `与 @${activeRoom.value.otherUser?.username || activeRoom.value.name} 的私信`;
+					return t('chat.directMessageWith', {
+						username: activeRoom.value.otherUser?.username || activeRoom.value.name,
+					});
 			}
 
 			if (activeRoom.value.isGeneral) {
 				const memberCount = activeRoom.value.memberCount
-					? ` · ${activeRoom.value.memberCount} 位成员`
+						? ` · ${t('chat.memberCount', { count: activeRoom.value.memberCount })}`
 					: "";
-				return `全员群组${memberCount}`;
+					return `${t('chat.generalGroup')}${memberCount}`;
 			}
 
 		const visibility =
-			activeRoom.value.kind === "private" ? "私有群组" : "公开群组";
+				activeRoom.value.kind === "private" ? t('chat.privateGroup') : t('chat.publicGroup');
 		const owner = activeRoom.value.ownerDisplayName
-			? ` · 群主 ${activeRoom.value.ownerDisplayName}`
+				? ` · ${t('chat.owner', { name: activeRoom.value.ownerDisplayName })}`
 			: "";
 		const memberCount = activeRoom.value.memberCount
-			? ` · ${activeRoom.value.memberCount} 位成员`
+				? ` · ${t('chat.memberCount', { count: activeRoom.value.memberCount })}`
 			: "";
 		return `${visibility}${owner}${memberCount}`;
 	});
@@ -77,7 +80,7 @@ export function useActiveRoom({ activeRoom }) {
 
 	function roomLabel(room) {
 		if (!room) {
-			return "未选择会话";
+				return t('chat.noConversationSelected');
 		}
 
 		if (room.kind === "dm") {

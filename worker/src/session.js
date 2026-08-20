@@ -1,4 +1,5 @@
 import { deleteSession, getSession, isAdminUser, putSession } from './auth.js';
+import { isUserDisabled } from './user-status.js';
 
 function toNumber(value, fallback = 0) {
   const numeric = Number(value);
@@ -12,7 +13,7 @@ export async function validateSession(env, token) {
   }
 
   const { results } = await env.DB.prepare(
-    `SELECT username, is_disabled, deleted_at, session_version, is_admin
+    `SELECT username, is_disabled, disabled_until, deleted_at, session_version, is_admin
      FROM users
      WHERE id = ?
      LIMIT 1`
@@ -21,7 +22,7 @@ export async function validateSession(env, token) {
     .all();
 
   const user = results[0];
-  if (!user || user.deleted_at || Boolean(toNumber(user.is_disabled))) {
+  if (!user || user.deleted_at || isUserDisabled(user)) {
     await deleteSession(env, token);
     return { ok: false, status: 401, message: '账号已不可用' };
   }

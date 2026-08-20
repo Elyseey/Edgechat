@@ -1,4 +1,5 @@
 import { publicFileUrl } from "../utils.js";
+import { activeUserSql, projectUserBan } from "../user-status.js";
 
 function mapUserSummary(row) {
 	return {
@@ -12,7 +13,7 @@ function mapUserSummary(row) {
 function mapAdminUser(row) {
 	return {
 		...mapUserSummary(row),
-		isDisabled: Boolean(Number(row.is_disabled)),
+		...projectUserBan(row),
 		createdAt: row.created_at,
 	};
 }
@@ -38,7 +39,7 @@ export async function isUserActiveById(db, userId) {
 			 FROM users
 			 WHERE id = ?
 			   AND deleted_at IS NULL
-			   AND is_disabled = 0
+				   AND ${activeUserSql()}
 			 LIMIT 1`,
 		)
 		.bind(Number(userId))
@@ -52,7 +53,7 @@ export async function listActiveUsers(db, excludeUserId) {
 			`SELECT id, username, display_name, avatar_key
 			 FROM users
 			 WHERE deleted_at IS NULL
-			   AND is_disabled = 0
+				   AND ${activeUserSql()}
 			   AND id != ?
 			 ORDER BY display_name ASC`,
 		)
@@ -64,7 +65,7 @@ export async function listActiveUsers(db, excludeUserId) {
 export async function listAdminUsers(db) {
 	const { results } = await db
 		.prepare(
-			`SELECT id, username, display_name, avatar_key, is_disabled, created_at
+			`SELECT id, username, display_name, avatar_key, is_disabled, disabled_until, created_at
 			 FROM users
 			 WHERE deleted_at IS NULL
 			 ORDER BY created_at DESC`,

@@ -1,6 +1,7 @@
 <script setup>
 import { ChevronDown } from '@lucide/vue';
 import { ref } from 'vue';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
 
 defineProps({
@@ -20,7 +21,7 @@ const expanded = ref(true);
       aria-controls="public-group-list"
       @click="expanded = !expanded"
     >
-      <span>未加入群组</span>
+      <span>{{ t('publicGroups.notJoined') }}</span>
       <span class="public-group-discovery__count">{{ items.length }}</span>
       <ChevronDown
         :size="18"
@@ -36,7 +37,7 @@ const expanded = ref(true);
         class="public-group-discovery__item"
         @click="emit('select', item)"
       >
-        <UiAvatar :src="item.avatarUrl" :fallback="item.fallback?.[0] || '群'" size="sm" />
+        <UiAvatar :src="item.avatarUrl" :fallback="item.fallback?.[0] || t('publicGroups.fallback')" size="sm" />
         <span class="public-group-discovery__identity">
           <strong>{{ item.title }}</strong>
           <small>{{ item.subtitle }}</small>

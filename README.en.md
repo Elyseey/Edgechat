@@ -112,6 +112,7 @@ Admins can bind any group in EdgeChat to a Telegram group. Once bound, messages 
 
 **🛠 Admin Dashboard**
 - Top-level navigation for dashboard, user management, registration invites, and site settings
+- Permanently ban users or apply temporary bans in days, hours, or minutes; expired bans lift automatically without scheduled jobs
 - Compares the current deployment directly against the source repository from the browser to check for updates
 
 **🎨 Experience**

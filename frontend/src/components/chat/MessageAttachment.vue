@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import api from '../../api.js';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
 
 const props = defineProps({
@@ -15,8 +16,8 @@ const previewOpen = ref(false);
 const previewEl = ref(null);
 const imageFailed = ref(false);
 const isImage = computed(() => isPreviewableImageAttachment(props.attachment));
-const displayName = computed(() => props.attachment?.name || '附件');
-const openOriginalLabel = computed(() => `打开原图：${displayName.value}`);
+const displayName = computed(() => props.attachment?.name || t('attachments.fallback'));
+const openOriginalLabel = computed(() => t('attachments.openOriginalNamed', { name: displayName.value }));
 const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || props.attachment?.url));
 
 useOverlayLifecycle({
@@ -52,7 +53,7 @@ watch(
         v-if="!imageFailed"
         type="button"
         class="message-attachment__image-button"
-        :aria-label="`预览图片：${displayName}`"
+        :aria-label="t('attachments.previewNamed', { name: displayName })"
         @click="openPreview"
       >
         <img
@@ -80,7 +81,7 @@ watch(
           class="image-preview-overlay"
           role="dialog"
           aria-modal="true"
-          :aria-label="`图片预览：${displayName}`"
+          :aria-label="t('attachments.imagePreviewNamed', { name: displayName })"
           tabindex="-1"
           @click.self="closePreview"
         >
@@ -93,10 +94,10 @@ watch(
               rel="noreferrer"
               :aria-label="openOriginalLabel"
             >
-              打开原图
+              {{ t('attachments.openOriginal') }}
             </a>
-            <button type="button" class="image-preview-overlay__close" aria-label="关闭图片预览" @click="closePreview">
-              关闭
+            <button type="button" class="image-preview-overlay__close" :aria-label="t('attachments.closePreview')" @click="closePreview">
+              {{ t('common.close') }}
             </button>
           </div>
           <img class="image-preview-overlay__image" :src="attachmentUrl" :alt="displayName" />

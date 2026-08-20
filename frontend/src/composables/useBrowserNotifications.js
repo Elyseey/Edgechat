@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { t } from "../i18n.js";
 
 const STORAGE_KEY_PREFIX = "edgechat:browser-notifications";
 
@@ -63,16 +64,16 @@ export function useBrowserNotifications(options = {}) {
 		}
 	}
 
-	const notificationStateLabel = computed(() => {
-		if (!supported.value) return "通知不可用";
-		if (permission.value === "denied") return "权限禁用";
-		return enabled.value ? "通知开启" : "通知关闭";
-	});
+		const notificationStateLabel = computed(() => {
+			if (!supported.value) return t('notifications.unavailable');
+			if (permission.value === "denied") return t('notifications.permissionDenied');
+			return enabled.value ? t('notifications.on') : t('notifications.off');
+		});
 
 	const notificationActionLabel = computed(() => {
-		if (!supported.value) return "当前浏览器不支持通知";
-		if (permission.value === "denied") return "浏览器已阻止通知";
-		return enabled.value ? "关闭通知" : "开启通知";
+			if (!supported.value) return t('notifications.unsupported');
+			if (permission.value === "denied") return t('notifications.blocked');
+			return enabled.value ? t('notifications.disable') : t('notifications.enable');
 	});
 
 	const notificationToggleDisabled = computed(
@@ -125,7 +126,7 @@ export function useBrowserNotifications(options = {}) {
 		}
 
 		const notification = new notificationApi(room.name || "EdgeChat", {
-			body: room.kind === "dm" ? "收到一条新私信" : "收到一条新群聊消息",
+				body: room.kind === "dm" ? t('notifications.directMessage') : t('notifications.groupMessage'),
 			tag: `edgechat:${browserNotificationRoomKey(room)}`,
 			renotify: true,
 		});

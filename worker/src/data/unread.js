@@ -1,3 +1,5 @@
+import { activeUserSql } from "../user-status.js";
+
 async function resolveReadableMessageId(db, channelId, messageId = null) {
 	const filters = ["channel_id = ?", "deleted_at IS NULL"];
 	const binds = [Number(channelId)];
@@ -49,7 +51,7 @@ export async function listRoomMemberIds(db, channelId) {
 			 JOIN users u ON u.id = cm.user_id
 			 WHERE cm.channel_id = ?
 			   AND u.deleted_at IS NULL
-			   AND u.is_disabled = 0`,
+			   AND ${activeUserSql("u")}`,
 		)
 		.bind(Number(channelId))
 		.all();

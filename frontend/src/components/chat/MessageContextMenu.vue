@@ -1,6 +1,7 @@
 <script setup>
 import { Trash2 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { t } from '../../i18n.js';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -68,12 +69,12 @@ onBeforeUnmount(() => {
         class="message-context-menu"
         :style="menuStyle"
         role="menu"
-        aria-label="消息操作"
+        :aria-label="t('messages.actions')"
         @contextmenu.prevent
       >
         <button ref="deleteButtonEl" type="button" role="menuitem" @click="emit('delete')">
           <Trash2 :size="18" :stroke-width="1.8" aria-hidden="true" />
-          删除消息
+          {{ t('messages.delete') }}
         </button>
       </div>
     </Transition>

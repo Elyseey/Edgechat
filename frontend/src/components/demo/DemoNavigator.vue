@@ -3,20 +3,21 @@ import { RotateCcw } from '@lucide/vue';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { resetRuntime } from '../../runtime.js';
+import { t } from '../../i18n.js';
 
 const route = useRoute();
 const router = useRouter();
 
 const pages = [
-  { label: '聊天前台', value: '/' },
-  { label: '个人设置', value: '/settings' },
-  { label: '后台仪表盘', value: '/admin/dashboard' },
-  { label: '用户管理', value: '/admin/users' },
-  { label: '注册邀请', value: '/admin/invites' },
-  { label: 'Telegram 互通', value: '/admin/telegram' },
-  { label: '网站设置', value: '/admin/site' },
-  { label: '登录页面', value: '/login' },
-  { label: '邀请注册', value: '/register/demo-invite' }
+  { labelKey: 'demo.chat', value: '/' },
+  { labelKey: 'demo.settings', value: '/settings' },
+  { labelKey: 'demo.dashboard', value: '/admin/dashboard' },
+  { labelKey: 'demo.users', value: '/admin/users' },
+  { labelKey: 'demo.invites', value: '/admin/invites' },
+  { labelKey: 'demo.telegram', value: '/admin/telegram' },
+  { labelKey: 'demo.site', value: '/admin/site' },
+  { labelKey: 'demo.login', value: '/login' },
+  { labelKey: 'demo.register', value: '/register/demo-invite' }
 ];
 
 const currentPage = computed(() => {
@@ -36,14 +37,18 @@ function resetDemo() {
 </script>
 
 <template>
-  <aside class="demo-navigator" aria-label="演示页面导航">
-    <span class="demo-navigator__badge">本地演示</span>
-    <select :value="currentPage" aria-label="选择演示页面" @change="navigate">
+  <aside
+    class="demo-navigator"
+    :class="{ 'demo-navigator--admin': route.path.startsWith('/admin') }"
+    :aria-label="t('demo.navigation')"
+  >
+    <span class="demo-navigator__badge">{{ t('demo.local') }}</span>
+    <select :value="currentPage" :aria-label="t('demo.selectPage')" @change="navigate">
       <option v-for="page in pages" :key="page.value" :value="page.value">
-        {{ page.label }}
+        {{ t(page.labelKey) }}
       </option>
     </select>
-    <button type="button" title="重置演示数据" aria-label="重置演示数据" @click="resetDemo">
+    <button type="button" :title="t('demo.reset')" :aria-label="t('demo.reset')" @click="resetDemo">
       <RotateCcw :size="16" aria-hidden="true" />
     </button>
   </aside>
@@ -52,7 +57,7 @@ function resetDemo() {
 <style scoped>
 .demo-navigator {
   position: fixed;
-  top: 12px;
+  top: 68px;
   right: 12px;
   z-index: 10000;
   display: flex;
@@ -106,7 +111,7 @@ function resetDemo() {
 
 @media (max-width: 640px) {
   .demo-navigator {
-    top: 8px;
+    top: 68px;
     right: 8px;
   }
 
@@ -116,6 +121,11 @@ function resetDemo() {
 
   .demo-navigator select {
     width: 124px;
+  }
+
+  .demo-navigator--admin {
+    top: auto;
+    bottom: 8px;
   }
 }
 </style>

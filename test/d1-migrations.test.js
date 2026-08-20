@@ -133,6 +133,21 @@ test("旧数据库只执行缺失的邀请次数迁移", async () => {
 	assert.doesNotMatch(plan.sql, /DROP TABLE channels/);
 });
 
+test("旧数据库会新增用户临时封禁截止时间字段", async () => {
+	const migrationIndex = D1_MIGRATIONS.findIndex(
+		(migration) => migration.id === "2026-08-20-user-ban-expiry",
+	);
+	const plan = await buildD1MigrationPlan({
+		migrations: D1_MIGRATIONS,
+		appliedMigrations: new Map(),
+		artifacts: artifactsThrough(migrationIndex - 1),
+		readSql: readMigration,
+	});
+
+	assert.equal(plan.decisions.at(-1).action, "apply");
+	assert.match(plan.sql, /ALTER TABLE users ADD COLUMN disabled_until TEXT/);
+});
+
 test("Telegram 迁移前会修复旧 channel_reads 外键并保留已读进度", async () => {
 	const telegramMigration = D1_MIGRATIONS.find(
 		(migration) => migration.id === "2026-08-12-telegram-bridge",

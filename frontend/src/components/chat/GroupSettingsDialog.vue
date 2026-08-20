@@ -1,6 +1,7 @@
 <script setup>
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
 
 const props = defineProps({
@@ -30,25 +31,25 @@ function openAvatarPicker() {
   <Transition name="modal-fade">
     <div v-if="show" class="room-dialog-overlay" @click.self="emit('close')">
       <section class="room-dialog" role="dialog" aria-modal="true" aria-labelledby="group-settings-title">
-        <h2 id="group-settings-title">群组设置</h2>
+        <h2 id="group-settings-title">{{ t('group.settings') }}</h2>
 
         <div class="room-dialog__avatar-row">
           <UiAvatar :src="form.avatarUrl" :fallback="room?.name?.[0] || '?'" />
           <input ref="avatarInput" type="file" class="room-dialog__file" accept="image/*" @change="emit('upload-avatar', $event)" />
           <button type="button" class="room-dialog__secondary" :disabled="avatarUploading" @click="openAvatarPicker">
-            {{ avatarUploading ? '上传中...' : '更换头像' }}
+            {{ avatarUploading ? t('common.uploading') : t('group.changeAvatar') }}
           </button>
         </div>
 
         <label class="room-dialog__field">
-          <span>群组名称</span>
+          <span>{{ t('group.nameGeneric') }}</span>
           <input ref="nameInputEl" v-model="form.name" type="text" class="room-dialog__input" :disabled="room?.isGeneral" />
         </label>
 
         <div class="room-dialog__actions">
-          <button type="button" class="room-dialog__secondary" @click="emit('close')">取消</button>
+          <button type="button" class="room-dialog__secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
           <button type="button" class="room-dialog__primary" :disabled="!form.name.trim() || saving" @click="emit('save')">
-            {{ saving ? '保存中...' : '保存' }}
+            {{ saving ? t('common.saving') : t('common.save') }}
           </button>
         </div>
       </section>

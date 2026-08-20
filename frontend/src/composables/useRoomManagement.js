@@ -1,5 +1,6 @@
 import { computed, reactive, ref, watch } from "vue";
 import api from "../api.js";
+import { t } from "../i18n.js";
 
 export function useRoomManagement({
 	activeRoom,
@@ -177,7 +178,7 @@ export function useRoomManagement({
 			) {
 			return;
 		}
-		if (!confirmAction(`Remove ${member.displayName} from this group?`)) {
+			if (!confirmAction(t('group.removeMemberConfirm', { name: member.displayName }))) {
 			return;
 		}
 
@@ -199,7 +200,7 @@ export function useRoomManagement({
 			) {
 			return;
 		}
-		if (!confirmAction(`Delete group ${activeRoom.value.name}?`)) {
+			if (!confirmAction(t('group.deleteConfirm', { name: activeRoom.value.name }))) {
 			return;
 		}
 
@@ -244,7 +245,7 @@ export function useRoomManagement({
 
 		const name = groupSettingsForm.name.trim();
 		if (!name) {
-			error.value = "Please enter a group name.";
+				error.value = t('group.enterName');
 			return;
 		}
 

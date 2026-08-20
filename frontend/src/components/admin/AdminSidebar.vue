@@ -3,30 +3,41 @@ import { ChevronDown, CircleUserRound, Home, Menu, Search, Settings, X } from '@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { adminNavigation } from '../../admin/navigation.js';
+import { useI18n } from '../../i18n.js';
 import store from '../../store.js';
 
 const route = useRoute();
 const router = useRouter();
+const { locale, t } = useI18n();
 const query = ref('');
 const mobileOpen = ref(false);
 const openGroups = ref(new Set(['invites', 'site']));
 
+const localizedNavigation = computed(() =>
+  adminNavigation.map((item) => ({
+    ...item,
+    label: t(item.labelKey),
+    description: t(item.descriptionKey),
+    children: item.children?.map((child) => ({ ...child, label: t(child.labelKey) }))
+  }))
+);
+
 const filteredNavigation = computed(() => {
-  const keyword = query.value.trim().toLocaleLowerCase('zh-CN');
+  const keyword = query.value.trim().toLocaleLowerCase(locale.value);
   if (!keyword) {
-    return adminNavigation;
+    return localizedNavigation.value;
   }
 
-  return adminNavigation
+  return localizedNavigation.value
     .map((item) => {
-      const parentMatches = `${item.label} ${item.description}`.toLocaleLowerCase('zh-CN').includes(keyword);
+      const parentMatches = `${item.label} ${item.description}`.toLocaleLowerCase(locale.value).includes(keyword);
       if (!item.children) {
         return parentMatches ? item : null;
       }
 
       const children = parentMatches
         ? item.children
-        : item.children.filter((child) => child.label.toLocaleLowerCase('zh-CN').includes(keyword));
+        : item.children.filter((child) => child.label.toLocaleLowerCase(locale.value).includes(keyword));
       return children.length ? { ...item, children } : null;
     })
     .filter(Boolean);
@@ -76,15 +87,15 @@ watch(
 <template>
   <aside class="admin-sidebar" :class="{ 'admin-sidebar--open': mobileOpen }">
     <div class="admin-sidebar__brand-row">
-      <button type="button" class="admin-brand" aria-label="打开仪表盘" @click="navigate('/admin/dashboard')">
-        Edgecht 管理后台
+      <button type="button" class="admin-brand" :aria-label="t('admin.sidebar.openDashboard')" @click="navigate('/admin/dashboard')">
+        {{ t('admin.sidebar.brand') }}
       </button>
       <button
         type="button"
         class="admin-mobile-toggle"
         :aria-expanded="mobileOpen"
         aria-controls="admin-sidebar-body"
-        :aria-label="mobileOpen ? '收起后台导航' : '展开后台导航'"
+        :aria-label="mobileOpen ? t('admin.sidebar.collapseNavigation') : t('admin.sidebar.expandNavigation')"
         @click="mobileOpen = !mobileOpen"
       >
         <X v-if="mobileOpen" :size="20" aria-hidden="true" />
@@ -95,11 +106,11 @@ watch(
     <div id="admin-sidebar-body" class="admin-sidebar__body">
       <label class="admin-nav-search">
         <Search :size="18" aria-hidden="true" />
-        <span class="sr-only">搜索后台导航</span>
-        <input v-model="query" type="search" placeholder="搜索" />
+        <span class="sr-only">{{ t('admin.sidebar.searchNavigation') }}</span>
+        <input v-model="query" type="search" :placeholder="t('admin.sidebar.search')" />
       </label>
 
-      <nav class="admin-nav" aria-label="后台导航">
+      <nav class="admin-nav" :aria-label="t('admin.sidebar.navigation')">
         <template v-for="item in filteredNavigation" :key="item.id">
           <button
             v-if="!item.children"
@@ -144,7 +155,7 @@ watch(
           </section>
         </template>
 
-        <p v-if="!filteredNavigation.length" class="admin-nav-empty">没有匹配的后台页面</p>
+        <p v-if="!filteredNavigation.length" class="admin-nav-empty">{{ t('admin.sidebar.noResults') }}</p>
       </nav>
 
       <div class="admin-sidebar__footer">
@@ -152,14 +163,14 @@ watch(
           <CircleUserRound :size="20" aria-hidden="true" />
           <div>
             <strong>{{ adminName }}</strong>
-            <span>超级管理员</span>
+            <span>{{ t('admin.sidebar.superAdmin') }}</span>
           </div>
         </div>
         <div class="admin-sidebar__shortcuts">
-          <button type="button" title="返回聊天" aria-label="返回聊天" @click="navigate('/')">
+          <button type="button" :title="t('nav.backToChat')" :aria-label="t('nav.backToChat')" @click="navigate('/')">
             <Home :size="19" aria-hidden="true" />
           </button>
-          <button type="button" title="个人设置" aria-label="个人设置" @click="navigate('/settings')">
+          <button type="button" :title="t('nav.personalSettings')" :aria-label="t('nav.personalSettings')" @click="navigate('/settings')">
             <Settings :size="19" aria-hidden="true" />
           </button>
         </div>

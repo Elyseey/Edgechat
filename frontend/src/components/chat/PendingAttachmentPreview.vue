@@ -4,6 +4,7 @@ import api from '../../api.js';
 import UiBadge from '../ui/Badge.vue';
 import UiButton from '../ui/Button.vue';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
+import { t } from '../../i18n.js';
 
 const props = defineProps({
   attachment: {
@@ -14,7 +15,7 @@ const props = defineProps({
 
 const emit = defineEmits(['clear']);
 const isImage = computed(() => isPreviewableImageAttachment(props.attachment));
-const displayName = computed(() => props.attachment?.name || '附件');
+const displayName = computed(() => props.attachment?.name || t('attachments.fallback'));
 const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || props.attachment?.url));
 </script>
 
@@ -28,6 +29,6 @@ const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || pro
       loading="lazy"
     />
     <UiBadge class="pending-attachment__name" variant="secondary">{{ displayName }}</UiBadge>
-    <UiButton class="pending-attachment__clear" variant="ghost" size="sm" @click="emit('clear')">移除</UiButton>
+    <UiButton class="pending-attachment__clear" variant="ghost" size="sm" @click="emit('clear')">{{ t('common.remove') }}</UiButton>
   </div>
 </template>

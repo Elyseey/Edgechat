@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import api from "../api.js";
+import { compareLocalized, formatDate, t } from "../i18n.js";
 
 function mapChannelItem(channel, subtitle) {
 	return {
@@ -10,7 +11,7 @@ function mapChannelItem(channel, subtitle) {
 		title: channel.name,
 		subtitle,
 		avatarUrl: channel.avatarUrl || "",
-		fallback: channel.name ? channel.name.slice(0, 1) : "群",
+		fallback: channel.name ? channel.name.slice(0, 1) : t('publicGroups.fallback'),
 		lastMessageAt: channel.lastMessageAt || "",
 		unreadCount: Number(channel.unreadCount || 0),
 		source: channel,
@@ -29,7 +30,7 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 			id: dm.id,
 			kind: "dm",
 			title: dm.otherUser.displayName,
-			subtitle: `联系人 @${dm.otherUser.username}`,
+				subtitle: t('chat.contact', { username: dm.otherUser.username }),
 			avatarUrl: dm.otherUser.avatarUrl,
 			fallback: dm.otherUser.displayName,
 			lastMessageAt: dm.lastMessageAt || "",
@@ -43,8 +44,10 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 				mapChannelItem(
 					channel,
 					channel.isGeneral
-						? "全员群组"
-						: `群主 ${channel.ownerDisplayName || "未知"}`,
+							? t('chat.generalGroup')
+							: t('chat.owner', {
+								name: channel.ownerDisplayName || t('common.unknown'),
+							}),
 				),
 			);
 
@@ -62,7 +65,7 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 			if (leftTime !== rightTime) {
 				return rightTime - leftTime;
 			}
-			return left.title.localeCompare(right.title, "zh-CN");
+				return compareLocalized(left.title, right.title);
 		});
 	});
 
@@ -70,16 +73,16 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 		channels.value
 			.filter((channel) => channel.kind === "public" && !channel.isMember)
 			.map((channel) =>
-				mapChannelItem(channel, `${Number(channel.memberCount || 0)} 位成员`),
+					mapChannelItem(channel, t('chat.memberCount', { count: Number(channel.memberCount || 0) })),
 			)
-			.sort((left, right) => left.title.localeCompare(right.title, "zh-CN")),
+				.sort((left, right) => compareLocalized(left.title, right.title)),
 	);
 
 	function formatListTime(value) {
 		if (!value) {
 			return "";
 		}
-		return new Date(value).toLocaleDateString();
+			return formatDate(value, { month: 'short', day: 'numeric' });
 	}
 
 	function findConversationSource(kind, roomId) {

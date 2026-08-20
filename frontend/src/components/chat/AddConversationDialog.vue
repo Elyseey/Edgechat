@@ -1,6 +1,7 @@
 <script setup>
 import { ref, toRef, watch } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
 
 const props = defineProps({
@@ -43,12 +44,12 @@ watch(
       >
         <header class="add-conversation-dialog__header">
           <div>
-            <h2 id="add-conversation-title">添加人员</h2>
-            <p>{{ step === 'dm' ? '选择一位尚未聊天的联系人' : '选择要创建的会话类型' }}</p>
+            <h2 id="add-conversation-title">{{ t('chat.addPeople') }}</h2>
+            <p>{{ step === 'dm' ? t('conversation.chooseContact') : t('conversation.chooseType') }}</p>
           </div>
-          <button type="button" class="add-conversation-dialog__close" aria-label="关闭" @click="emit('close')">
+          <button type="button" class="add-conversation-dialog__close" :aria-label="t('common.close')" @click="emit('close')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <title>关闭</title>
+              <title>{{ t('common.close') }}</title>
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
           </button>
@@ -58,16 +59,16 @@ watch(
           <button ref="firstActionEl" type="button" class="add-conversation-choice" @click="step = 'dm'">
             <span class="add-conversation-choice__icon">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <title>发起新对话</title>
+                <title>{{ t('conversation.startNew') }}</title>
                 <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
               </svg>
             </span>
             <span>
-              <strong>发起新对话</strong>
-              <small>与尚未聊天的用户开始私聊</small>
+              <strong>{{ t('conversation.startNew') }}</strong>
+              <small>{{ t('conversation.startNewDescription') }}</small>
             </span>
             <svg class="add-conversation-choice__arrow" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <title>进入联系人选择</title>
+              <title>{{ t('conversation.chooseContacts') }}</title>
               <path d="m9 18 6-6-6-6" />
             </svg>
           </button>
@@ -75,18 +76,18 @@ watch(
           <button type="button" class="add-conversation-choice" @click="emit('create-group')">
             <span class="add-conversation-choice__icon">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <title>创建群聊</title>
+                <title>{{ t('conversation.createGroup') }}</title>
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="8.5" cy="7" r="4" />
                 <path d="M20 8v6M23 11h-6" />
               </svg>
             </span>
             <span>
-              <strong>创建群聊</strong>
-              <small>选择多位成员开始群组会话</small>
+              <strong>{{ t('conversation.createGroup') }}</strong>
+              <small>{{ t('conversation.createGroupDescription') }}</small>
             </span>
             <svg class="add-conversation-choice__arrow" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <title>进入群聊创建</title>
+              <title>{{ t('conversation.enterGroupCreation') }}</title>
               <path d="m9 18 6-6-6-6" />
             </svg>
           </button>
@@ -95,15 +96,15 @@ watch(
         <div v-else class="add-conversation-dialog__people">
           <button type="button" class="add-conversation-dialog__back" @click="step = 'choose'">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <title>返回</title>
+              <title>{{ t('common.back') }}</title>
               <path d="m15 18-6-6 6-6" />
             </svg>
-            返回
+            {{ t('common.back') }}
           </button>
 
           <p v-if="error" class="add-conversation-dialog__error" role="alert">{{ error }}</p>
           <p v-if="!users.length" class="add-conversation-dialog__empty">
-            所有站内用户都已经有私聊会话了。
+            {{ t('conversation.allUsersHaveDm') }}
           </p>
 
           <div v-else class="add-conversation-dialog__list">
@@ -121,7 +122,7 @@ watch(
                 <small>@{{ user.username }}</small>
               </span>
               <span class="add-conversation-person__status" aria-live="polite">
-                {{ openingDmUserId === Number(user.id) ? '正在打开...' : '开始对话' }}
+                {{ openingDmUserId === Number(user.id) ? t('common.opening') : t('conversation.start') }}
               </span>
             </button>
           </div>

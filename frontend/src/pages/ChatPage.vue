@@ -15,6 +15,7 @@ import PendingAttachmentPreview from '../components/chat/PendingAttachmentPrevie
 import PublicGroupDiscovery from '../components/chat/PublicGroupDiscovery.vue';
 import PublicGroupJoinDialog from '../components/chat/PublicGroupJoinDialog.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
+import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
 import UiTextarea from '../components/ui/Textarea.vue';
 import { useActiveRoom } from '../composables/useActiveRoom.js';
 import { useBrowserNotifications } from '../composables/useBrowserNotifications.js';
@@ -25,8 +26,10 @@ import { useConversationCreation } from '../composables/useConversationCreation.
 import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
 import store from '../store.js';
+import { useI18n } from '../i18n.js';
 
 const router = useRouter();
+const { formatTime: formatLocaleTime, t } = useI18n();
 const error = ref('');
 const activeRoom = ref(null);
 const showMobileNavigation = ref(false);
@@ -84,10 +87,10 @@ function handleRoomActivity({ room, message }) {
 }
 
 function handleRoomAccessRevoked(room) {
-  const roomName = room.name || 'this private room';
+  const roomName = room.name || t('chat.privateGroup');
   error.value = room.kind === 'private'
-    ? `You no longer have access to "${roomName}".`
-    : 'You no longer have access to this room.';
+    ? t('chat.roomAccessRevokedNamed', { name: roomName })
+    : t('chat.roomAccessRevoked');
   activeRoom.value = null;
   returnToConversationList();
   void refreshSidebar();
@@ -119,12 +122,12 @@ const activeRoomSubtitle = computed(() => {
   if (activeRoom.value.kind === 'dm') {
     return activeRoom.value.otherUser?.username
       ? `@${activeRoom.value.otherUser.username}`
-      : wsConnected.value ? '在线' : '正在连接';
+      : wsConnected.value ? t('chat.online') : t('chat.connecting');
   }
   if (activeRoom.value.memberCount) {
-    return `${activeRoom.value.memberCount} 位成员`;
+    return t('chat.memberCount', { count: activeRoom.value.memberCount });
   }
-  return activeRoom.value.isGeneral ? '全员群组' : '群组会话';
+  return activeRoom.value.isGeneral ? t('chat.generalGroup') : t('chat.groupConversation');
 });
 const canModerateMessages = computed(
   () => Boolean(session.value?.isAdmin || canManageActiveRoom.value)
@@ -338,7 +341,7 @@ watch(activeRoomKey, async (k) => {
 function confirmDeleteMessage() {
   const message = messageMenu.value.message;
   closeMessageMenu();
-  if (!message || !window.confirm('确认删除这条消息吗？删除后会话中的所有人都将看不到它。')) {
+  if (!message || !window.confirm(t('chat.deleteMessageConfirm'))) {
     return;
   }
   deleteMessage(message.id);
@@ -350,11 +353,7 @@ onMounted(() => {
   void bootstrap().then(connectUnreadInbox);
 });
 function formatBubbleTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+  return value ? formatLocaleTime(value) : '';
 }
 
 onBeforeUnmount(() => {
@@ -397,25 +396,26 @@ onBeforeUnmount(() => {
             v-if="showAdminEntry"
             type="button"
             class="right-sidebar-action right-sidebar-action--admin tooltip"
-            data-tooltip="管理后台"
+            :data-tooltip="t('nav.admin')"
+            :aria-label="t('nav.admin')"
             @click="openAdmin"
           >
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
-              <title>管理后台</title>
+              <title>{{ t('nav.admin') }}</title>
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
               <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
             </svg>
-            <span class="right-sidebar-action__label">管理后台</span>
+            <span class="right-sidebar-action__label">{{ t('nav.admin') }}</span>
           </button>
         </div>
 
         <div class="right-sidebar-section right-sidebar-user-group">
-          <button type="button" class="right-sidebar-user tooltip" data-tooltip="个人设置" aria-label="个人设置" @click="router.push('/settings')">
+          <button type="button" class="right-sidebar-user tooltip" :data-tooltip="t('nav.personalSettings')" :aria-label="t('nav.personalSettings')" @click="router.push('/settings')">
             <UiAvatar :src="session?.avatarUrl" :fallback="session?.displayName?.[0] || 'U'" size="sm" />
           </button>
-          <button type="button" class="right-sidebar-action right-sidebar-action--danger tooltip" data-tooltip="退出" aria-label="退出登录" @click="logout">
+          <button type="button" class="right-sidebar-action right-sidebar-action--danger tooltip" :data-tooltip="t('auth.signOut')" :aria-label="t('auth.signOut')" @click="logout">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
-              <title>退出</title>
+              <title>{{ t('auth.signOut') }}</title>
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
           </button>
@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="header-action mobile-menu-action"
-            aria-label="打开导航"
+            :aria-label="t('nav.openNavigation')"
             :aria-expanded="showMobileNavigation"
             @click="showMobileNavigation = true"
           >
@@ -443,34 +443,36 @@ onBeforeUnmount(() => {
               href="https://github.com/aozorae/Edgechat"
               target="_blank"
               rel="noopener noreferrer"
-              title="GitHub 仓库"
-              aria-label="打开 EdgeChat GitHub 仓库"
+              :title="t('nav.githubRepository')"
+              :aria-label="t('nav.openGithubRepository')"
             >
               <img src="/github.svg" alt="" width="20" height="20" />
+              <span class="sr-only">{{ t('nav.openGithubRepository') }}</span>
             </a>
             <button
               type="button"
               class="header-action"
-              title="添加人员"
-              aria-label="添加人员"
+              :title="t('chat.addPeople')"
+              :aria-label="t('chat.addPeople')"
               aria-haspopup="dialog"
               :aria-expanded="showAddConversation"
               @click="openAddConversation"
             >
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <title>添加人员</title>
+                <title>{{ t('chat.addPeople') }}</title>
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                 <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
               </svg>
             </button>
+            <LanguageSwitch class="mobile-language-switch" />
           </div>
         </div>
 
         <div class="sidebar-divider"></div>
 
         <div class="sidebar-section sidebar-list">
-          <div v-if="sidebarLoading" class="sidebar-hint">加载中...</div>
-          <div v-else-if="!conversationItems.length" class="sidebar-hint">暂无会话</div>
+          <div v-if="sidebarLoading" class="sidebar-hint">{{ t('chat.loadingConversations') }}</div>
+          <div v-else-if="!conversationItems.length" class="sidebar-hint">{{ t('chat.noConversations') }}</div>
           <button
             type="button"
             v-for="item in conversationItems" :key="item.key"
@@ -488,8 +490,8 @@ onBeforeUnmount(() => {
                 <span
                   v-if="isRoomMuted(item)"
                   class="sidebar-muted-indicator"
-                  title="已设为免打扰"
-                  aria-label="已设为免打扰"
+                  :title="t('chat.muted')"
+                  :aria-label="t('chat.muted')"
                 >
                   <BellOff :size="14" aria-hidden="true" />
                 </span>
@@ -512,7 +514,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="chat-header__back"
-            aria-label="返回会话列表"
+            :aria-label="t('chat.backToConversationList')"
             @click="returnToMobileConversationList"
           >
             <ArrowLeft :size="24" aria-hidden="true" />
@@ -531,51 +533,52 @@ onBeforeUnmount(() => {
             <div
               class="chat-header__status"
               :class="wsConnected ? 'online' : 'offline'"
-              :title="wsConnected ? '实时连接正常' : '正在连接'"
-              :aria-label="wsConnected ? '实时连接正常' : '正在连接'"
+              :title="wsConnected ? t('chat.connected') : t('chat.connecting')"
+              :aria-label="wsConnected ? t('chat.connected') : t('chat.connecting')"
               role="status"
             ></div>
             <button
               type="button"
               class="chat-header__button"
               :class="{ 'chat-header__button--active': activeRoomMuted }"
-              :title="activeRoomMuted ? '关闭当前会话免打扰' : '开启当前会话免打扰'"
-              :aria-label="activeRoomMuted ? '关闭当前会话免打扰' : '开启当前会话免打扰'"
+              :title="activeRoomMuted ? t('chat.unmuteCurrent') : t('chat.muteCurrent')"
+              :aria-label="activeRoomMuted ? t('chat.unmuteCurrent') : t('chat.muteCurrent')"
               :aria-pressed="activeRoomMuted"
               @click="toggleActiveRoomMute"
             >
               <BellOff v-if="activeRoomMuted" :size="19" aria-hidden="true" />
               <Bell v-else :size="19" aria-hidden="true" />
-              <span>{{ activeRoomMuted ? '已免打扰' : '免打扰' }}</span>
+              <span>{{ activeRoomMuted ? t('chat.mutedShort') : t('chat.mute') }}</span>
             </button>
             <button
               v-if="activeRoom.kind !== 'dm'"
               type="button"
               class="chat-header__button"
-              :aria-label="showMemberPanel ? '关闭成员列表' : '查看成员列表'"
+              :aria-label="showMemberPanel ? t('chat.closeMembers') : t('chat.viewMembers')"
               :aria-expanded="showMemberPanel"
               @click="toggleMemberPanel"
             >
               <UsersRound :size="19" aria-hidden="true" />
-              <span>{{ showMemberPanel ? '收起成员' : '成员' }}</span>
+              <span>{{ showMemberPanel ? t('chat.collapseMembers') : t('chat.members') }}</span>
             </button>
             <button
               v-if="canManageActiveRoom"
               type="button"
               class="chat-header__button"
-              aria-label="打开群设置"
+              :aria-label="t('chat.openGroupSettings')"
               @click="openGroupEditor"
             >
               <Settings :size="19" aria-hidden="true" />
-              <span>群设置</span>
+              <span>{{ t('chat.groupSettings') }}</span>
             </button>
+            <LanguageSwitch class="chat-header__language-switch" />
           </div>
         </header>
 
         <section ref="messagesEl" class="chat-messages">
-          <button v-if="messages.length" type="button" class="load-more-btn" @click="loadOlder">加载更早</button>
-          <div v-if="loading" class="messages-hint">加载中...</div>
-          <div v-else-if="!messages.length" class="messages-hint">暂无消息</div>
+          <button v-if="messages.length" type="button" class="load-more-btn" @click="loadOlder">{{ t('chat.loadEarlier') }}</button>
+          <div v-if="loading" class="messages-hint">{{ t('chat.loadingMessages') }}</div>
+          <div v-else-if="!messages.length" class="messages-hint">{{ t('chat.noMessages') }}</div>
 
           <article
             v-for="msg in messages" :key="msg.id"
@@ -632,29 +635,29 @@ onBeforeUnmount(() => {
               type="button"
               class="composer-btn"
               :disabled="!activeRoom"
-              title="添加附件"
-              aria-label="添加附件"
+              :title="t('chat.addAttachment')"
+              :aria-label="t('chat.addAttachment')"
               @click="openFilePicker"
             >
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
-                <title>添加附件</title>
+                <title>{{ t('chat.addAttachment') }}</title>
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
               </svg>
             </button>
             <UiTextarea
               v-model="composerText" class="composer-input" auto-grow :max-height="120" rows="1"
-              :disabled="!activeRoom" placeholder="输入消息..." @keydown="handleComposerKeydown"
+              :disabled="!activeRoom" :placeholder="t('chat.messagePlaceholder')" @keydown="handleComposerKeydown"
             />
             <button
               type="button"
               class="composer-send"
               :disabled="sending || !activeRoom || (!composerText.trim() && !pendingAttachment)"
-              title="发送消息"
-              aria-label="发送消息"
+              :title="t('chat.sendMessage')"
+              :aria-label="t('chat.sendMessage')"
               @click="sendMessage"
             >
               <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <title>发送</title>
+                <title>{{ t('chat.send') }}</title>
                 <line x1="4" y1="12" x2="20" y2="12"/>
                 <polyline points="14 6 20 12 14 18"/>
               </svg>
@@ -664,6 +667,7 @@ onBeforeUnmount(() => {
       </template>
 
       <div v-else class="chat-empty">
+        <LanguageSwitch class="chat-empty__language-switch" />
         <div class="empty-content">
           <div class="empty-brand">
             <span class="empty-title">EdgeChat</span>
@@ -802,6 +806,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.mobile-language-switch {
+  display: none;
 }
 
 .header-action {
@@ -1056,9 +1064,11 @@ onBeforeUnmount(() => {
 }
 
 .right-sidebar-action__label {
+  max-width: 100%;
   font-size: 10px;
-  line-height: 1.2;
-  white-space: nowrap;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .tooltip {
@@ -1137,6 +1147,12 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.chat-header__language-switch {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
 }
 
 .chat-header__button {
@@ -1443,10 +1459,17 @@ onBeforeUnmount(() => {
 }
 
 .chat-empty {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.chat-empty__language-switch {
+  position: absolute;
+  top: 10px;
+  right: 16px;
 }
 
 .empty-content {
@@ -1550,6 +1573,10 @@ onBeforeUnmount(() => {
     gap: 0;
   }
 
+  .mobile-language-switch {
+    display: inline-grid;
+  }
+
   .sidebar-list {
     padding-bottom: max(8px, env(safe-area-inset-bottom));
     overscroll-behavior: contain;
@@ -1625,6 +1652,15 @@ onBeforeUnmount(() => {
 
   .chat-header__actions {
     gap: 0;
+  }
+
+  .chat-header__language-switch {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
   }
 
   .chat-messages {

@@ -16,6 +16,7 @@ import {
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
+import { formatTime, t } from '../i18n.js';
 
 const router = useRouter();
 const loading = ref(false);
@@ -45,25 +46,25 @@ const totalMessageCount = computed(() => {
 });
 
 const metrics = computed(() => [
-  { label: '用户', value: overview.value.users.length, icon: Users },
-  { label: '群组', value: overview.value.channels.length, icon: MessagesSquare },
-  { label: '私信会话', value: overview.value.dms.length, icon: MessageSquare },
-  { label: '消息', value: totalMessageCount.value, icon: Activity }
+  { label: t('dashboard.metrics.users'), value: overview.value.users.length, icon: Users },
+  { label: t('dashboard.metrics.groups'), value: overview.value.channels.length, icon: MessagesSquare },
+  { label: t('dashboard.metrics.directMessages'), value: overview.value.dms.length, icon: MessageSquare },
+  { label: t('dashboard.metrics.messages'), value: totalMessageCount.value, icon: Activity }
 ]);
 
-const quickLinks = [
-  { label: '用户管理', to: '/admin/users', icon: UserCog },
-  { label: '创建用户', to: '/admin/invites#create-user', icon: UserPlus },
-  { label: '注册链接', to: '/admin/invites#registration-links', icon: Link },
-  { label: '网站设置', to: '/admin/site#site-appearance', icon: Settings },
-  { label: '返回聊天', to: '/', icon: Home }
-];
+const quickLinks = computed(() => [
+  { label: t('admin.nav.users'), to: '/admin/users', icon: UserCog },
+  { label: t('admin.nav.createUser'), to: '/admin/invites#create-user', icon: UserPlus },
+  { label: t('admin.nav.registrationLinks'), to: '/admin/invites#registration-links', icon: Link },
+  { label: t('admin.nav.site'), to: '/admin/site#site-appearance', icon: Settings },
+  { label: t('nav.backToChat'), to: '/', icon: Home }
+]);
 
 const refreshedTime = computed(() => {
   if (!refreshedAt.value) {
-    return '尚未刷新';
+    return t('dashboard.notRefreshed');
   }
-  return refreshedAt.value.toLocaleTimeString('zh-CN', { hour12: false });
+  return formatTime(refreshedAt.value, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 });
 
 async function loadOverview() {
@@ -94,7 +95,7 @@ onMounted(loadOverview);
 
 <template>
   <div class="admin-dashboard">
-    <section class="admin-dashboard__metrics" aria-label="站点统计">
+    <section class="admin-dashboard__metrics" :aria-label="t('dashboard.metrics.ariaLabel')">
       <article v-for="metric in metrics" :key="metric.label" class="admin-dashboard-metric">
         <span class="admin-icon-tile admin-icon-tile--neutral">
           <component :is="metric.icon" :size="21" aria-hidden="true" />
@@ -109,7 +110,7 @@ onMounted(loadOverview);
     <section class="admin-dashboard__body">
       <article class="admin-panel admin-quick-panel">
         <header class="admin-panel__header">
-          <h2>快捷访问</h2>
+          <h2>{{ t('dashboard.quickAccess') }}</h2>
         </header>
         <div class="admin-quick-grid">
           <button
@@ -133,15 +134,15 @@ onMounted(loadOverview);
       <article class="admin-panel admin-status-panel">
         <header class="admin-panel__header admin-panel__header--actions">
           <div>
-            <h2>运行概况</h2>
-            <p>最近刷新：{{ refreshedTime }}</p>
+            <h2>{{ t('dashboard.systemOverview') }}</h2>
+            <p>{{ t('dashboard.lastRefreshed', { time: refreshedTime }) }}</p>
           </div>
           <button
             type="button"
             class="admin-icon-button"
             :disabled="loading"
-            title="刷新数据"
-            aria-label="刷新数据"
+            :title="t('dashboard.refreshData')"
+            :aria-label="t('dashboard.refreshData')"
             @click="loadOverview"
           >
             <RefreshCw :size="18" aria-hidden="true" :class="{ 'admin-spin': loading }" />
@@ -150,38 +151,38 @@ onMounted(loadOverview);
 
         <div v-if="error" class="admin-dashboard-state admin-dashboard-state--error">
           <Activity :size="28" aria-hidden="true" />
-          <strong>概况读取失败</strong>
+          <strong>{{ t('dashboard.loadFailed') }}</strong>
           <span>{{ error }}</span>
-          <button type="button" class="admin-secondary-command" @click="loadOverview">重新加载</button>
+          <button type="button" class="admin-secondary-command" @click="loadOverview">{{ t('common.reload') }}</button>
         </div>
 
         <div v-else class="admin-status-list">
           <div class="admin-status-list__item">
             <span class="admin-icon-tile"><Globe2 :size="20" aria-hidden="true" /></span>
             <div>
-              <span>站点</span>
+              <span>{{ t('dashboard.site') }}</span>
               <strong>{{ overview.site?.siteName || 'Edgechat' }}</strong>
             </div>
           </div>
           <div class="admin-status-list__item">
             <span class="admin-icon-tile"><Users :size="20" aria-hidden="true" /></span>
             <div>
-              <span>可用账号</span>
-              <strong>{{ loading ? '读取中' : `${activeUserCount} / ${overview.users.length}` }}</strong>
+              <span>{{ t('dashboard.availableAccounts') }}</span>
+              <strong>{{ loading ? t('common.loading') : `${activeUserCount} / ${overview.users.length}` }}</strong>
             </div>
           </div>
           <div class="admin-status-list__item">
             <span class="admin-icon-tile"><MessagesSquare :size="20" aria-hidden="true" /></span>
             <div>
-              <span>群组分布</span>
-              <strong>{{ loading ? '读取中' : `公开 ${publicChannelCount} · 私有 ${privateChannelCount}` }}</strong>
+              <span>{{ t('dashboard.groupDistribution') }}</span>
+              <strong>{{ loading ? t('common.loading') : t('dashboard.channelBreakdown', { publicCount: publicChannelCount, privateCount: privateChannelCount }) }}</strong>
             </div>
           </div>
           <div class="admin-status-list__item">
             <span class="admin-icon-tile"><MessageSquare :size="20" aria-hidden="true" /></span>
             <div>
-              <span>累计消息</span>
-              <strong>{{ loading ? '读取中' : totalMessageCount }}</strong>
+              <span>{{ t('dashboard.totalMessages') }}</span>
+              <strong>{{ loading ? t('common.loading') : totalMessageCount }}</strong>
             </div>
           </div>
         </div>

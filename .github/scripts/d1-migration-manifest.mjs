@@ -86,4 +86,9 @@ export const D1_MIGRATIONS = [
       "column:messages.source_attachment_unique_id",
     ],
   },
+  {
+    id: "2026-08-20-user-ban-expiry",
+    file: "worker/migrations/2026-08-20-user-ban-expiry.sql",
+    artifacts: ["column:users.disabled_until"],
+  },
 ];

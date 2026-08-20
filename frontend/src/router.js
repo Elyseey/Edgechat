@@ -48,37 +48,37 @@ const router = createRouter({
           path: 'dashboard',
           name: 'admin-dashboard',
           component: AdminDashboardPage,
-          meta: { admin: true, adminTitle: '仪表盘', adminIcon: 'dashboard', transition: 'page' }
+          meta: { admin: true, adminTitleKey: 'admin.nav.dashboard', adminIcon: 'dashboard', transition: 'page' }
         },
         {
           path: 'users',
           name: 'admin-users',
           component: AdminUsersPage,
-          meta: { admin: true, adminTitle: '用户管理', adminIcon: 'users', transition: 'page' }
+          meta: { admin: true, adminTitleKey: 'admin.nav.users', adminIcon: 'users', transition: 'page' }
         },
         {
           path: 'storage',
           name: 'admin-storage',
           component: AdminStoragePage,
-          meta: { admin: true, adminTitle: '存储统计', adminIcon: 'storage', transition: 'page' }
+          meta: { admin: true, adminTitleKey: 'admin.nav.storage', adminIcon: 'storage', transition: 'page' }
         },
         {
           path: 'invites',
           name: 'admin-invites',
           component: AdminInvitesPage,
-          meta: { admin: true, adminTitle: '注册邀请', adminIcon: 'invites', transition: 'page' }
+          meta: { admin: true, adminTitleKey: 'admin.nav.invites', adminIcon: 'invites', transition: 'page' }
         },
         {
           path: 'telegram',
           name: 'admin-telegram',
           component: AdminTelegramPage,
-          meta: { admin: true, adminTitle: 'Telegram 互通', adminIcon: 'telegram', transition: 'page' }
+          meta: { admin: true, adminTitleKey: 'admin.nav.telegram', adminIcon: 'telegram', transition: 'page' }
         },
         {
           path: 'site',
           name: 'admin-site',
           component: AdminSitePage,
-          meta: { admin: true, adminTitle: '网站设置', adminIcon: 'site', transition: 'page' }
+          meta: { admin: true, adminTitleKey: 'admin.nav.site', adminIcon: 'site', transition: 'page' }
         }
       ]
     },

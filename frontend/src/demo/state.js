@@ -27,8 +27,22 @@ export function findDemoChannel(channelId) {
 
 export function projectDemoUser(user) {
   if (!user) return null;
-  const { id, username, displayName, avatarUrl, isDisabled, createdAt } = user;
-  return { id, username, displayName, avatarUrl, isDisabled, createdAt };
+  const { id, username, displayName, avatarUrl, createdAt } = user;
+  const isPermanentlyDisabled = Boolean(user.isPermanentlyDisabled ?? (user.isDisabled && !user.disabledUntil));
+  const disabledUntilTimestamp = Date.parse(user.disabledUntil || '');
+  const disabledUntil = Number.isFinite(disabledUntilTimestamp) && disabledUntilTimestamp > Date.now()
+    ? user.disabledUntil
+    : null;
+  return {
+    id,
+    username,
+    displayName,
+    avatarUrl,
+    isDisabled: isPermanentlyDisabled || Boolean(disabledUntil),
+    isPermanentlyDisabled,
+    disabledUntil,
+    createdAt
+  };
 }
 
 export function projectDemoChannel(channel) {

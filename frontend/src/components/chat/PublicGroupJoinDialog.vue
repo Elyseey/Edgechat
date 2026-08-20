@@ -2,6 +2,7 @@
 import { Globe2, UserPlus, X } from '@lucide/vue';
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
 
 const props = defineProps({
@@ -29,34 +30,34 @@ useOverlayLifecycle({
         <button
           type="button"
           class="public-group-dialog__close"
-          aria-label="关闭"
+          :aria-label="t('common.close')"
           :disabled="joining"
           @click="emit('close')"
         >
           <X :size="20" aria-hidden="true" />
         </button>
 
-        <UiAvatar :src="channel.avatarUrl" :fallback="channel.name?.[0] || '群'" size="lg" />
+        <UiAvatar :src="channel.avatarUrl" :fallback="channel.name?.[0] || t('publicGroups.fallback')" size="lg" />
         <div class="public-group-dialog__identity">
-          <span class="public-group-dialog__kind"><Globe2 :size="15" aria-hidden="true" />公开群组</span>
+          <span class="public-group-dialog__kind"><Globe2 :size="15" aria-hidden="true" />{{ t('chat.publicGroup') }}</span>
           <h2 id="public-group-title">{{ channel.name }}</h2>
           <p v-if="channel.description">{{ channel.description }}</p>
         </div>
 
         <dl class="public-group-dialog__facts">
           <div>
-            <dt>成员</dt>
-            <dd>{{ Number(channel.memberCount || 0) }} 人</dd>
+            <dt>{{ t('chat.members') }}</dt>
+            <dd>{{ t('publicGroups.peopleCount', { count: Number(channel.memberCount || 0) }) }}</dd>
           </div>
           <div>
-            <dt>群主</dt>
-            <dd>{{ channel.ownerDisplayName || '未知' }}</dd>
+            <dt>{{ t('publicGroups.owner') }}</dt>
+            <dd>{{ channel.ownerDisplayName || t('common.unknown') }}</dd>
           </div>
         </dl>
 
         <div class="public-group-dialog__actions">
           <button type="button" class="public-group-dialog__secondary" :disabled="joining" @click="emit('close')">
-            取消
+            {{ t('common.cancel') }}
           </button>
           <button
             ref="joinButtonEl"
@@ -66,7 +67,7 @@ useOverlayLifecycle({
             @click="emit('join')"
           >
             <UserPlus :size="18" aria-hidden="true" />
-            {{ joining ? '加入中...' : '加入群组' }}
+            {{ joining ? t('publicGroups.joining') : t('publicGroups.join') }}
           </button>
         </div>
       </section>

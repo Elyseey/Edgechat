@@ -1,6 +1,7 @@
 <script setup>
 import UiAvatar from '../ui/Avatar.vue';
 import UiSurface from '../ui/Surface.vue';
+import { t } from '../../i18n.js';
 
 defineProps({
   items: {
@@ -23,11 +24,11 @@ const emit = defineEmits(['select']);
 <template>
   <div class="conversation-list">
     <UiSurface v-if="loading" tone="soft" class="empty-state">
-      会话列表同步中...
+      {{ t('conversationList.syncing') }}
     </UiSurface>
 
     <UiSurface v-else-if="!items.length" tone="soft" class="empty-state">
-      还没有可进入的会话。
+      {{ t('conversationList.empty') }}
     </UiSurface>
 
     <button

@@ -2,6 +2,7 @@
 import { Globe2, LockKeyhole } from '@lucide/vue';
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
 
 const props = defineProps({
@@ -25,22 +26,22 @@ useOverlayLifecycle({
   <Transition name="modal-fade">
     <div v-if="show" class="room-dialog-overlay" @click.self="emit('close')">
       <section class="room-dialog" role="dialog" aria-modal="true" aria-labelledby="create-group-title">
-        <h2 id="create-group-title">创建群聊</h2>
+        <h2 id="create-group-title">{{ t('group.create') }}</h2>
         <label class="room-dialog__field">
-          <span>群聊名称</span>
+          <span>{{ t('group.name') }}</span>
           <input ref="nameInputEl" v-model="form.name" type="text" class="room-dialog__input" autocomplete="off" />
         </label>
 
 		<div class="room-dialog__type-field">
-		  <span>群组类型</span>
-		  <div class="room-dialog__type-switch" role="radiogroup" aria-label="群组类型">
+			  <span>{{ t('group.type') }}</span>
+			  <div class="room-dialog__type-switch" role="radiogroup" :aria-label="t('group.type')">
 			<label
 			  :class="{ 'room-dialog__type-option--active': form.kind === 'public' }"
 			  class="room-dialog__type-option"
 			>
 			  <input v-model="form.kind" type="radio" name="group-kind" value="public" />
 			  <Globe2 :size="17" aria-hidden="true" />
-			  <span>公开群组</span>
+				  <span>{{ t('chat.publicGroup') }}</span>
 			</label>
 			<label
 			  :class="{ 'room-dialog__type-option--active': form.kind === 'private' }"
@@ -48,13 +49,13 @@ useOverlayLifecycle({
 			>
 			  <input v-model="form.kind" type="radio" name="group-kind" value="private" />
 			  <LockKeyhole :size="17" aria-hidden="true" />
-			  <span>私有群组</span>
+				  <span>{{ t('chat.privateGroup') }}</span>
 			</label>
 		  </div>
 		</div>
 
         <div class="room-dialog__members">
-		  <label>{{ form.kind === 'public' ? '邀请成员（可选）' : '选择成员' }}</label>
+			  <label>{{ form.kind === 'public' ? t('group.inviteOptional') : t('group.selectMembers') }}</label>
           <div class="room-dialog__member-list">
             <button
               v-for="user in users"
@@ -71,14 +72,14 @@ useOverlayLifecycle({
         </div>
 
         <div class="room-dialog__actions">
-          <button type="button" class="room-dialog__secondary" @click="emit('close')">取消</button>
+          <button type="button" class="room-dialog__secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
           <button
             type="button"
             class="room-dialog__primary"
             :disabled="!form.name.trim() || submitting"
             @click="emit('submit')"
           >
-            {{ submitting ? '创建中...' : '创建' }}
+            {{ submitting ? t('common.creating') : t('common.create') }}
           </button>
         </div>
       </section>

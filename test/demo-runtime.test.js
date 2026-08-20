@@ -56,6 +56,30 @@ test('demo backend keeps group and admin mutations in browser memory', async () 
   assert.equal(invite.invite.remainingUses, 2);
 });
 
+test('demo admin supports temporary bans, permanent bans and unbanning', async () => {
+  const temporary = await requestDemo('/admin/users/2', {
+    method: 'PATCH',
+    body: { isDisabled: true, banDurationMinutes: 90 }
+  });
+  assert.equal(temporary.user.isDisabled, true);
+  assert.equal(temporary.user.isPermanentlyDisabled, false);
+  assert.ok(Date.parse(temporary.user.disabledUntil) > Date.now());
+
+  const permanent = await requestDemo('/admin/users/3', {
+    method: 'PATCH',
+    body: { isDisabled: true, banDurationMinutes: null }
+  });
+  assert.equal(permanent.user.isPermanentlyDisabled, true);
+  assert.equal(permanent.user.disabledUntil, null);
+
+  const enabled = await requestDemo('/admin/users/2', {
+    method: 'PATCH',
+    body: { isDisabled: false }
+  });
+  assert.equal(enabled.user.isDisabled, false);
+  assert.equal(enabled.user.disabledUntil, null);
+});
+
 test('demo groups use the signed-in user as their owner', async () => {
   await requestDemo('/auth/login', {
     method: 'POST',

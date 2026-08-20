@@ -4,6 +4,7 @@ import api from '../../api.js';
 import store from '../../store.js';
 import UiButton from '../ui/Button.vue';
 import UiSurface from '../ui/Surface.vue';
+import { t } from '../../i18n.js';
 
 const loading = ref(false);
 const error = ref('');
@@ -71,40 +72,40 @@ onMounted(loadSiteSettings);
   <UiSurface class="panel admin-site-appearance">
     <div class="admin-site-appearance__heading">
       <div>
-        <h3 class="panel-title">站点外观</h3>
-        <p>修改聊天站点显示的名称与图标。</p>
+        <h3 class="panel-title">{{ t('site.appearance.title') }}</h3>
+        <p>{{ t('site.appearance.description') }}</p>
       </div>
       <UiButton variant="secondary" size="sm" :disabled="loading" @click="loadSiteSettings">
-        {{ loading ? '读取中...' : '重新读取' }}
+        {{ loading ? `${t('common.loading')}...` : t('site.reload') }}
       </UiButton>
     </div>
 
     <p v-if="error" class="error-text">{{ error }}</p>
     <label class="field">
-      <span>站点名称</span>
-      <input v-model.trim="siteForm.siteName" placeholder="例如：Edgechat" />
+      <span>{{ t('site.name') }}</span>
+      <input v-model.trim="siteForm.siteName" :placeholder="t('site.namePlaceholder')" />
     </label>
     <label class="field">
-      <span>站点图标 URL</span>
-      <input v-model.trim="siteForm.siteIconUrl" placeholder="/files/... 或 https://..." />
+      <span>{{ t('site.iconUrl') }}</span>
+      <input v-model.trim="siteForm.siteIconUrl" :placeholder="t('site.iconUrlPlaceholder')" />
     </label>
     <div class="inline-actions">
       <input ref="iconFileInputEl" type="file" accept="image/*" hidden @change="uploadSiteIcon" />
       <UiButton variant="secondary" size="sm" :disabled="iconUploading" @click="openIconPicker">
-        {{ iconUploading ? '上传中...' : '上传图标' }}
+        {{ iconUploading ? t('common.uploading') : t('site.uploadIcon') }}
       </UiButton>
       <UiButton :disabled="saving" @click="saveSiteSettings">
-        {{ saving ? '保存中...' : '保存设置' }}
+        {{ saving ? t('common.saving') : t('site.save') }}
       </UiButton>
     </div>
     <div class="admin-site-preview">
       <div class="admin-site-preview__icon">
-        <img v-if="siteForm.siteIconUrl" :src="siteForm.siteIconUrl" alt="站点图标" />
+        <img v-if="siteForm.siteIconUrl" :src="siteForm.siteIconUrl" :alt="t('site.iconAlt')" />
         <span v-else>{{ siteForm.siteName.slice(0, 1) || 'C' }}</span>
       </div>
       <div class="admin-site-preview__meta">
         <strong>{{ siteForm.siteName || 'Edgechat' }}</strong>
-        <span>{{ siteForm.siteIconUrl || '未设置图标 URL' }}</span>
+        <span>{{ siteForm.siteIconUrl || t('site.noIconUrl') }}</span>
       </div>
     </div>
   </UiSurface>

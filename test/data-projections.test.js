@@ -133,6 +133,7 @@ test("后台用户与频道成员 projection 保持稳定字段", async () => {
 			display_name: "Alice",
 			avatar_key: "a.png",
 			is_disabled: "1",
+			disabled_until: null,
 			created_at: "2026-07-23",
 		},
 	]);
@@ -142,6 +143,8 @@ test("后台用户与频道成员 projection 保持稳定字段", async () => {
 		displayName: "Alice",
 		avatarUrl: "/files/a.png",
 		isDisabled: true,
+		isPermanentlyDisabled: true,
+		disabledUntil: null,
 		createdAt: "2026-07-23",
 	});
 

@@ -1,4 +1,5 @@
 import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
+import { localizedError, localizeErrorMessage } from './localized-error.js';
 import { getRuntimeFileUrl, isDemoMode, requestRuntime } from './runtime.js';
 
 const API_PREFIX = '/api';
@@ -14,7 +15,11 @@ function buildHeaders(extra = {}) {
 
 async function request(path, options = {}) {
   if (isDemoMode) {
-    return requestRuntime(path, options);
+    try {
+      return await requestRuntime(path, options);
+    } catch (error) {
+      throw localizedError(error);
+    }
   }
 
   const response = await fetch(`${API_PREFIX}${path}`, {
@@ -34,13 +39,14 @@ async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
-    const message = payload?.error || payload || 'Request failed';
-    const error = new Error(message);
+    const rawMessage = payload?.error || payload || 'Request failed';
+    const error = new Error(localizeErrorMessage(rawMessage));
     error.status = response.status;
     error.payload = payload;
+    error.rawMessage = rawMessage;
 
     if (response.status === 401 && typeof window !== 'undefined') {
-      dispatchAuthInvalid(message);
+      dispatchAuthInvalid(error.message);
     }
 
     throw error;

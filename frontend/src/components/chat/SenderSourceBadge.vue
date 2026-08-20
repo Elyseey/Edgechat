@@ -1,4 +1,6 @@
 <script setup>
+import { t } from '../../i18n.js';
+
 defineProps({
   source: {
     type: String,
@@ -8,7 +10,7 @@ defineProps({
 </script>
 
 <template>
-  <span v-if="source === 'telegram'" class="sender-source-badge" title="Telegram" aria-label="Telegram 来源">
+  <span v-if="source === 'telegram'" class="sender-source-badge" title="Telegram" :aria-label="t('telegram.source')">
     TG
   </span>
 </template>

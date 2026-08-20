@@ -52,8 +52,8 @@ function bootstrapPayload() {
     channels: demoState.channels.map(projectDemoChannel),
     dms: demoState.dms.map(projectDemoDm),
     users: demoState.users
-      .filter((user) => Number(user.id) !== Number(demoState.session.userId) && !user.isDisabled)
       .map(projectDemoUser)
+      .filter((user) => Number(user.id) !== Number(demoState.session.userId) && !user.isDisabled)
   };
 }
 
@@ -208,6 +208,8 @@ function createAdminUser(body) {
     avatarUrl: '',
     isAdmin: false,
     isDisabled: false,
+    isPermanentlyDisabled: false,
+    disabledUntil: null,
     createdAt: new Date().toISOString()
   };
   demoState.users.push(user);
@@ -232,6 +234,7 @@ export async function requestDemo(path, options = {}) {
       fail('请输入账号和密码');
     }
     const user = demoState.users.find((item) => item.username === body.username) || demoState.users[0];
+    if (projectDemoUser(user).isDisabled) fail('账号或密码错误', 401);
     demoState.session = sessionForUser(user);
     return { token: demoState.session.token, session: cloneDemo(demoState.session) };
   }
@@ -392,7 +395,18 @@ export async function requestDemo(path, options = {}) {
     const user = findDemoUser(match[1]);
     if (!user) fail('用户不存在', 404);
     user.displayName = String(body.displayName || user.displayName);
-    user.isDisabled = Boolean(body.isDisabled);
+    if (typeof body.isDisabled === 'boolean') {
+      const durationMinutes = body.banDurationMinutes == null ? null : Number(body.banDurationMinutes);
+      if (body.isDisabled && durationMinutes !== null
+        && (!Number.isInteger(durationMinutes) || durationMinutes < 1)) {
+        fail('封禁时长必须是正整数分钟');
+      }
+      user.isPermanentlyDisabled = body.isDisabled && durationMinutes === null;
+      user.disabledUntil = body.isDisabled && durationMinutes !== null
+        ? new Date(Date.now() + durationMinutes * 60 * 1000).toISOString()
+        : null;
+      user.isDisabled = user.isPermanentlyDisabled || Boolean(user.disabledUntil);
+    }
     return { user: projectDemoUser(user) };
   }
   if (method === 'DELETE' && match) {

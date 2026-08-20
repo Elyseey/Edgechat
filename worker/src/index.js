@@ -35,6 +35,7 @@ import { Scheduler } from './do/Scheduler.js';
 import { UserInbox } from './do/UserInbox.js';
 import { forwardInboxConnection, forwardRoomConnection } from './do-bridge.js';
 import { runScheduledGc } from './gc.js';
+import { isUserDisabled } from './user-status.js';
 import {
   errorResponse,
   parseJsonRequest,
@@ -134,7 +135,7 @@ app.post('/api/auth/login', async (c) => {
   }
 
   const user = await getUserByUsername(c.env.DB, username);
-  if (!user || Number(user.is_disabled)) {
+  if (!user || isUserDisabled(user)) {
     return errorResponse('账号或密码错误', 401);
   }
 
@@ -155,7 +156,7 @@ app.use('/api/*', authMiddleware);
 app.get('/api/auth/session', async (c) => {
   const session = c.get('session');
   const user = await c.env.DB.prepare(
-    `SELECT display_name, avatar_key, is_disabled
+    `SELECT display_name, avatar_key, is_disabled, disabled_until
      FROM users
      WHERE id = ?
        AND deleted_at IS NULL
@@ -164,7 +165,7 @@ app.get('/api/auth/session', async (c) => {
     .bind(session.userId)
     .all();
 
-  if (!user.results[0] || Number(user.results[0].is_disabled)) {
+  if (!user.results[0] || isUserDisabled(user.results[0])) {
     await deleteSession(c.env, session.token);
     return errorResponse('账号已不可用', 401);
   }

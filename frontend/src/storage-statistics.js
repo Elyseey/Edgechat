@@ -6,7 +6,7 @@ export function storageTimestampValue(value) {
 
 export function formatStorageDateTime(value) {
   const timestamp = storageTimestampValue(value);
-  return timestamp ? new Date(timestamp).toLocaleString() : '';
+  return timestamp ? formatDateTime(timestamp) : '';
 }
 
 export function formatByteSize(value) {
@@ -62,7 +62,7 @@ export function buildStorageRows(users = [], summaries = new Map()) {
         rows.push({
           ...storageValues(summary),
           ownerKey: summary.ownerKey,
-          displayName: `未知用户 #${summary.ownerId}`,
+          displayName: t('storage.unknownUser', { id: summary.ownerId }),
           username: '',
           isDeleted: true
         });
@@ -73,7 +73,10 @@ export function buildStorageRows(users = [], summaries = new Map()) {
     rows.push({
       ...storageValues(summary),
       ownerKey: summary.ownerKey,
-      displayName: summary.ownerType === 'telegram' ? '系统 / Telegram' : '未知 / 历史文件',
+      displayName:
+        summary.ownerType === 'telegram'
+          ? t('storage.systemTelegram')
+          : t('storage.unknownHistorical'),
       username: '',
       isDeleted: false
     });
@@ -122,5 +125,6 @@ export function sortStorageRows(rows, sort) {
 }
 
 function compareNames(left, right) {
-  return String(left.displayName).localeCompare(String(right.displayName), 'zh-CN');
+  return compareLocalized(left.displayName, right.displayName);
 }
+import { compareLocalized, formatDateTime, t } from './i18n.js';

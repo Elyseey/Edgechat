@@ -22,16 +22,16 @@ const joinDialog = readFileSync(
 test('创建群聊弹窗提供公开和私有类型切换', () => {
   assert.match(createGroupDialog, /role="radiogroup"/);
   assert.match(createGroupDialog, /form\.kind === 'public'/);
-  assert.match(createGroupDialog, />公开群组</);
-  assert.match(createGroupDialog, />私有群组</);
+  assert.match(createGroupDialog, /t\('chat\.publicGroup'\)/);
+  assert.match(createGroupDialog, /t\('chat\.privateGroup'\)/);
 });
 
 test('未加入公开群位于侧栏底部折叠区并通过确认弹窗加入', () => {
   assert.match(chatPage, /<PublicGroupDiscovery/);
   assert.match(chatPage, /publicGroupItems/);
   assert.match(chatPage, /<PublicGroupJoinDialog/);
-  assert.match(discovery, />未加入群组</);
-  assert.match(discovery, /aria-expanded="expanded"/);
-  assert.match(joinDialog, /加入群组/);
+  assert.match(discovery, /t\('publicGroups\.notJoined'\)/);
+  assert.match(discovery, /:aria-expanded="expanded"/);
+  assert.match(joinDialog, /t\('publicGroups\.join'\)/);
   assert.match(joinDialog, /channel\.memberCount/);
 });
