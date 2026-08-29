@@ -14,6 +14,8 @@ const navigationSource = read('../frontend/src/admin/navigation.js');
 const sidebarSource = read('../frontend/src/components/admin/AdminSidebar.vue');
 const dashboardSource = read('../frontend/src/pages/AdminDashboardPage.vue');
 const usersSource = read('../frontend/src/pages/AdminUsersPage.vue');
+const userBanDialogSource = read('../frontend/src/components/admin/UserBanDialog.vue');
+const userBanDurationSource = read('../frontend/src/admin/user-ban-duration.js');
 const storageSource = read('../frontend/src/pages/AdminStoragePage.vue');
 const invitesSource = read('../frontend/src/pages/AdminInvitesPage.vue');
 const userCreatorSource = read('../frontend/src/components/admin/AdminUserCreator.vue');
@@ -25,6 +27,7 @@ const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
 const adminLayout = read('../frontend/src/styles/admin/layout.css');
 const adminSidebarStyles = read('../frontend/src/styles/admin/sidebar.css');
+const userBanDialogStyles = read('../frontend/src/styles/admin/user-ban-dialog.css');
 const legacyTokens = read('../frontend/src/styles/tokens.css');
 const dashboardStyles = read('../frontend/src/styles/admin/dashboard.css');
 const invitesPageStyles = read('../frontend/src/styles/admin/invites-page.css');
@@ -81,13 +84,20 @@ test('用户管理只维护用户列表，创建用户和注册链接集中在�
   assert.match(invitesSource, /id="registration-links"/);
 });
 
-test('用户管理支持按天、小时、分钟或永久封禁并显示截止时间', () => {
-  assert.match(usersSource, /BAN_UNIT_MINUTES/);
+test('用户管理通过独立弹窗选择快捷、自定义或永久封禁时长', () => {
+  assert.match(usersSource, /import UserBanDialog/);
   assert.match(usersSource, /banDurationMinutes/);
-  assert.match(usersSource, /value="days"/);
-  assert.match(usersSource, /value="hours"/);
-  assert.match(usersSource, /value="minutes"/);
-  assert.match(usersSource, /value="permanent"/);
+  assert.match(usersSource, /@confirm="disableUser"/);
+  assert.match(userBanDialogSource, /role="dialog"/);
+  assert.match(userBanDialogSource, /useOverlayLifecycle/);
+  assert.match(userBanDialogSource, /value="days"/);
+  assert.match(userBanDialogSource, /value="hours"/);
+  assert.match(userBanDialogSource, /value="minutes"/);
+  assert.match(userBanDialogSource, /selection === 'custom'/);
+  assert.match(userBanDialogSource, /value: 'permanent'/);
+  assert.match(userBanDurationSource, /BAN_DURATION_PRESETS/);
+  assert.match(adminStyles, /user-ban-dialog\.css/);
+  assert.match(userBanDialogStyles, /@media \(max-width: 480px\)/);
   assert.match(usersSource, /user\.disabledUntil/);
   assert.match(adminApiSource, /disabled_until = \?/);
   assert.match(adminApiSource, /session_version = session_version \+ 1/);

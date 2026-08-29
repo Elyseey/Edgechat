@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import api from '../api.js';
+import UserBanDialog from '../components/admin/UserBanDialog.vue';
 import UiButton from '../components/ui/Button.vue';
 import UiSurface from '../components/ui/Surface.vue';
 import { formatDateTime, t } from '../i18n.js';
@@ -8,15 +9,9 @@ import { formatDateTime, t } from '../i18n.js';
 const loading = ref(false);
 const error = ref('');
 const users = ref([]);
-const banEditorUserId = ref(null);
-const banDuration = ref(1);
-const banUnit = ref('days');
-
-const BAN_UNIT_MINUTES = {
-  minutes: 1,
-  hours: 60,
-  days: 24 * 60
-};
+const banDialogUser = ref(null);
+const banSaving = ref(false);
+const banError = ref('');
 
 async function loadUsers() {
   loading.value = true;
@@ -31,31 +26,35 @@ async function loadUsers() {
   }
 }
 
-function openBanEditor(user) {
-  banEditorUserId.value = user.id;
-  banDuration.value = 1;
-  banUnit.value = 'days';
+function openBanDialog(user) {
+  banDialogUser.value = user;
+  banError.value = '';
 }
 
-function closeBanEditor() {
-  banEditorUserId.value = null;
+function closeBanDialog() {
+  if (banSaving.value) return;
+  banDialogUser.value = null;
+  banError.value = '';
 }
 
-async function disableUser(user) {
-  const durationMinutes = banUnit.value === 'permanent'
-    ? null
-    : Number(banDuration.value) * BAN_UNIT_MINUTES[banUnit.value];
-  if (durationMinutes !== null && (!Number.isInteger(durationMinutes) || durationMinutes < 1)) {
-    error.value = t('users.invalidDuration');
-    return;
+async function disableUser(durationMinutes) {
+  const user = banDialogUser.value;
+  if (!user) return;
+
+  banSaving.value = true;
+  banError.value = '';
+  try {
+    await api.updateUser(user.id, {
+      isDisabled: true,
+      banDurationMinutes: durationMinutes
+    });
+    banDialogUser.value = null;
+    await loadUsers();
+  } catch (currentError) {
+    banError.value = currentError.message;
+  } finally {
+    banSaving.value = false;
   }
-
-  await api.updateUser(user.id, {
-    isDisabled: true,
-    banDurationMinutes: durationMinutes
-  });
-  closeBanEditor();
-  await loadUsers();
 }
 
 async function enableUser(user) {
@@ -136,26 +135,9 @@ onMounted(loadUsers);
                     <UiButton v-if="user.isDisabled" variant="secondary" size="sm" @click="enableUser(user)">
                       {{ t('users.enable') }}
                     </UiButton>
-                    <UiButton v-else-if="banEditorUserId !== user.id" variant="secondary" size="sm" @click="openBanEditor(user)">
+                    <UiButton v-else variant="destructive" size="sm" @click="openBanDialog(user)">
                       {{ t('users.disable') }}
                     </UiButton>
-                    <div v-else class="user-ban-editor">
-                      <label v-if="banUnit !== 'permanent'" class="field user-ban-editor__duration">
-                        <span class="sr-only">{{ t('users.durationValue') }}</span>
-                        <input v-model.number="banDuration" type="number" min="1" step="1">
-                      </label>
-                      <label class="field user-ban-editor__unit">
-                        <span class="sr-only">{{ t('users.durationUnit') }}</span>
-                        <select v-model="banUnit">
-                          <option value="days">{{ t('users.units.days') }}</option>
-                          <option value="hours">{{ t('users.units.hours') }}</option>
-                          <option value="minutes">{{ t('users.units.minutes') }}</option>
-                          <option value="permanent">{{ t('users.units.permanent') }}</option>
-                        </select>
-                      </label>
-                      <UiButton size="sm" @click="disableUser(user)">{{ t('users.confirmDisable') }}</UiButton>
-                      <UiButton variant="secondary" size="sm" @click="closeBanEditor">{{ t('common.cancel') }}</UiButton>
-                    </div>
                     <UiButton variant="secondary" size="sm" @click="resetPassword(user)">{{ t('users.resetPassword') }}</UiButton>
                     <UiButton variant="destructive" size="sm" @click="removeUser(user)">{{ t('common.delete') }}</UiButton>
                   </div>
@@ -166,27 +148,14 @@ onMounted(loadUsers);
         </div>
       </UiSurface>
     </div>
+
+    <UserBanDialog
+      :show="Boolean(banDialogUser)"
+      :user="banDialogUser"
+      :saving="banSaving"
+      :error="banError"
+      @close="closeBanDialog"
+      @confirm="disableUser"
+    />
   </div>
 </template>
-
-<style scoped>
-.user-ban-editor {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--admin-space-2xs);
-}
-
-.user-ban-editor__duration {
-  width: 5rem;
-}
-
-.user-ban-editor__unit {
-  width: 6.5rem;
-}
-
-.user-ban-editor input,
-.user-ban-editor select {
-  min-height: 34px;
-}
-</style>
