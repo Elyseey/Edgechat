@@ -26,6 +26,7 @@ import { registerChannelRoutes } from './api/channels.js';
 import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
+import { registerV1Routes } from './api/v1.js';
 import {
   registerTelegramAdminRoutes,
   registerTelegramPublicRoutes
@@ -36,16 +37,22 @@ import { UserInbox } from './do/UserInbox.js';
 import { forwardInboxConnection, forwardRoomConnection } from './do-bridge.js';
 import { runScheduledGc } from './gc.js';
 import { isUserDisabled } from './user-status.js';
+import { updateCurrentDeviceSessionVersion } from './mobile-session.js';
 import {
+  errorCodeForStatus,
   errorResponse,
   parseJsonRequest,
-  requestBodyTooLarge
+  requestBodyTooLarge,
+  v1ErrorResponse
 } from './utils.js';
 
 const app = new Hono();
 
 app.use('/api/*', async (c, next) => {
-  if (requestBodyTooLarge(c.req.raw)) {
+  const path = new URL(c.req.url).pathname;
+  const uploadLimit = Number(c.env.MAX_FILE_SIZE || 20971520) + 1024 * 1024;
+  const maxBytes = ['/api/upload', '/api/v1/uploads'].includes(path) ? uploadLimit : undefined;
+  if (requestBodyTooLarge(c.req.raw, maxBytes)) {
     // 提前拒绝超大请求体，避免 Worker 在 JSON 解析前消耗过多内存。
     return errorResponse('请求体过大', 413);
   }
@@ -151,6 +158,8 @@ app.post('/api/auth/login', async (c) => {
   });
 });
 
+registerV1Routes(app);
+
 app.use('/api/*', authMiddleware);
 
 app.get('/api/auth/session', async (c) => {
@@ -235,6 +244,7 @@ app.post('/api/auth/change-password', async (c) => {
     ...session,
     sessionVersion: Number(session.sessionVersion || 0) + 1
   };
+  await updateCurrentDeviceSessionVersion(c.env, session, nextSession.sessionVersion);
   await putSession(c.env, nextSession);
 
   return c.json({ ok: true });
@@ -338,10 +348,17 @@ app.notFound(async (c) => {
   return new Response('Not Found', { status: 404 });
 });
 
-app.onError((error) => {
+app.onError((error, c) => {
   console.error(error);
+  const isV1 = new URL(c.req.url).pathname.startsWith('/api/v1/');
   if (error instanceof ApiError) {
+    if (isV1) {
+      return v1ErrorResponse(error.code, error.message, error.status);
+    }
     return errorResponse(error.message, error.status);
+  }
+  if (isV1) {
+    return v1ErrorResponse(errorCodeForStatus(500), '服务器开小差了', 500);
   }
   return errorResponse('服务器开小差了', 500);
 });

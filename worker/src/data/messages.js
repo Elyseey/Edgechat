@@ -10,12 +10,12 @@ function toNullableNumber(value) {
 export function mapMessage(row, content = row.content) {
 	const isExternal = row.sender_kind === "external";
 	const isTelegramExternal = isExternal && row.source === "telegram";
-	return {
-			id: Number(row.id),
-			content,
-			createdAt: row.created_at,
-			source: row.source || "edgechat",
-			sender: {
+	const message = {
+		id: Number(row.id),
+		content,
+		createdAt: row.created_at,
+		source: row.source || "edgechat",
+		sender: {
 				kind: isExternal ? "external" : "local",
 				id: isExternal ? String(row.external_sender_id || "") : Number(row.sender_id),
 				username: isExternal ? "" : row.sender_username,
@@ -39,6 +39,10 @@ export function mapMessage(row, content = row.content) {
 				}
 			: null,
 	};
+	if (row.client_message_id) {
+		message.clientMessageId = row.client_message_id;
+	}
+	return message;
 }
 
 export async function externalSenderExists(db, source, senderId) {
@@ -59,21 +63,19 @@ export async function externalSenderExists(db, source, senderId) {
 
 async function mapDecryptedMessage(env, row) {
 	const content = await decryptMessageContent(env, row.content, {
-				channelId: row.channel_id,
-				senderId: row.sender_id ?? 0,
-				senderContext:
-					row.sender_kind === "external"
-						? `${row.source}:${row.external_sender_id}`
-						: "",
-		});
+		channelId: row.channel_id,
+		senderId: row.sender_id ?? 0,
+		senderContext:
+			row.sender_kind === "external" ? `${row.source}:${row.external_sender_id}` : "",
+	});
 	return mapMessage(row, content);
 }
 
 const MESSAGE_SELECT = `SELECT
-  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
-  m.attachment_size, m.sender_kind, m.external_sender_id, m.external_sender_name,
+	  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
+	  m.attachment_size, m.sender_kind, m.external_sender_id, m.external_sender_name,
 	  m.external_sender_avatar_url, m.source, m.source_message_id,
-	  m.source_attachment_id, m.source_attachment_unique_id, m.created_at,
+	  m.source_attachment_id, m.source_attachment_unique_id, m.client_message_id, m.created_at,
   u.id AS sender_id, u.username AS sender_username,
   u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key
  FROM messages m LEFT JOIN users u ON u.id = m.sender_id`;
@@ -112,6 +114,118 @@ export async function getMessageBySource(env, source, sourceMessageId) {
 	return results[0] ? mapDecryptedMessage(env, results[0]) : null;
 }
 
+export async function getMessageByClientId(env, channelId, senderId, clientMessageId) {
+	const { results } = await env.DB
+		.prepare(
+			`${MESSAGE_SELECT}
+			 WHERE m.channel_id = ?
+			   AND m.sender_id = ?
+			   AND m.client_message_id = ?
+			   AND m.deleted_at IS NULL
+			 LIMIT 1`,
+		)
+		.bind(Number(channelId), Number(senderId), String(clientMessageId))
+		.all();
+	return results[0] ? mapDecryptedMessage(env, results[0]) : null;
+}
+
+async function hasConsumedClientMessageId(db, channelId, senderId, clientMessageId) {
+	const { results } = await db
+		.prepare(
+			`SELECT id
+			 FROM messages
+			 WHERE channel_id = ? AND sender_id = ? AND client_message_id = ?
+			 LIMIT 1`,
+		)
+		.bind(Number(channelId), Number(senderId), String(clientMessageId))
+		.all();
+	return Boolean(results[0]);
+}
+
+export async function getRoomSyncCursor(db, channelId) {
+	const { results } = await db
+		.prepare(
+			`SELECT MAX(sequence) AS sequence
+			 FROM (
+			   SELECT COALESCE(MAX(sequence), 0) AS sequence
+			   FROM message_events
+			   WHERE channel_id = ?
+			   UNION ALL
+			   SELECT COALESCE(MAX(compacted_through), 0) AS sequence
+			   FROM message_event_compaction
+			   WHERE channel_id = ?
+			 )`,
+		)
+		.bind(Number(channelId), Number(channelId))
+		.all();
+	return Number(results[0]?.sequence || 0);
+}
+
+export async function getRoomCompactedCursor(db, channelId) {
+	const { results } = await db
+		.prepare(
+			`SELECT compacted_through
+			 FROM message_event_compaction
+			 WHERE channel_id = ?
+			 LIMIT 1`,
+		)
+		.bind(Number(channelId))
+		.all();
+	return Number(results[0]?.compacted_through || 0);
+}
+
+export async function listRoomMessageEvents(env, channelId, afterSequence = 0, limit = 100) {
+	const normalizedCursor = Number(afterSequence) || 0;
+	const compactedThrough = await getRoomCompactedCursor(env.DB, channelId);
+	if (normalizedCursor < compactedThrough) {
+		const error = new Error("Room sync cursor expired");
+		error.name = "RoomSyncCursorExpiredError";
+		error.code = "sync_cursor_expired";
+		error.status = 409;
+		throw error;
+	}
+	const pageSize = Math.min(Math.max(Number(limit) || 100, 1), 100);
+	const { results } = await env.DB
+		.prepare(
+			`SELECT sequence, message_id, event_type, created_at
+			 FROM message_events
+			 WHERE channel_id = ? AND sequence > ?
+			 ORDER BY sequence ASC
+			 LIMIT ?`,
+		)
+		.bind(Number(channelId), normalizedCursor, pageSize + 1)
+		.all();
+	const page = results.slice(0, pageSize);
+	const events = [];
+	for (const row of page) {
+		if (row.event_type === "deleted") {
+			events.push({
+				sequence: Number(row.sequence),
+				type: "message_deleted",
+				messageId: Number(row.message_id),
+				createdAt: row.created_at,
+			});
+			continue;
+		}
+		const message = await getMessageById(env, row.message_id);
+		if (message) {
+			events.push({
+				sequence: Number(row.sequence),
+				type: "message",
+				message,
+				createdAt: row.created_at,
+			});
+		}
+	}
+	return {
+		events,
+		nextCursor: page.length
+			? Number(page[page.length - 1].sequence)
+				: normalizedCursor,
+		hasMore: results.length > pageSize,
+	};
+}
+
 export async function softDeleteMessage(db, { channelId, messageId }) {
 	const result = await db
 		.prepare(
@@ -136,6 +250,7 @@ async function persistMessage(env, {
 	sourceMessageId = null,
 	sourceAttachmentId = null,
 	sourceAttachmentUniqueId = null,
+	clientMessageId = null,
 }) {
 	const isExternal = externalSender !== null;
 	const normalizedSenderId = isExternal ? null : Number(senderId);
@@ -170,6 +285,9 @@ async function persistMessage(env, {
 		senderId: normalizedSenderId ?? 0,
 		senderContext: isExternal ? `${source}:${externalId}` : "",
 	});
+	const normalizedClientMessageId = isExternal
+		? null
+		: String(clientMessageId || "").trim() || null;
 	try {
 		const result = await env.DB
 			.prepare(
@@ -177,8 +295,8 @@ async function persistMessage(env, {
 				   channel_id, sender_id, content, attachment_key, attachment_name,
 				   attachment_type, attachment_size, sender_kind, external_sender_id,
 				   external_sender_name, external_sender_avatar_url, source, source_message_id,
-				   source_attachment_id, source_attachment_unique_id
-				 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				   source_attachment_id, source_attachment_unique_id, client_message_id
+				 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				Number(channelId),
@@ -189,14 +307,15 @@ async function persistMessage(env, {
 				cleanAttachment?.type || null,
 				cleanAttachment?.size || null,
 				isExternal ? "external" : "local",
-				isExternal ? externalId : null,
-				isExternal ? externalName : null,
-				isExternal ? String(externalSender.avatarUrl || "") : null,
+					isExternal ? externalId : null,
+					isExternal ? externalName : null,
+					isExternal ? String(externalSender.avatarUrl || "") : null,
 					String(source || "edgechat"),
 					sourceMessageId ? String(sourceMessageId) : null,
 					sourceAttachmentId ? String(sourceAttachmentId) : null,
 					sourceAttachmentUniqueId ? String(sourceAttachmentUniqueId) : null,
-			)
+					normalizedClientMessageId,
+				)
 			.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
 	} catch (error) {
@@ -206,18 +325,50 @@ async function persistMessage(env, {
 				return { message: existing, created: false };
 			}
 		}
+		if (normalizedClientMessageId && String(error?.message || error).includes("UNIQUE")) {
+			const existing = await getMessageByClientId(
+				env,
+				channelId,
+				normalizedSenderId,
+				normalizedClientMessageId,
+			);
+			if (existing) {
+				return { message: existing, created: false };
+			}
+			if (
+				await hasConsumedClientMessageId(
+					env.DB,
+					channelId,
+					normalizedSenderId,
+					normalizedClientMessageId,
+				)
+			) {
+				throw new Error("Message idempotency key was already consumed");
+			}
+		}
 		throw error;
 	}
 }
 
-export async function insertMessage(env, { channelId, senderId, content, attachment }) {
+export async function insertMessage(env, {
+	channelId,
+	senderId,
+	content,
+	attachment,
+	clientMessageId = null,
+}) {
 	const result = await persistMessage(env, {
 		channelId,
 		senderId,
 		content,
 		attachment,
+		clientMessageId,
 	});
 	return result.message;
+}
+
+export function insertMessageIdempotent(env, payload) {
+	return persistMessage(env, payload);
 }
 
 export function insertExternalMessage(env, payload) {

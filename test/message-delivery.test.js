@@ -28,7 +28,7 @@ test("消息提交 module 统一持久化参数与广播 packet", async () => {
 		args: { channelId: 3, senderId: 7, content: "hello", attachment: { key: "a" } },
 	}]);
 	assert.equal(result.message, message);
-	assert.deepEqual(JSON.parse(result.packet), { type: "message", message });
+	assert.deepEqual(JSON.parse(result.packet), { protocolVersion: 1, type: "message", message });
 });
 
 test("消息提交只转换可预期的空消息错误", async () => {
@@ -83,8 +83,9 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 	assert.deepEqual(notifications, [
 		{
 			userId: 2,
-			payload: {
-				type: "room_message",
+				payload: {
+					protocolVersion: 1,
+					type: "room_message",
 				room: { id: 4, kind: "private", name: "Team" },
 				messageId: 8,
 				createdAt: "now",
@@ -93,8 +94,9 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 		},
 		{
 			userId: 3,
-			payload: {
-				type: "room_message",
+				payload: {
+					protocolVersion: 1,
+					type: "room_message",
 				room: { id: 4, kind: "private", name: "Team" },
 				messageId: 8,
 				createdAt: "now",

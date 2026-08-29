@@ -81,11 +81,77 @@ function createSummary() {
     usersDeleted: 0,
     userMessagesDeleted: 0,
     userMembershipsDeleted: 0,
+    expiredRealtimeTicketsDeleted: 0,
+    expiredMessageEventsDeleted: 0,
+    expiredDeviceSessionsDeleted: 0,
     r2Deleted: 0,
     r2DeleteFailed: 0,
     r2DeleteQueued: 0,
     r2SkippedReferenced: 0
   };
+}
+
+async function runMobileProtocolCleanupStep(env, config, summary) {
+  const ticketResult = await env.DB.prepare(
+    `DELETE FROM realtime_tickets
+     WHERE token_hash IN (
+       SELECT token_hash FROM realtime_tickets
+       WHERE expires_at <= CURRENT_TIMESTAMP OR consumed_at IS NOT NULL
+       ORDER BY expires_at ASC
+       LIMIT ?
+     )`
+  )
+    .bind(config.batchSize)
+    .run();
+  summary.expiredRealtimeTicketsDeleted = Number(ticketResult.meta?.changes || 0);
+
+  const eventCutoff = `-${config.messageRetentionDays} day`;
+  const [, eventResult] = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO message_event_compaction (channel_id, compacted_through, updated_at)
+       SELECT channel_id, MAX(sequence), CURRENT_TIMESTAMP
+       FROM (
+         SELECT sequence, channel_id
+         FROM message_events
+         WHERE created_at < datetime('now', ?)
+         ORDER BY sequence ASC
+         LIMIT ?
+       ) AS expired_events
+       WHERE true
+       GROUP BY channel_id
+       ON CONFLICT(channel_id) DO UPDATE SET
+         compacted_through = MAX(message_event_compaction.compacted_through, excluded.compacted_through),
+         updated_at = CURRENT_TIMESTAMP`
+    ).bind(eventCutoff, config.batchSize),
+    env.DB.prepare(
+      `DELETE FROM message_events
+       WHERE sequence IN (
+         SELECT sequence FROM message_events
+         WHERE created_at < datetime('now', ?)
+         ORDER BY sequence ASC
+         LIMIT ?
+       )`
+    ).bind(eventCutoff, config.batchSize)
+  ]);
+  summary.expiredMessageEventsDeleted = Number(eventResult.meta?.changes || 0);
+
+  const deviceResult = await env.DB.prepare(
+    `DELETE FROM device_sessions
+     WHERE id IN (
+       SELECT id FROM device_sessions
+       WHERE expires_at < datetime('now', ?)
+          OR (revoked_at IS NOT NULL AND revoked_at < datetime('now', ?))
+       ORDER BY expires_at ASC
+       LIMIT ?
+     )`
+  )
+    .bind(
+      `-${config.softDeleteRetentionDays} day`,
+      `-${config.softDeleteRetentionDays} day`,
+      config.batchSize
+    )
+    .run();
+  summary.expiredDeviceSessionsDeleted = Number(deviceResult.meta?.changes || 0);
 }
 
 async function ensureGcSchema(db) {
@@ -536,6 +602,7 @@ export async function runScheduledGc(env) {
   const summary = createSummary();
   await ensureGcSchema(env.DB);
 
+  await runMobileProtocolCleanupStep(env, config, summary);
   await runRetryQueueStep(env, config, summary);
   await runExpiredMessagesStep(env, config, summary);
   await runHardDeleteInvitesStep(env, config, summary);

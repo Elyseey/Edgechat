@@ -27,6 +27,25 @@ export async function validateSession(env, token) {
     return { ok: false, status: 401, message: '账号已不可用' };
   }
 
+  if (session.deviceSessionId) {
+    const device = await env.DB.prepare(
+      `SELECT session_version
+       FROM device_sessions
+       WHERE id = ?
+         AND user_id = ?
+         AND revoked_at IS NULL
+         AND expires_at > CURRENT_TIMESTAMP
+       LIMIT 1`
+    )
+      .bind(String(session.deviceSessionId), session.userId)
+      .all();
+    const deviceSession = device.results[0];
+    if (!deviceSession || toNumber(deviceSession.session_version) !== toNumber(user.session_version)) {
+      await deleteSession(env, token);
+      return { ok: false, status: 401, message: '设备登录已失效，请重新登录' };
+    }
+  }
+
   const dbVersion = toNumber(user.session_version);
   const sessionVersion = toNumber(session.sessionVersion);
   if (sessionVersion !== dbVersion) {

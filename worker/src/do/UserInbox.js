@@ -38,7 +38,7 @@ export class UserInbox {
       this.state.acceptWebSocket(server);
       server.serializeAttachment({ userId });
       this.connections.add(server);
-      server.send(JSON.stringify({ type: 'ready' }));
+      server.send(JSON.stringify({ protocolVersion: 1, type: 'ready' }));
       return new Response(null, { status: 101, webSocket: client });
     }
 

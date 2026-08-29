@@ -37,8 +37,8 @@ export function createMessageDeletion({
 		}
 
 		return {
-			messageId,
-			packet: JSON.stringify({ type: "message_deleted", messageId }),
+				messageId,
+				packet: JSON.stringify({ protocolVersion: 1, type: "message_deleted", messageId }),
 		};
 	};
 }

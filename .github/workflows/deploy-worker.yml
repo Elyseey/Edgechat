@@ -4,6 +4,16 @@ on:
     branches:
       - master
       - main
+    paths:
+      - "worker/**"
+      - "frontend/**"
+      - "test/**"
+      - ".github/scripts/**"
+      - ".github/workflows/deploy-worker.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "biome.json"
+      - "wrangler.example.toml"
   workflow_dispatch:
     inputs:
       apply_encryption_keyring:
@@ -26,9 +36,9 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: npm

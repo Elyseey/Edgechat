@@ -17,8 +17,9 @@ export function createUnreadProjection({
 				channelId: room.id,
 				userId,
 			});
-			await notifyInbox(env, userId, {
-				type: "room_message",
+				await notifyInbox(env, userId, {
+					protocolVersion: 1,
+					type: "room_message",
 				room: {
 					id: Number(room.id),
 					kind: room.kind,

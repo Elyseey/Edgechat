@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS messages (
   source_message_id TEXT,
   source_attachment_id TEXT,
   source_attachment_unique_id TEXT,
+  client_message_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT,
   CHECK (
@@ -197,9 +198,71 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   filename TEXT NOT NULL DEFAULT '',
   content_type TEXT NOT NULL DEFAULT '',
   size INTEGER NOT NULL DEFAULT 0,
+  client_upload_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (owner_user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS device_sessions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  installation_id TEXT NOT NULL,
+  device_name TEXT NOT NULL,
+  app_version TEXT NOT NULL DEFAULT '',
+  refresh_token_hash TEXT NOT NULL,
+  session_version INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS realtime_tickets (
+  token_hash TEXT PRIMARY KEY,
+  access_token_ciphertext TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  device_session_id TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK (scope IN ('room', 'inbox')),
+  room_kind TEXT CHECK (room_kind IN ('public', 'private', 'dm')),
+  room_id INTEGER,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (device_session_id) REFERENCES device_sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS message_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN ('created', 'deleted')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS message_event_compaction (
+  channel_id INTEGER PRIMARY KEY,
+  compacted_through INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+);
+
+-- 由数据库在消息写入事务内生成同步游标，HTTP 与 WebSocket 两条提交入口不会产生不同步的事件。
+CREATE TRIGGER IF NOT EXISTS record_message_created_event
+AFTER INSERT ON messages
+BEGIN
+  INSERT INTO message_events (channel_id, message_id, event_type)
+  VALUES (NEW.channel_id, NEW.id, 'created');
+END;
+
+CREATE TRIGGER IF NOT EXISTS record_message_deleted_event
+AFTER UPDATE OF deleted_at ON messages
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+BEGIN
+  INSERT INTO message_events (channel_id, message_id, event_type)
+  VALUES (NEW.channel_id, NEW.id, 'deleted');
+END;
 
 CREATE TABLE IF NOT EXISTS pending_r2_delete (
   object_key TEXT PRIMARY KEY,
@@ -250,6 +313,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_source
   ON messages(source, source_message_id)
   WHERE source_message_id IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_channel_client_message
+  ON messages(channel_id, sender_id, client_message_id)
+  WHERE client_message_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_message_reads_user
   ON message_reads(user_id, updated_at DESC);
 
@@ -273,6 +340,26 @@ CREATE INDEX IF NOT EXISTS idx_pending_r2_delete_next_retry
 
 CREATE INDEX IF NOT EXISTS idx_uploaded_files_owner
   ON uploaded_files(owner_user_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uploaded_files_client_upload
+  ON uploaded_files(owner_user_id, client_upload_id)
+  WHERE client_upload_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_sessions_refresh_token
+  ON device_sessions(refresh_token_hash);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_sessions_user_installation_active
+  ON device_sessions(user_id, installation_id)
+  WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_device_sessions_user_active
+  ON device_sessions(user_id, revoked_at, expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_realtime_tickets_expiry
+  ON realtime_tickets(expires_at, consumed_at);
+
+CREATE INDEX IF NOT EXISTS idx_message_events_channel_sequence
+  ON message_events(channel_id, sequence);
 
 CREATE INDEX IF NOT EXISTS idx_telegram_mappings_channel
   ON telegram_mappings(channel_id, enabled, id);

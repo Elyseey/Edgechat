@@ -146,6 +146,17 @@ GitHub Actions でのデプロイを優先的に推奨します。長期的な�
 - クイックスタート：<https://echat.azora.top/guide/getting-started.html>
 - 詳細チュートリアル：<https://echat.azora.top/guide/actions-deploy.html>
 
+### ネイティブ Android クライアント
+
+リポジトリの `android/` は Android 8 / API 26 以降向けの独立した Kotlin + Jetpack Compose クライアントです。安定した `/api/v1` 契約だけを共有し、Vue コンポーネントや CSS は APK に含めません。初回起動時に有効な HTTPS サーバー URL を入力するか、`edgechat://connect?server=https%3A%2F%2Fchat.example.com` を開くと、ログイン前にサーバー機能を確認します。
+
+- インストール：GitHub Releases から `edgechat-*.apk` を取得し、`SHA256SUMS.txt` を確認
+- CI：`.github/workflows/android-ci.yml` が単体テスト、Lint、Debug APK ビルドを実行
+- リリース：`android-v*` タグ、または手動の `Android Release` を使用し、4 つの `ANDROID_KEYSTORE_*` Secret を設定
+- 制限：初版は FCM 非対応です。バックグラウンドでは WebSocket を閉じ、フォアグラウンド復帰時に差分同期するため、バックグラウンド即時通知は保証しません
+
+詳細：<https://echat.azora.top/en/guide/android.html>
+
 <details>
 <summary><strong>🔐 プライバシーとサーバー側暗号化の説明（クリックで展開）</strong></summary>
 

@@ -91,4 +91,32 @@ export const D1_MIGRATIONS = [
     file: "worker/migrations/2026-08-20-user-ban-expiry.sql",
     artifacts: ["column:users.disabled_until"],
   },
+  {
+    id: "2026-08-30-mobile-client-v1",
+    file: "worker/migrations/2026-08-30-mobile-client-v1.sql",
+    artifacts: [
+      "column:messages.client_message_id",
+      "column:uploaded_files.client_upload_id",
+      "table:device_sessions",
+      "table:realtime_tickets",
+      "table:message_events",
+      "index:idx_messages_client_message",
+      "index:idx_uploaded_files_client_upload",
+      "index:idx_device_sessions_refresh_token",
+      "index:idx_device_sessions_user_installation_active",
+      "index:idx_device_sessions_user_active",
+      "index:idx_realtime_tickets_expiry",
+      "index:idx_message_events_channel_sequence",
+      "trigger:record_message_created_event",
+      "trigger:record_message_deleted_event",
+    ],
+  },
+  {
+    id: "2026-08-30-native-client-hardening",
+    file: "worker/migrations/2026-08-30-native-client-hardening.sql",
+    artifacts: [
+      "index:idx_messages_channel_client_message",
+      "table:message_event_compaction",
+    ],
+  },
 ];

@@ -1,4 +1,8 @@
-import { MessageSubmissionError, submitRoomMessage } from '../message-submission.js';
+import {
+  MessageSubmissionError,
+  submitRoomMessage,
+  submitRoomMessageIdempotent
+} from '../message-submission.js';
 import { deleteRoomMessage, MessageDeletionError } from '../message-deletion.js';
 import { submitExternalMessage } from '../external-message-submission.js';
 import { forwardEdgeChatMessageToTelegram } from '../integrations/telegram/bridge.js';
@@ -19,7 +23,7 @@ function socketMeta(token, principal, room) {
 
 function sendSocketError(ws, message) {
   try {
-    ws.send(JSON.stringify({ type: 'error', error: message }));
+    ws.send(JSON.stringify({ protocolVersion: 1, type: 'error', error: message }));
   } catch {
     // Ignore broken sockets.
   }
@@ -173,11 +177,75 @@ export class ChannelRoom {
     return Response.json({ ok: true, created: result.created, message: result.message });
   }
 
+  async receiveClientAction(request) {
+    if (!isVerifiedInternalRequest(request)) {
+      return Response.json(
+        { error: { code: 'authentication_required', message: '请先登录' } },
+        { status: 401 }
+      );
+    }
+
+    const principal = parseVerifiedPrincipal(request);
+    const payload = await request.json();
+    const room = payload.room;
+    const action = payload.action;
+    const access = principal
+      ? await authorizeRoom(this.env.DB, principal, room?.kind, Number(room?.id))
+      : { ok: false };
+    if (!access.ok) {
+      return Response.json(
+        { error: { code: 'forbidden', message: '无权访问该会话' } },
+        { status: 403 }
+      );
+    }
+
+    const meta = { principal, room: access.room };
+    try {
+      if (action?.type === 'send') {
+        const result = await submitRoomMessageIdempotent(this.env, meta, action);
+        if (result.created) {
+          await this.broadcast(result.packet);
+          this.runMessageProjections(access.room, result.message);
+        }
+        return Response.json({ created: result.created, message: result.message });
+      }
+      if (action?.type === 'delete_message') {
+        const result = await deleteRoomMessage(this.env, meta, action);
+        await this.broadcast(result.packet);
+        return Response.json({ ok: true, messageId: result.messageId });
+      }
+      return Response.json(
+        { error: { code: 'invalid_request', message: '不支持的消息操作' } },
+        { status: 400 }
+      );
+    } catch (error) {
+      if (error instanceof MessageSubmissionError || error instanceof MessageDeletionError) {
+        return Response.json(
+          { error: { code: error.code || 'invalid_request', message: error.message } },
+          { status: error.status || 400 }
+        );
+      }
+      console.error(JSON.stringify({
+        message: 'client room action failed',
+        roomId: Number(access.room.id),
+        error: error instanceof Error ? error.message : String(error)
+      }));
+      return Response.json(
+        { error: { code: 'internal_error', message: '消息操作失败' } },
+        { status: 500 }
+      );
+    }
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
 
     if (url.pathname === '/external-message' && request.method === 'POST') {
       return this.receiveExternalMessage(request);
+    }
+
+    if (url.pathname === '/client-action' && request.method === 'POST') {
+      return this.receiveClientAction(request);
     }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -216,6 +284,7 @@ export class ChannelRoom {
     this.connections.set(server, meta);
     server.send(
       JSON.stringify({
+        protocolVersion: 1,
         type: 'ready',
         room: {
           id: Number(room.id),

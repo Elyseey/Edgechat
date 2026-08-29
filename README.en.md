@@ -146,6 +146,17 @@ GitHub Actions deployment is recommended first — it suits long-term maintenanc
 - Quick start: <https://echat.azora.top/guide/getting-started.html>
 - Detailed guide: <https://echat.azora.top/guide/actions-deploy.html>
 
+### Native Android Client
+
+The repository's `android/` directory is an independent Kotlin + Jetpack Compose client for Android 8 / API 26 and newer. It depends only on the stable `/api/v1` contract and never packages Vue components or CSS. On first launch, paste a valid HTTPS server origin or open `edgechat://connect?server=https%3A%2F%2Fchat.example.com`; the app validates server capabilities before sign-in.
+
+- Installation: download `edgechat-*.apk` from GitHub Releases and verify `SHA256SUMS.txt`
+- CI: `.github/workflows/android-ci.yml` runs unit tests, Lint, and a Debug APK build
+- Release: push an `android-v*` tag or run `Android Release` manually after configuring `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`
+- Limitation: the first release has no FCM. WebSockets close in the background and incremental sync catches up after returning to the foreground, so background instant notifications are not promised
+
+Full guide: <https://echat.azora.top/en/guide/android.html>
+
 <details>
 <summary><strong>🔐 Privacy & Server-Side Encryption (click to expand)</strong></summary>
 

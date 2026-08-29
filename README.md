@@ -146,6 +146,17 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
 - 快速开始：<https://echat.azora.top/guide/getting-started.html>
 - 详细教程：<https://echat.azora.top/guide/actions-deploy.html>
 
+### 原生 Android 客户端
+
+仓库内的 `android/` 是独立的 Kotlin + Jetpack Compose 客户端（Android 8 / API 26 起），只依赖稳定的 `/api/v1` 协议，不复用网页组件或 CSS。首次启动粘贴有效 HTTPS 服务器地址，或打开 `edgechat://connect?server=https%3A%2F%2Fchat.example.com`，客户端会先校验服务器能力再登录。
+
+- 安装包：从 GitHub Releases 下载 `edgechat-*.apk` 并核对 `SHA256SUMS.txt`
+- CI：`.github/workflows/android-ci.yml` 运行单元测试、Lint 和 Debug APK 构建
+- 发布：推送 `android-v*` 标签或手动运行 `Android Release`，需要配置 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`
+- 限制：首版不接入 FCM，应用进入后台后会关闭 WebSocket；恢复前台时通过增量同步补齐消息，不承诺后台即时通知
+
+完整说明：<https://echat.azora.top/guide/android.html>
+
 <details>
 <summary><strong>🔐 隐私与服务端加密说明（点击展开）</strong></summary>
 

@@ -1,26 +1,53 @@
 export async function recordUploadedFile(
 	db,
-	{ key, ownerUserId, filename, contentType, size },
+	{ key, ownerUserId, filename, contentType, size, clientUploadId = null },
 ) {
 	await db
 		.prepare(
 			`INSERT INTO uploaded_files (
-			   object_key, owner_user_id, filename, content_type, size, created_at
-			 ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-			 ON CONFLICT(object_key) DO UPDATE SET
-			   owner_user_id = excluded.owner_user_id,
-			   filename = excluded.filename,
-			   content_type = excluded.content_type,
-			   size = excluded.size`,
+				   object_key, owner_user_id, filename, content_type, size, client_upload_id, created_at
+				 ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+				 ON CONFLICT(object_key) DO UPDATE SET
+				   owner_user_id = excluded.owner_user_id,
+				   filename = excluded.filename,
+				   content_type = excluded.content_type,
+				   size = excluded.size,
+				   client_upload_id = excluded.client_upload_id`,
 		)
 		.bind(
 			String(key),
 			Number(ownerUserId),
 			String(filename || ""),
 			String(contentType || ""),
-			Number(size || 0),
-		)
+				Number(size || 0),
+				clientUploadId ? String(clientUploadId) : null,
+			)
 		.run();
+}
+
+function mapUploadedFile(row) {
+	return row
+		? {
+				key: row.object_key,
+				name: row.filename,
+				type: row.content_type,
+				size: Number(row.size || 0),
+				url: `/files/${encodeURIComponent(row.object_key)}`,
+			}
+		: null;
+}
+
+export async function getUploadedFileByClientId(db, userId, clientUploadId) {
+	const { results } = await db
+		.prepare(
+			`SELECT object_key, filename, content_type, size
+			 FROM uploaded_files
+			 WHERE owner_user_id = ? AND client_upload_id = ?
+			 LIMIT 1`,
+		)
+		.bind(Number(userId), String(clientUploadId))
+		.all();
+	return mapUploadedFile(results[0]);
 }
 
 export async function getUploadedFileMetadata(db, key) {

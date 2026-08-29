@@ -12,6 +12,20 @@ export function errorResponse(message, status = 400) {
   return jsonResponse({ error: message }, { status });
 }
 
+export function v1ErrorResponse(code, message, status = 400) {
+  return jsonResponse({ error: { code, message } }, { status });
+}
+
+export function errorCodeForStatus(status) {
+  if (status === 401) return 'authentication_required';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'not_found';
+  if (status === 413) return 'payload_too_large';
+  if (status === 503) return 'service_unavailable';
+  if (status >= 500) return 'internal_error';
+  return 'invalid_request';
+}
+
 export const MAX_JSON_BODY_SIZE = 10 * 1024 * 1024;
 
 export function requestBodyTooLarge(request, maxBytes = MAX_JSON_BODY_SIZE) {

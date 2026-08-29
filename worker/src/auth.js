@@ -81,9 +81,18 @@ export function isAdminUser(_env, user) {
   return Boolean(Number(user?.is_admin));
 }
 
-export async function putSession(env, session) {
+function resolveSessionTtl(session, fallback) {
+  const expiresAt = Date.parse(String(session?.expiresAt || ''));
+  if (!Number.isFinite(expiresAt)) {
+    return fallback;
+  }
+  return Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
+}
+
+export async function putSession(env, session, { ttlSeconds = SESSION_TTL_SECONDS } = {}) {
   await env.SESSIONS.put(session.token, JSON.stringify(session), {
-    expirationTtl: SESSION_TTL_SECONDS
+    // 移动端 access token 的寿命短于网页会话；刷新资料时必须保留原到期时间，不能被普通写回延长。
+    expirationTtl: resolveSessionTtl(session, ttlSeconds)
   });
 }
 

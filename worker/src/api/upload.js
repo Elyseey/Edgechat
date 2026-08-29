@@ -1,4 +1,9 @@
-import { canAccessFile, getUploadedFileMetadata, recordUploadedFile } from '../data/uploaded-files.js';
+import {
+  canAccessFile,
+  getUploadedFileByClientId,
+  getUploadedFileMetadata,
+  recordUploadedFile
+} from '../data/uploaded-files.js';
 import { decryptAttachment, encryptAttachment } from '../encryption.js';
 import { normalizeContentType, sanitizeFilename } from '../attachment-metadata.js';
 import { validateSession } from '../session.js';
@@ -81,52 +86,15 @@ export function registerUploadRoutes(app) {
     }
 
     try {
-      validateUpload(c.env, file);
+      const result = await saveUploadedFile(c.env, session, file);
+      return c.json({ file: result.file });
     } catch (error) {
-      return errorResponse(error.message);
-    }
-
-    const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
-    const key = `${session.userId}/${Date.now()}-${crypto.randomUUID()}${extension}`;
-    const encryptedFile = await encryptAttachment(c.env, await file.arrayBuffer(), key);
-    await c.env.FILES.put(key, encryptedFile, {
-      httpMetadata: {
-        contentType: normalizeContentType(file.type) || 'application/octet-stream',
-        cacheControl: FILE_RESPONSE_CACHE_CONTROL
-      },
-      customMetadata: {
-        filename: sanitizeFilename(file.name),
-        edgechatEncryption: 'v1'
-      }
-    });
-
-    try {
-      await recordUploadedFile(c.env.DB, {
-        key,
-        ownerUserId: session.userId,
-        filename: sanitizeFilename(file.name),
-        contentType: normalizeContentType(file.type) || 'application/octet-stream',
-        size: file.size
-      });
-    } catch (error) {
-      // 元数据写入失败时删除刚上传的密文，避免生成无法归属、也无法被消息引用的孤儿对象。
-      try {
-        await c.env.FILES.delete(key);
-      } catch (deleteError) {
-        console.warn('Failed to delete orphaned upload after metadata error', deleteError);
+      const message = String(error?.message || '');
+      if (message.startsWith('文件大小不能超过') || message === '该文件类型不允许上传') {
+        return errorResponse(message);
       }
       throw error;
     }
-
-    return c.json({
-      file: {
-        key,
-        name: file.name,
-        type: file.type || 'application/octet-stream',
-        size: file.size,
-        url: `/files/${encodeURIComponent(key)}`
-      }
-    });
   });
 
   app.get('/files/:key{.+}', async (c) => {
@@ -188,4 +156,56 @@ export function registerUploadRoutes(app) {
 
     return new Response(decrypted.bytes, { headers });
   });
+}
+
+export async function saveUploadedFile(env, session, file, { clientUploadId = null } = {}) {
+  validateUpload(env, file);
+  if (clientUploadId) {
+    const existing = await getUploadedFileByClientId(env.DB, session.userId, clientUploadId);
+    if (existing) return { file: existing, created: false };
+  }
+
+  const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+  const key = `${session.userId}/${Date.now()}-${crypto.randomUUID()}${extension}`;
+  const filename = sanitizeFilename(file.name);
+  const contentType = normalizeContentType(file.type) || 'application/octet-stream';
+  const encryptedFile = await encryptAttachment(env, await file.arrayBuffer(), key);
+  await env.FILES.put(key, encryptedFile, {
+    httpMetadata: { contentType, cacheControl: FILE_RESPONSE_CACHE_CONTROL },
+    customMetadata: { filename, edgechatEncryption: 'v1' }
+  });
+
+  try {
+    await recordUploadedFile(env.DB, {
+      key,
+      ownerUserId: session.userId,
+      filename,
+      contentType,
+      size: file.size,
+      clientUploadId
+    });
+  } catch (error) {
+    // 元数据失败或幂等键竞争时移除本次新对象，避免 R2 留下没有稳定引用的副本。
+    try {
+      await env.FILES.delete(key);
+    } catch (deleteError) {
+      console.warn('Failed to delete orphaned upload after metadata error', deleteError);
+    }
+    if (clientUploadId && String(error?.message || error).includes('UNIQUE')) {
+      const existing = await getUploadedFileByClientId(env.DB, session.userId, clientUploadId);
+      if (existing) return { file: existing, created: false };
+    }
+    throw error;
+  }
+
+  return {
+    created: true,
+    file: {
+      key,
+      name: filename,
+      type: contentType,
+      size: file.size,
+      url: `/files/${encodeURIComponent(key)}`
+    }
+  };
 }
