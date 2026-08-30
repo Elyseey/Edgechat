@@ -28,6 +28,8 @@ test("Android release requires secret signing and publishes APK, AAB and SHA-256
 	assert.match(release, /assembleDebugAndroidTest/);
 	assert.match(release, /assembleRelease bundleRelease/);
 	assert.match(release, /sha256sum \*\.apk \*\.aab > SHA256SUMS\.txt/);
+	assert.match(release, /jarsigner -verify -verbose -certs/);
+	assert.doesNotMatch(release, /jarsigner -verify -strict/);
 	assert.match(release, /gh release create/);
 });
 

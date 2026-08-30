@@ -89,7 +89,8 @@ jobs:
           apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$apksigner_path"
           "$apksigner_path" verify --verbose --print-certs android/release-artifacts/*.apk
-          jarsigner -verify -strict android/release-artifacts/*.aab
+          # AAB 是 JAR 签名格式；JDK 17 的 strict 模式会把 App Bundle 合法的 ZIP 结构警告误判为失败。
+          jarsigner -verify -verbose -certs android/release-artifacts/*.aab
       - name: Publish GitHub Release
         shell: bash
         env:
