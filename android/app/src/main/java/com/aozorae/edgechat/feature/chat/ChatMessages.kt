@@ -61,6 +61,7 @@ import com.aozorae.edgechat.ui.formatDayLabel
 import com.aozorae.edgechat.ui.formatMessageTime
 import com.aozorae.edgechat.ui.messageDate
 import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
+import java.io.File
 import kotlinx.coroutines.launch
 
 private enum class MessageGroupPosition {
@@ -290,6 +291,7 @@ private fun MessageItem(
                     message = message,
                     own = own,
                     groupPosition = groupPosition,
+                    serverBaseUrl = serverBaseUrl,
                     language = language,
                     onOpenAttachment = onOpenAttachment,
                     modifier = Modifier.testTag("message_bubble:${message.id}"),
@@ -304,6 +306,7 @@ private fun MessageBubble(
     message: MessageEntity,
     own: Boolean,
     groupPosition: MessageGroupPosition,
+    serverBaseUrl: String,
     language: String,
     onOpenAttachment: (String, String, String) -> Unit,
     modifier: Modifier = Modifier,
@@ -323,18 +326,28 @@ private fun MessageBubble(
                 val attachmentUrl = message.attachmentUrl
                 if (attachmentUrl != null) {
                     if (message.content.isNotBlank()) Spacer(Modifier.height(8.dp))
-                    AttachmentTile(
-                        name = message.attachmentName ?: "attachment",
-                        type = message.attachmentType ?: "application/octet-stream",
-                        language = language,
-                        onClick = {
-                            onOpenAttachment(
-                                attachmentUrl,
-                                message.attachmentName ?: "attachment",
-                                message.attachmentType ?: "application/octet-stream",
-                            )
-                        },
-                    )
+                    val attachmentName = message.attachmentName ?: "attachment"
+                    val attachmentType = message.attachmentType ?: "application/octet-stream"
+                    val openAttachment = {
+                        onOpenAttachment(attachmentUrl, attachmentName, attachmentType)
+                    }
+                    if (isImageAttachment(attachmentType)) {
+                        MessageImageAttachment(
+                            model = resolveServerUrl(serverBaseUrl, attachmentUrl),
+                            name = attachmentName,
+                            language = language,
+                            tag = "message_image:${message.id}",
+                            onClick = openAttachment,
+                        )
+                    } else {
+                        AttachmentTile(
+                            name = attachmentName,
+                            type = attachmentType,
+                            language = language,
+                            onClick = openAttachment,
+                            modifier = Modifier.testTag("message_attachment:${message.id}"),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -371,12 +384,18 @@ private fun messageBubbleShape(position: MessageGroupPosition, own: Boolean): Ro
 }
 
 @Composable
-private fun AttachmentTile(name: String, type: String, language: String, onClick: () -> Unit) {
+private fun AttachmentTile(
+    name: String,
+    type: String,
+    language: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalEdgeChatColors.current
     Surface(
         color = colors.canvas.copy(alpha = 0.72f),
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.clickable(
+        modifier = modifier.clickable(
             role = Role.Button,
             onClickLabel = if (language == "zh-CN") "打开附件" else "Open attachment",
             onClick = onClick,
@@ -436,9 +455,20 @@ private fun PendingMessageItem(
             ) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     if (item.content.isNotBlank()) Text(item.content, style = MaterialTheme.typography.bodyLarge)
-                    item.attachmentName?.let {
+                    item.attachmentName?.let { attachmentName ->
                         if (item.content.isNotBlank()) Spacer(Modifier.height(6.dp))
-                        Text(it, style = MaterialTheme.typography.bodySmall)
+                        val localPath = item.localAttachmentPath
+                        if (localPath != null && isImageAttachment(item.attachmentType)) {
+                            MessageImageAttachment(
+                                model = File(localPath),
+                                name = attachmentName,
+                                language = language,
+                                tag = "pending_message_image:${item.clientMessageId}",
+                                onClick = null,
+                            )
+                        } else {
+                            Text(attachmentName, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     Spacer(Modifier.height(5.dp))
                     Text(

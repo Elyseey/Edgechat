@@ -7,6 +7,14 @@ import org.junit.Test
 
 class ChatMessagesTest {
     @Test
+    fun onlyImageMimeTypesUseInlinePreview() {
+        assertTrue(isImageAttachment("image/jpeg"))
+        assertFalse(isImageAttachment("video/mp4"))
+        assertFalse(isImageAttachment("application/pdf"))
+        assertFalse(isImageAttachment(null))
+    }
+
+    @Test
     fun authorGroupRestartsForAnotherSender() {
         assertTrue(startsMessageGroup(message(2, "2026-08-30T10:01:00Z", "2"), message(1, "2026-08-30T10:00:00Z", "1")))
     }
