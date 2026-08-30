@@ -148,7 +148,7 @@ GitHub Actions deployment is recommended first — it suits long-term maintenanc
 
 ### Native Android Client
 
-The repository's `android/` directory is an independent Kotlin + Jetpack Compose client for Android 8 / API 26 and newer. It depends only on the stable `/api/v1` contract and never packages Vue components or CSS. On first launch, paste a valid HTTPS server origin or open `edgechat://connect?server=https%3A%2F%2Fchat.example.com`; the app validates server capabilities before sign-in.
+The repository's `android/` directory is an independent Kotlin + Jetpack Compose client for Android 8 / API 26 and newer. It depends only on the stable `/api/v1` contract and never packages Vue components or CSS. When signed out, enter the HTTPS server origin, username, and password on one screen, or use `edgechat://connect?server=https%3A%2F%2Fchat.example.com` to prefill the server. The app validates server capabilities before completing sign-in.
 
 - Installation: download `edgechat-*.apk` from GitHub Releases and verify `SHA256SUMS.txt`
 - CI: `.github/workflows/android-ci.yml` runs unit tests, Lint, and a Debug APK build

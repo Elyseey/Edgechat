@@ -1,6 +1,5 @@
 package com.aozorae.edgechat.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -28,8 +27,6 @@ import com.aozorae.edgechat.core.database.ConversationEntity
 import com.aozorae.edgechat.core.network.dto.SessionDto
 import com.aozorae.edgechat.core.session.ServerProfile
 import com.aozorae.edgechat.feature.app.AppViewModel
-import com.aozorae.edgechat.feature.auth.LoginScreen
-import com.aozorae.edgechat.feature.auth.ServerSetupScreen
 import com.aozorae.edgechat.feature.auth.WelcomeScreen
 import com.aozorae.edgechat.feature.chat.ChatPane
 import com.aozorae.edgechat.feature.chat.ChatUiState
@@ -52,48 +49,27 @@ fun EdgeChatApp(
     val preset by deepLinkServer.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
     var showGroup by remember { mutableStateOf(false) }
-    var showServerSetup by rememberSaveable { mutableStateOf(false) }
+    var handledPreset by rememberSaveable { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(preset) {
-        if (!preset.isNullOrBlank() && preset != appState.server?.baseUrl) {
-            showServerSetup = true
-            appViewModel.connect(requireNotNull(preset))
+    LaunchedEffect(preset, appState.initializing) {
+        if (!appState.initializing && !preset.isNullOrBlank() && preset != handledPreset) {
+            handledPreset = preset
+            if (appState.session != null && preset != appState.server?.baseUrl) {
+                appViewModel.connect(requireNotNull(preset))
+            }
         }
-    }
-    BackHandler(enabled = appState.server == null && showServerSetup) {
-        showServerSetup = false
     }
 
     when {
-        appState.loading && appState.server == null -> {
+        appState.initializing -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         }
-        appState.server == null -> {
-            if (showServerSetup) {
-                ServerSetupScreen(
-                    loading = appState.loading,
-                    preset = preset,
-                    language = appState.language,
-                    onConnect = appViewModel::connect,
-                    onBack = { showServerSetup = false },
-                )
-            } else {
-                WelcomeScreen(
-                    language = appState.language,
-                    onContinue = { showServerSetup = true },
-                )
-            }
-        }
         appState.session == null -> {
-            LoginScreen(
-                server = requireNotNull(appState.server),
+            WelcomeScreen(
+                initialServer = preset ?: appState.server?.baseUrl,
                 loading = appState.loading,
                 language = appState.language,
-                onLogin = appViewModel::login,
-                onChangeServer = {
-                    showServerSetup = true
-                    appViewModel.disconnect()
-                },
+                onLogin = appViewModel::connectAndLogin,
             )
         }
         else -> {

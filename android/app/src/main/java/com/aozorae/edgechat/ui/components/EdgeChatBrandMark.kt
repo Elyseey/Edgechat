@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ fun EdgeChatBrandMark(
     val colors = LocalEdgeChatColors.current
     Box(
         modifier = modifier
+            .size(size)
             .background(colors.subtleSecondary, RoundedCornerShape(size * 0.28f))
             .padding(size * 0.18f),
     ) {

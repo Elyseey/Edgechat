@@ -148,7 +148,7 @@ GitHub Actions でのデプロイを優先的に推奨します。長期的な�
 
 ### ネイティブ Android クライアント
 
-リポジトリの `android/` は Android 8 / API 26 以降向けの独立した Kotlin + Jetpack Compose クライアントです。安定した `/api/v1` 契約だけを共有し、Vue コンポーネントや CSS は APK に含めません。初回起動時に有効な HTTPS サーバー URL を入力するか、`edgechat://connect?server=https%3A%2F%2Fchat.example.com` を開くと、ログイン前にサーバー機能を確認します。
+リポジトリの `android/` は Android 8 / API 26 以降向けの独立した Kotlin + Jetpack Compose クライアントです。安定した `/api/v1` 契約だけを共有し、Vue コンポーネントや CSS は APK に含めません。未ログイン時は 1 つの画面で HTTPS サーバー URL、ユーザー名、パスワードを入力できます。`edgechat://connect?server=https%3A%2F%2Fchat.example.com` でサーバーを事前入力することもでき、送信後にサーバー機能を確認してからログインします。
 
 - インストール：GitHub Releases から `edgechat-*.apk` を取得し、`SHA256SUMS.txt` を確認
 - CI：`.github/workflows/android-ci.yml` が単体テスト、Lint、Debug APK ビルドを実行

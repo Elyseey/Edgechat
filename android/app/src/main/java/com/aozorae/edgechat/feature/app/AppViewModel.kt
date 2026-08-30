@@ -25,13 +25,21 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class AppUiState(
     val server: ServerProfile? = null,
     val session: SessionDto? = null,
     val language: String = "zh-CN",
-    val loading: Boolean = true,
+    val initializing: Boolean = true,
+    val loading: Boolean = false,
     val error: String? = null,
+)
+
+private data class AppProgress(
+    val initializing: Boolean,
+    val loading: Boolean,
 )
 
 @HiltViewModel
@@ -46,17 +54,20 @@ class AppViewModel @Inject constructor(
     private val diagnostics: DiagnosticLog,
     private val realtime: RealtimeCoordinator,
 ) : ViewModel() {
-    private val loading = MutableStateFlow(true)
+    private val initializing = MutableStateFlow(true)
+    private val loading = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
+    private val progress = combine(initializing, loading, ::AppProgress)
+    private val actionMutex = Mutex()
 
     val state: StateFlow<AppUiState> = combine(
         serverStore.server,
         sessionRepository.session,
         serverStore.language,
-        loading,
+        progress,
         error,
-    ) { server, session, language, busy, failure ->
-        AppUiState(server, session, language, busy, failure)
+    ) { server, session, language, progress, failure ->
+        AppUiState(server, session, language, progress.initializing, progress.loading, failure)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
@@ -74,11 +85,24 @@ class AppViewModel @Inject constructor(
                 runCatching { chatRepository.bootstrap() }.onFailure { error.value = it.message }
                 realtime.start()
             }
-            loading.value = false
+            initializing.value = false
         }
     }
 
     fun connect(server: String) = launchAction {
+        connectToServer(server)
+    }
+
+    fun connectAndLogin(server: String, username: String, password: String) = launchAction {
+        connectToServer(server)
+        authenticate(username, password)
+    }
+
+    fun login(username: String, password: String) = launchAction {
+        authenticate(username, password)
+    }
+
+    private suspend fun connectToServer(server: String) {
         val hadSession = sessionRepository.session.value != null
         realtime.stop()
         outboxRepository.pauseForServerChange()
@@ -99,9 +123,10 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun login(username: String, password: String) = launchAction {
+    private suspend fun authenticate(username: String, password: String) {
         sessionRepository.login(username, password)
         chatRepository.bootstrap()
+        outboxRepository.resume()
         realtime.start()
     }
 
@@ -155,13 +180,15 @@ class AppViewModel @Inject constructor(
 
     private fun launchAction(block: suspend () -> Unit) {
         viewModelScope.launch {
-            loading.value = true
-            error.value = null
-            runCatching { block() }.onFailure {
-                diagnostics.record("ui_action_failed reason=${it.javaClass.simpleName}")
-                error.value = it.message ?: "操作失败"
+            actionMutex.withLock {
+                loading.value = true
+                error.value = null
+                runCatching { block() }.onFailure {
+                    diagnostics.record("ui_action_failed reason=${it.javaClass.simpleName}")
+                    error.value = it.message ?: "操作失败"
+                }
+                loading.value = false
             }
-            loading.value = false
         }
     }
 }
