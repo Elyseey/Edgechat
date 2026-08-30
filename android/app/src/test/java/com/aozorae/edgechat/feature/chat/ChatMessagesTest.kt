@@ -1,6 +1,7 @@
 package com.aozorae.edgechat.feature.chat
 
 import com.aozorae.edgechat.core.database.MessageEntity
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,6 +13,17 @@ class ChatMessagesTest {
         assertFalse(isImageAttachment("video/mp4"))
         assertFalse(isImageAttachment("application/pdf"))
         assertFalse(isImageAttachment(null))
+    }
+
+    @Test
+    fun imagePreviewKeepsPortraitAndLandscapeAspectRatiosWithinBounds() {
+        val portrait = fitImagePreview(aspectRatio = 9f / 19.5f, maxWidth = 280f, maxHeight = 240f)
+        assertEquals(240f, portrait.height, 0.01f)
+        assertEquals(110.77f, portrait.width, 0.01f)
+
+        val landscape = fitImagePreview(aspectRatio = 19.5f / 9f, maxWidth = 280f, maxHeight = 240f)
+        assertEquals(280f, landscape.width, 0.01f)
+        assertEquals(129.23f, landscape.height, 0.01f)
     }
 
     @Test

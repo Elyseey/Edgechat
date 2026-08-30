@@ -1,5 +1,7 @@
 package com.aozorae.edgechat.feature.chat
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -9,6 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
 import com.aozorae.edgechat.core.database.MessageEntity
 import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.network.dto.SessionDto
@@ -17,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.io.File
 
 class ChatMessagesLayoutTest {
     @get:Rule val compose = createComposeRule()
@@ -109,6 +113,53 @@ class ChatMessagesLayoutTest {
         )
     }
 
+    @Test
+    fun portraitPendingImageUsesItsOwnAspectRatioAndStaysCompact() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val portrait = File(context.cacheDir, "portrait-preview.png")
+        Bitmap.createBitmap(90, 180, Bitmap.Config.ARGB_8888).run {
+            eraseColor(Color.RED)
+            portrait.outputStream().use { compress(Bitmap.CompressFormat.PNG, 100, it) }
+            recycle()
+        }
+        compose.setContent {
+            EdgeChatTheme {
+                Box(Modifier.width(360.dp).height(640.dp)) {
+                    ChatMessages(
+                        messages = emptyList(),
+                        outbox = listOf(
+                            pendingMessage(
+                                localAttachmentPath = portrait.absolutePath,
+                                attachmentName = "portrait-preview.png",
+                                attachmentType = "image/png",
+                            ),
+                        ),
+                        currentUser = currentUser(),
+                        serverBaseUrl = "https://example.com",
+                        language = "en-US",
+                        scrollState = rememberLazyListState(),
+                        onLoadOlder = {},
+                        onRetry = {},
+                        onCancel = {},
+                        onDeleteMessage = {},
+                        onOpenAttachment = { _, _, _ -> },
+                    )
+                }
+            }
+        }
+
+        compose.waitUntil(5_000) {
+            val bounds = compose.onNodeWithTag("pending_message_image:pending-1")
+                .fetchSemanticsNode().boundsInRoot
+            bounds.height > bounds.width
+        }
+        val bounds = compose.onNodeWithTag("pending_message_image:pending-1")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(bounds.height > bounds.width * 1.9f)
+        assertTrue(bounds.height <= 240f * context.resources.displayMetrics.density + 1f)
+        portrait.delete()
+    }
+
     private fun currentUser() = SessionDto(
         userId = 1,
         username = "me",
@@ -142,14 +193,18 @@ class ChatMessagesLayoutTest {
         attachmentUrl = attachmentUrl,
     )
 
-    private fun pendingMessage() = OutboxEntity(
+    private fun pendingMessage(
+        localAttachmentPath: String? = null,
+        attachmentName: String? = null,
+        attachmentType: String? = null,
+    ) = OutboxEntity(
         clientMessageId = "pending-1",
         roomKind = "public",
         roomId = 1,
         content = "Pending",
-        localAttachmentPath = null,
-        attachmentName = null,
-        attachmentType = null,
+        localAttachmentPath = localAttachmentPath,
+        attachmentName = attachmentName,
+        attachmentType = attachmentType,
         attachmentSize = null,
         clientUploadId = null,
         uploadedKey = null,
