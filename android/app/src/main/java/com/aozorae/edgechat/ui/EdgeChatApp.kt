@@ -4,32 +4,48 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aozorae.edgechat.core.database.ConversationEntity
+import com.aozorae.edgechat.core.network.dto.SessionDto
+import com.aozorae.edgechat.core.repository.RoomIdentity
+import com.aozorae.edgechat.core.session.ServerProfile
 import com.aozorae.edgechat.feature.app.AppViewModel
 import com.aozorae.edgechat.feature.auth.LoginScreen
 import com.aozorae.edgechat.feature.auth.ServerSetupScreen
 import com.aozorae.edgechat.feature.chat.ChatPane
+import com.aozorae.edgechat.feature.chat.ChatUiState
 import com.aozorae.edgechat.feature.chat.ChatViewModel
 import com.aozorae.edgechat.feature.chat.GroupManagementDialog
 import com.aozorae.edgechat.feature.conversations.ConversationPane
 import com.aozorae.edgechat.feature.settings.SettingsSheet
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EdgeChatApp(
     deepLinkServer: StateFlow<String?>,
@@ -46,131 +62,68 @@ fun EdgeChatApp(
         if (!preset.isNullOrBlank() && preset != appState.server?.baseUrl) appViewModel.connect(requireNotNull(preset))
     }
 
-    if (appState.loading && appState.server == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-    } else if (appState.server == null) {
-        ServerSetupScreen(appState.loading, preset, appState.language, appViewModel::connect)
-    } else if (appState.session == null) {
-        LoginScreen(
-            server = requireNotNull(appState.server),
-            loading = appState.loading,
-            language = appState.language,
-            onLogin = appViewModel::login,
-            onChangeServer = appViewModel::disconnect,
-        )
-    } else {
-        val session = requireNotNull(appState.session)
-        val server = requireNotNull(appState.server)
-        val selectedConversation = chatState.selectedRoom?.let { room ->
-            chatState.conversations.firstOrNull { it.kind == room.kind && it.id == room.id }
+    when {
+        appState.loading && appState.server == null -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         }
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val tablet = maxWidth >= 840.dp
-            if (tablet) {
-                Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.width(340.dp)) {
-                        ConversationPane(
-                            server.siteName,
-                            chatState.conversations,
-                            chatState.users,
-                            chatState.selectedRoom,
-                            appState.language,
-                            chatViewModel::select,
-                            chatViewModel::join,
-                            chatViewModel::openDm,
-                            chatViewModel::createGroup,
-                            { showSettings = true },
-                        )
-                    }
-                    Box(Modifier.weight(1f)) {
-                        ChatPane(
-                            room = chatState.selectedRoom,
-                            conversation = selectedConversation,
-                            messages = chatState.messages,
-                            outbox = chatState.outbox,
-                            attachment = chatState.attachment,
-                            currentUserId = session.userId,
-                            busy = chatState.busy,
-                            language = appState.language,
-                            openAttachmentEvents = chatViewModel.openAttachment,
-                            onBack = { chatViewModel.select(null) },
-                            onLoadOlder = chatViewModel::loadOlder,
-                            onSend = chatViewModel::send,
-                            onChooseAttachment = chatViewModel::chooseAttachment,
-                            onClearAttachment = chatViewModel::clearAttachment,
-                            onRetry = chatViewModel::retry,
-                            onCancel = chatViewModel::cancel,
-                            onDeleteMessage = chatViewModel::deleteMessage,
-                            onOpenAttachment = chatViewModel::openAttachment,
-                            onManageGroup = { showGroup = true },
-                        )
-                    }
-                }
-            } else if (chatState.selectedRoom == null) {
-                ConversationPane(
-                    server.siteName,
-                    chatState.conversations,
-                    chatState.users,
-                    null,
-                    appState.language,
-                    chatViewModel::select,
-                    chatViewModel::join,
-                    chatViewModel::openDm,
-                    chatViewModel::createGroup,
-                    { showSettings = true },
-                )
-            } else {
-                ChatPane(
-                    room = chatState.selectedRoom,
-                    conversation = selectedConversation,
-                    messages = chatState.messages,
-                    outbox = chatState.outbox,
-                    attachment = chatState.attachment,
-                    currentUserId = session.userId,
-                    busy = chatState.busy,
+        appState.server == null -> {
+            ServerSetupScreen(appState.loading, preset, appState.language, appViewModel::connect)
+        }
+        appState.session == null -> {
+            LoginScreen(
+                server = requireNotNull(appState.server),
+                loading = appState.loading,
+                language = appState.language,
+                onLogin = appViewModel::login,
+                onChangeServer = appViewModel::disconnect,
+            )
+        }
+        else -> {
+            val session = requireNotNull(appState.session)
+            val server = requireNotNull(appState.server)
+            val selectedConversation = chatState.selectedRoom?.let { room ->
+                chatState.conversations.firstOrNull { it.kind == room.kind && it.id == room.id }
+            }
+
+            AuthenticatedShell(
+                server = server,
+                session = session,
+                chatState = chatState,
+                selectedConversation = selectedConversation,
+                language = appState.language,
+                chatViewModel = chatViewModel,
+                onSettings = { showSettings = true },
+                onManageGroup = { showGroup = true },
+            )
+
+            if (showSettings) {
+                SettingsSheet(
+                    session = session,
                     language = appState.language,
-                    openAttachmentEvents = chatViewModel.openAttachment,
-                    onBack = { chatViewModel.select(null) },
-                    onLoadOlder = chatViewModel::loadOlder,
-                    onSend = chatViewModel::send,
-                    onChooseAttachment = chatViewModel::chooseAttachment,
-                    onClearAttachment = chatViewModel::clearAttachment,
-                    onRetry = chatViewModel::retry,
-                    onCancel = chatViewModel::cancel,
-                    onDeleteMessage = chatViewModel::deleteMessage,
-                    onOpenAttachment = chatViewModel::openAttachment,
-                    onManageGroup = { showGroup = true },
+                    onDismiss = { showSettings = false },
+                    onUpdateProfile = appViewModel::updateProfile,
+                    onUpdateAvatar = appViewModel::updateAvatar,
+                    onChangePassword = appViewModel::changePassword,
+                    onLanguage = appViewModel::setLanguage,
+                    onClearCache = appViewModel::clearCache,
+                    diagnosticUri = appViewModel::diagnosticUri,
+                    onLogout = { showSettings = false; appViewModel.logout() },
                 )
             }
-        }
-
-        if (showSettings) {
-            SettingsSheet(
-                session = session,
-                language = appState.language,
-                onDismiss = { showSettings = false },
-                onUpdateProfile = appViewModel::updateProfile,
-                onUpdateAvatar = appViewModel::updateAvatar,
-                onChangePassword = appViewModel::changePassword,
-                onLanguage = appViewModel::setLanguage,
-                onClearCache = appViewModel::clearCache,
-                diagnosticUri = appViewModel::diagnosticUri,
-                onLogout = { showSettings = false; appViewModel.logout() },
-            )
-        }
-        if (showGroup && selectedConversation != null) {
-            GroupManagementDialog(
-                conversation = selectedConversation,
-                members = chatState.members,
-                users = chatState.users,
-                language = appState.language,
-                onLoad = { chatViewModel.loadMembers(selectedConversation.id) },
-                onRename = { chatViewModel.renameGroup(selectedConversation.id, it) },
-                onInvite = { chatViewModel.invite(selectedConversation.id, it) },
-                onRemove = { chatViewModel.removeMember(selectedConversation.id, it) },
-                onDelete = { showGroup = false; chatViewModel.deleteGroup(selectedConversation.id) },
-                onDismiss = { showGroup = false },
-            )
+            if (showGroup && selectedConversation != null) {
+                GroupManagementDialog(
+                    conversation = selectedConversation,
+                    members = chatState.members,
+                    users = chatState.users,
+                    language = appState.language,
+                    onLoad = { chatViewModel.loadMembers(selectedConversation.id) },
+                    onRename = { chatViewModel.renameGroup(selectedConversation.id, it) },
+                    onInvite = { chatViewModel.invite(selectedConversation.id, it) },
+                    onRemove = { chatViewModel.removeMember(selectedConversation.id, it) },
+                    onDelete = { showGroup = false; chatViewModel.deleteGroup(selectedConversation.id) },
+                    onDismiss = { showGroup = false },
+                )
+            }
         }
     }
 
@@ -187,4 +140,152 @@ fun EdgeChatApp(
             },
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AuthenticatedShell(
+    server: ServerProfile,
+    session: SessionDto,
+    chatState: ChatUiState,
+    selectedConversation: ConversationEntity?,
+    language: String,
+    chatViewModel: ChatViewModel,
+    onSettings: () -> Unit,
+    onManageGroup: () -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val expanded = maxWidth >= 840.dp
+        if (expanded) {
+            Row(Modifier.fillMaxSize()) {
+                Box(Modifier.width(336.dp)) {
+                    ConversationContent(
+                        server,
+                        session,
+                        chatState,
+                        language,
+                        chatViewModel,
+                        onSettings,
+                    )
+                }
+                VerticalDivider()
+                Box(Modifier.weight(1f)) {
+                    ChatContent(
+                        server = server,
+                        session = session,
+                        chatState = chatState,
+                        selectedConversation = selectedConversation,
+                        language = language,
+                        chatViewModel = chatViewModel,
+                        onOpenNavigation = null,
+                        onBack = null,
+                        onManageGroup = onManageGroup,
+                    )
+                }
+            }
+        } else if (chatState.selectedRoom == null) {
+            ConversationContent(server, session, chatState, language, chatViewModel, onSettings)
+        } else {
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet(Modifier.widthIn(max = 336.dp).fillMaxWidth()) {
+                        ConversationContent(
+                            server = server,
+                            session = session,
+                            chatState = chatState,
+                            language = language,
+                            chatViewModel = chatViewModel,
+                            onSettings = {
+                                scope.launch { drawerState.close() }
+                                onSettings()
+                            },
+                            onSelect = { room ->
+                                scope.launch { drawerState.close() }
+                                chatViewModel.select(room)
+                            },
+                        )
+                    }
+                },
+            ) {
+                ChatContent(
+                    server = server,
+                    session = session,
+                    chatState = chatState,
+                    selectedConversation = selectedConversation,
+                    language = language,
+                    chatViewModel = chatViewModel,
+                    onOpenNavigation = { scope.launch { drawerState.open() } },
+                    onBack = { chatViewModel.select(null) },
+                    onManageGroup = onManageGroup,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationContent(
+    server: ServerProfile,
+    session: SessionDto,
+    chatState: ChatUiState,
+    language: String,
+    chatViewModel: ChatViewModel,
+    onSettings: () -> Unit,
+    onSelect: (RoomIdentity) -> Unit = chatViewModel::select,
+) {
+    ConversationPane(
+        siteName = server.siteName,
+        siteIconUrl = server.siteIconUrl,
+        serverBaseUrl = server.baseUrl,
+        currentUser = session,
+        conversations = chatState.conversations,
+        users = chatState.users,
+        selected = chatState.selectedRoom,
+        language = language,
+        onSelect = onSelect,
+        onJoin = chatViewModel::join,
+        onOpenDm = chatViewModel::openDm,
+        onCreateGroup = chatViewModel::createGroup,
+        onSettings = onSettings,
+    )
+}
+
+@Composable
+private fun ChatContent(
+    server: ServerProfile,
+    session: SessionDto,
+    chatState: ChatUiState,
+    selectedConversation: ConversationEntity?,
+    language: String,
+    chatViewModel: ChatViewModel,
+    onOpenNavigation: (() -> Unit)?,
+    onBack: (() -> Unit)?,
+    onManageGroup: () -> Unit,
+) {
+    ChatPane(
+        room = chatState.selectedRoom,
+        conversation = selectedConversation,
+        messages = chatState.messages,
+        outbox = chatState.outbox,
+        attachment = chatState.attachment,
+        currentUser = session,
+        serverBaseUrl = server.baseUrl,
+        busy = chatState.busy,
+        language = language,
+        openAttachmentEvents = chatViewModel.openAttachment,
+        onOpenNavigation = onOpenNavigation,
+        onBack = onBack,
+        onLoadOlder = chatViewModel::loadOlder,
+        onSend = chatViewModel::send,
+        onChooseAttachment = chatViewModel::chooseAttachment,
+        onClearAttachment = chatViewModel::clearAttachment,
+        onRetry = chatViewModel::retry,
+        onCancel = chatViewModel::cancel,
+        onDeleteMessage = chatViewModel::deleteMessage,
+        onOpenAttachment = chatViewModel::openAttachment,
+        onManageGroup = onManageGroup,
+    )
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -58,13 +59,13 @@ fun GroupManagementDialog(
                     Text(if (language == "zh-CN") "保存名称" else "Save name")
                 }
                 Text(if (language == "zh-CN") "成员" else "Members", modifier = Modifier.padding(top = 16.dp))
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
                     items(members, key = { it.id }) { member ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(member.displayName, modifier = Modifier.weight(1f))
                             Text(member.role)
                             if (member.role != "owner") IconButton(onClick = { onRemove(member.id) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = null)
+                                Icon(Icons.Outlined.Delete, contentDescription = if (language == "zh-CN") "移除成员" else "Remove member")
                             }
                         }
                     }
@@ -82,13 +83,13 @@ fun GroupManagementDialog(
                 }
                 if (selectedUsers.isNotEmpty()) {
                     Button(onClick = { onInvite(selectedUsers.toList()); selectedUsers = emptySet() }) {
-                        Icon(Icons.Outlined.PersonAdd, contentDescription = null)
+                        Icon(Icons.Outlined.PersonAdd, contentDescription = if (language == "zh-CN") "邀请成员" else "Invite members")
                         Text(if (language == "zh-CN") "邀请所选用户" else "Invite selected")
                     }
                 }
                 if (!conversation.isGeneral) {
                     OutlinedButton(onClick = onDelete, modifier = Modifier.padding(top = 12.dp)) {
-                        Icon(Icons.Outlined.Delete, contentDescription = null)
+                        Icon(Icons.Outlined.Delete, contentDescription = if (language == "zh-CN") "删除群组" else "Delete group")
                         Text(if (language == "zh-CN") "删除群组" else "Delete group")
                     }
                 }

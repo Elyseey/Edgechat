@@ -44,9 +44,9 @@ jobs:
           java-version: "17"
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Test, lint and build debug APK
+      - name: Test, lint and build debug APKs
         working-directory: android
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug --stacktrace
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

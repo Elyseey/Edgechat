@@ -1,0 +1,41 @@
+package com.aozorae.edgechat.feature.chat
+
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import com.aozorae.edgechat.ui.theme.EdgeChatTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+
+class MessageComposerTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun sendEnablesForTextAndClearsAfterSending() {
+        var sent = ""
+        compose.setContent {
+            EdgeChatTheme {
+                MessageComposer(
+                    roomKey = "public:1",
+                    roomTitle = "general",
+                    attachment = null,
+                    language = "en-US",
+                    onChooseAttachment = {},
+                    onClearAttachment = {},
+                    onSend = { sent = it },
+                )
+            }
+        }
+
+        compose.onNodeWithTag("send_message").assertIsNotEnabled()
+        compose.onNodeWithTag("message_input").performTextInput("Hello")
+        compose.onNodeWithTag("send_message").assertIsEnabled().performClick()
+        compose.onNodeWithTag("message_input").assertTextEquals("")
+        assertEquals("Hello", sent)
+    }
+}

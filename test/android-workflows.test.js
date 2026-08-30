@@ -11,6 +11,7 @@ const demo = read("../.github/workflows/deploy-demo.yml");
 test("Android CI validates the wrapper and builds a tested debug APK", () => {
 	assert.match(ci, /gradle\/actions\/wrapper-validation@v4/);
 	assert.match(ci, /testDebugUnitTest lintDebug assembleDebug/);
+	assert.match(ci, /assembleDebugAndroidTest/);
 	assert.match(ci, /android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
 	assert.match(ci, /docs\/api\/\*\*/);
 });
@@ -24,6 +25,7 @@ test("Android release requires secret signing and publishes APK, AAB and SHA-256
 	]) {
 		assert.match(release, new RegExp(`secrets\\.${secret}`));
 	}
+	assert.match(release, /assembleDebugAndroidTest/);
 	assert.match(release, /assembleRelease bundleRelease/);
 	assert.match(release, /sha256sum \*\.apk \*\.aab > SHA256SUMS\.txt/);
 	assert.match(release, /gh release create/);

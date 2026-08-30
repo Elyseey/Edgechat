@@ -71,7 +71,7 @@ jobs:
       - name: Test, lint and build signed artifacts
         working-directory: android
         run: >-
-          ./gradlew testDebugUnitTest lintRelease assembleRelease bundleRelease
+          ./gradlew testDebugUnitTest assembleDebugAndroidTest lintRelease assembleRelease bundleRelease
           -PedgechatVersionName=${{ steps.version.outputs.version }}
           -PedgechatVersionCode=${{ github.run_number }}
           --stacktrace

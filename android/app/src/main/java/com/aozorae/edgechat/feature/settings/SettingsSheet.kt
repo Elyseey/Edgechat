@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Cached
@@ -56,13 +58,16 @@ fun SettingsSheet(
         uri?.let { onUpdateAvatar(displayName, it) }
     }
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(if (language == "zh-CN") "设置" else "Settings", style = MaterialTheme.typography.headlineSmall)
             OutlinedTextField(displayName, { displayName = it }, modifier = Modifier.fillMaxWidth(), label = { Text(if (language == "zh-CN") "显示名称" else "Display name") })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onUpdateProfile(displayName) }) { Text(if (language == "zh-CN") "保存资料" else "Save profile") }
                 OutlinedButton(onClick = { avatarPicker.launch("image/*") }) {
-                    androidx.compose.material3.Icon(Icons.Outlined.Image, contentDescription = null)
+                    androidx.compose.material3.Icon(Icons.Outlined.Image, contentDescription = if (language == "zh-CN") "更换头像" else "Change avatar")
                     Text(if (language == "zh-CN") "更换头像" else "Change avatar")
                 }
             }
@@ -80,7 +85,7 @@ fun SettingsSheet(
                 else OutlinedButton(onClick = { onLanguage("en-US") }) { Text("English") }
             }
             OutlinedButton(onClick = onClearCache, modifier = Modifier.fillMaxWidth()) {
-                androidx.compose.material3.Icon(Icons.Outlined.Cached, contentDescription = null)
+                androidx.compose.material3.Icon(Icons.Outlined.Cached, contentDescription = if (language == "zh-CN") "清理缓存" else "Clear cache")
                 Text(if (language == "zh-CN") "清理并重新同步本地缓存" else "Clear and resync local cache")
             }
             OutlinedButton(
@@ -93,11 +98,11 @@ fun SettingsSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                androidx.compose.material3.Icon(Icons.Outlined.Share, contentDescription = null)
+                androidx.compose.material3.Icon(Icons.Outlined.Share, contentDescription = if (language == "zh-CN") "导出诊断日志" else "Export diagnostics")
                 Text(if (language == "zh-CN") "导出诊断日志" else "Export diagnostics")
             }
             OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
-                androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
+                androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = if (language == "zh-CN") "注销" else "Sign out")
                 Text(if (language == "zh-CN") "注销并清理缓存" else "Sign out and clear cache")
             }
             Spacer(Modifier.height(24.dp))
