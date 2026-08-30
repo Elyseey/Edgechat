@@ -4,25 +4,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +24,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aozorae.edgechat.core.database.ConversationEntity
 import com.aozorae.edgechat.core.network.dto.SessionDto
-import com.aozorae.edgechat.core.repository.RoomIdentity
 import com.aozorae.edgechat.core.session.ServerProfile
 import com.aozorae.edgechat.feature.app.AppViewModel
 import com.aozorae.edgechat.feature.auth.LoginScreen
@@ -43,7 +35,6 @@ import com.aozorae.edgechat.feature.chat.GroupManagementDialog
 import com.aozorae.edgechat.feature.conversations.ConversationPane
 import com.aozorae.edgechat.feature.settings.SettingsSheet
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,7 +168,6 @@ private fun AuthenticatedShell(
                         selectedConversation = selectedConversation,
                         language = language,
                         chatViewModel = chatViewModel,
-                        onOpenNavigation = null,
                         onBack = null,
                         onManageGroup = onManageGroup,
                     )
@@ -186,42 +176,16 @@ private fun AuthenticatedShell(
         } else if (chatState.selectedRoom == null) {
             ConversationContent(server, session, chatState, language, chatViewModel, onSettings)
         } else {
-            val drawerState = rememberDrawerState(DrawerValue.Closed)
-            val scope = rememberCoroutineScope()
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = {
-                    ModalDrawerSheet(Modifier.widthIn(max = 336.dp).fillMaxWidth()) {
-                        ConversationContent(
-                            server = server,
-                            session = session,
-                            chatState = chatState,
-                            language = language,
-                            chatViewModel = chatViewModel,
-                            onSettings = {
-                                scope.launch { drawerState.close() }
-                                onSettings()
-                            },
-                            onSelect = { room ->
-                                scope.launch { drawerState.close() }
-                                chatViewModel.select(room)
-                            },
-                        )
-                    }
-                },
-            ) {
-                ChatContent(
-                    server = server,
-                    session = session,
-                    chatState = chatState,
-                    selectedConversation = selectedConversation,
-                    language = language,
-                    chatViewModel = chatViewModel,
-                    onOpenNavigation = { scope.launch { drawerState.open() } },
-                    onBack = { chatViewModel.select(null) },
-                    onManageGroup = onManageGroup,
-                )
-            }
+            ChatContent(
+                server = server,
+                session = session,
+                chatState = chatState,
+                selectedConversation = selectedConversation,
+                language = language,
+                chatViewModel = chatViewModel,
+                onBack = { chatViewModel.select(null) },
+                onManageGroup = onManageGroup,
+            )
         }
     }
 }
@@ -234,7 +198,6 @@ private fun ConversationContent(
     language: String,
     chatViewModel: ChatViewModel,
     onSettings: () -> Unit,
-    onSelect: (RoomIdentity) -> Unit = chatViewModel::select,
 ) {
     ConversationPane(
         siteName = server.siteName,
@@ -245,7 +208,7 @@ private fun ConversationContent(
         users = chatState.users,
         selected = chatState.selectedRoom,
         language = language,
-        onSelect = onSelect,
+        onSelect = chatViewModel::select,
         onJoin = chatViewModel::join,
         onOpenDm = chatViewModel::openDm,
         onCreateGroup = chatViewModel::createGroup,
@@ -261,7 +224,6 @@ private fun ChatContent(
     selectedConversation: ConversationEntity?,
     language: String,
     chatViewModel: ChatViewModel,
-    onOpenNavigation: (() -> Unit)?,
     onBack: (() -> Unit)?,
     onManageGroup: () -> Unit,
 ) {
@@ -276,7 +238,6 @@ private fun ChatContent(
         busy = chatState.busy,
         language = language,
         openAttachmentEvents = chatViewModel.openAttachment,
-        onOpenNavigation = onOpenNavigation,
         onBack = onBack,
         onLoadOlder = chatViewModel::loadOlder,
         onSend = chatViewModel::send,

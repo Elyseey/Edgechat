@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.aozorae.edgechat.ui.theme.EdgeChatTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -37,5 +38,29 @@ class MessageComposerTest {
         compose.onNodeWithTag("send_message").assertIsEnabled().performClick()
         compose.onNodeWithTag("message_input").assertTextEquals("")
         assertEquals("Hello", sent)
+    }
+
+    @Test
+    fun inputGrowsForMultipleLines() {
+        compose.setContent {
+            EdgeChatTheme {
+                MessageComposer(
+                    roomKey = "public:1",
+                    roomTitle = "general",
+                    attachment = null,
+                    language = "en-US",
+                    onChooseAttachment = {},
+                    onClearAttachment = {},
+                    onSend = {},
+                )
+            }
+        }
+
+        val input = compose.onNodeWithTag("message_input")
+        val initialHeight = input.fetchSemanticsNode().boundsInRoot.height
+        input.performTextInput("One\nTwo\nThree\nFour")
+        compose.waitForIdle()
+
+        assertTrue(input.fetchSemanticsNode().boundsInRoot.height > initialHeight)
     }
 }

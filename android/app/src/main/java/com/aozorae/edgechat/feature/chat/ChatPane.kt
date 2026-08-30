@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,7 +59,6 @@ fun ChatPane(
     busy: Boolean,
     language: String,
     openAttachmentEvents: SharedFlow<Pair<android.net.Uri, String>>,
-    onOpenNavigation: (() -> Unit)?,
     onBack: (() -> Unit)?,
     onLoadOlder: () -> Unit,
     onSend: (String) -> Unit,
@@ -96,6 +97,7 @@ fun ChatPane(
     }
 
     LaunchedEffect(room) { scrollState.scrollToItem(0) }
+    val bottomInsets = WindowInsets.navigationBars.union(WindowInsets.ime)
 
     Scaffold(
         topBar = {
@@ -123,9 +125,12 @@ fun ChatPane(
                     }
                 },
                 navigationIcon = {
-                    if (onOpenNavigation != null) {
-                        IconButton(onClick = onOpenNavigation) {
-                            Icon(Icons.Outlined.Menu, contentDescription = if (language == "zh-CN") "打开会话列表" else "Open conversations")
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = if (language == "zh-CN") "返回会话列表" else "Back to conversations",
+                            )
                         }
                     }
                 },
@@ -140,10 +145,15 @@ fun ChatPane(
             )
         },
         contentWindowInsets = ScaffoldDefaults.contentWindowInsets
-            .exclude(WindowInsets.navigationBars)
-            .exclude(WindowInsets.ime),
+            .exclude(bottomInsets),
     ) { paddingValues ->
-        Column(Modifier.fillMaxSize().padding(paddingValues)) {
+        // Edge-to-edge 下不能只依赖 adjustResize；取键盘与导航栏的较大底边，既避免遮挡，也避免两段高度相加形成空洞。
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .windowInsetsPadding(bottomInsets),
+        ) {
             ChatMessages(
                 messages = messages,
                 outbox = outbox,
