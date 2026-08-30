@@ -63,7 +63,18 @@ import com.aozorae.edgechat.ui.formatMessageTime
 import com.aozorae.edgechat.ui.messageDate
 import kotlinx.coroutines.launch
 
-private val ChatBubbleShape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
+private val IncomingChatBubbleShape = RoundedCornerShape(
+    topStart = 4.dp,
+    topEnd = 20.dp,
+    bottomEnd = 20.dp,
+    bottomStart = 20.dp,
+)
+private val OwnChatBubbleShape = RoundedCornerShape(
+    topStart = 20.dp,
+    topEnd = 4.dp,
+    bottomEnd = 20.dp,
+    bottomStart = 20.dp,
+)
 
 @Composable
 fun ChatMessages(
@@ -100,8 +111,6 @@ fun ChatMessages(
                 item(key = "pending:${pending.clientMessageId}") {
                     PendingMessageItem(
                         item = pending,
-                        currentUser = currentUser,
-                        serverBaseUrl = serverBaseUrl,
                         language = language,
                         onRetry = onRetry,
                         onCancel = onCancel,
@@ -190,22 +199,30 @@ private fun MessageItem(
         modifier = Modifier.fillMaxWidth().padding(top = if (showAuthor) 8.dp else 0.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        if (showAuthor) {
-            EdgeAvatar(
-                imageUrl = resolveServerUrl(serverBaseUrl, message.senderAvatarUrl),
-                displayName = message.senderDisplayName,
-                modifier = Modifier.padding(horizontal = 4.dp).size(42.dp),
-                borderColor = if (own) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
-            )
-        } else {
-            Spacer(Modifier.width(50.dp))
+        if (!own) {
+            if (showAuthor) {
+                EdgeAvatar(
+                    imageUrl = resolveServerUrl(serverBaseUrl, message.senderAvatarUrl),
+                    displayName = message.senderDisplayName,
+                    modifier = Modifier.padding(horizontal = 4.dp).size(42.dp),
+                    borderColor = MaterialTheme.colorScheme.tertiary,
+                )
+            } else {
+                Spacer(Modifier.width(50.dp))
+            }
         }
-        Column(Modifier.weight(1f).padding(end = 4.dp)) {
+        Column(
+            modifier = Modifier.weight(1f).padding(start = if (own) 50.dp else 0.dp, end = 4.dp),
+            horizontalAlignment = if (own) Alignment.End else Alignment.Start,
+        ) {
             if (showAuthor) {
                 AuthorAndTimestamp(message, own, language)
             }
-            Row(verticalAlignment = Alignment.Top) {
-                MessageBubble(message, own, language, onOpenAttachment)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (own) Arrangement.End else Arrangement.Start,
+                verticalAlignment = Alignment.Top,
+            ) {
                 if (own) {
                     IconButton(
                         onClick = { onDelete(message.id) },
@@ -218,6 +235,13 @@ private fun MessageItem(
                         )
                     }
                 }
+                MessageBubble(
+                    message = message,
+                    own = own,
+                    language = language,
+                    onOpenAttachment = onOpenAttachment,
+                    modifier = Modifier.testTag("message_bubble:${message.id}"),
+                )
             }
             Spacer(Modifier.height(if (endsAuthorGroup) 8.dp else 4.dp))
         }
@@ -227,7 +251,9 @@ private fun MessageItem(
 @Composable
 private fun AuthorAndTimestamp(message: MessageEntity, own: Boolean, language: String) {
     Row(
-        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp).semantics(mergeDescendants = true) {},
+        modifier = Modifier
+            .padding(start = if (own) 0.dp else 4.dp, end = if (own) 4.dp else 0.dp, bottom = 6.dp)
+            .semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -263,11 +289,17 @@ private fun MessageBubble(
     own: Boolean,
     language: String,
     onOpenAttachment: (String, String, String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val bubbleColor = if (own) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val contentColor = if (own) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
 
-    Surface(color = bubbleColor, contentColor = contentColor, shape = ChatBubbleShape) {
+    Surface(
+        modifier = modifier,
+        color = bubbleColor,
+        contentColor = contentColor,
+        shape = if (own) OwnChatBubbleShape else IncomingChatBubbleShape,
+    ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             if (message.content.isNotBlank()) {
                 Text(message.content, style = MaterialTheme.typography.bodyLarge)
@@ -324,28 +356,39 @@ private fun AttachmentTile(name: String, type: String, own: Boolean, language: S
 @Composable
 private fun PendingMessageItem(
     item: OutboxEntity,
-    currentUser: SessionDto,
-    serverBaseUrl: String,
     language: String,
     onRetry: (String) -> Unit,
     onCancel: (String) -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
-        EdgeAvatar(
-            imageUrl = resolveServerUrl(serverBaseUrl, currentUser.avatarUrl),
-            displayName = currentUser.displayName,
-            modifier = Modifier.padding(horizontal = 4.dp).size(42.dp),
-            borderColor = MaterialTheme.colorScheme.primary,
-        )
-        Column(Modifier.weight(1f).padding(end = 4.dp)) {
+        Column(
+            modifier = Modifier.weight(1f).padding(start = 50.dp, end = 4.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
             Text(
                 text = if (language == "zh-CN") "我" else "You",
-                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                modifier = Modifier.padding(end = 4.dp, bottom = 6.dp),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
-            Row(verticalAlignment = Alignment.Top) {
-                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = ChatBubbleShape) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.Top,
+            ) {
+                if (item.state == "RETRY") {
+                    IconButton(onClick = { onRetry(item.clientMessageId) }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = if (language == "zh-CN") "重试发送" else "Retry sending")
+                    }
+                }
+                IconButton(onClick = { onCancel(item.clientMessageId) }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Outlined.Close, contentDescription = if (language == "zh-CN") "取消发送" else "Cancel sending")
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = OwnChatBubbleShape,
+                    modifier = Modifier.testTag("pending_message_bubble:${item.clientMessageId}"),
+                ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         if (item.content.isNotBlank()) Text(item.content, style = MaterialTheme.typography.bodyLarge)
                         item.attachmentName?.let {
@@ -364,14 +407,6 @@ private fun PendingMessageItem(
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
-                }
-                if (item.state == "RETRY") {
-                    IconButton(onClick = { onRetry(item.clientMessageId) }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = if (language == "zh-CN") "重试发送" else "Retry sending")
-                    }
-                }
-                IconButton(onClick = { onCancel(item.clientMessageId) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Close, contentDescription = if (language == "zh-CN") "取消发送" else "Cancel sending")
                 }
             }
             Spacer(Modifier.height(8.dp))
