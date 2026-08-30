@@ -11,6 +11,7 @@ import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageComposer from '../components/chat/MessageComposer.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
+import PinnedMessageBar from '../components/chat/PinnedMessageBar.vue';
 import MobileNavigationDrawer from '../components/chat/MobileNavigationDrawer.vue';
 import SenderSourceBadge from '../components/chat/SenderSourceBadge.vue';
 import PublicGroupDiscovery from '../components/chat/PublicGroupDiscovery.vue';
@@ -105,9 +106,10 @@ function handleRoomAccessRevoked(room) {
 }
 
 const {
-  messages, loading, wsStatus, composerText, pendingAttachment, sending,
+  messages, pinnedMessage, highlightedMessageId, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, isOwnMessage,
   loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, deleteMessage,
+  pinMessage, unpinMessage, revealPinnedMessage,
   uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
@@ -129,6 +131,9 @@ const activeRoomSubtitle = computed(() => roomSubtitle(activeRoom.value, wsConne
 const canModerateMessages = computed(
   () => Boolean(session.value?.isAdmin || canManageActiveRoom.value)
 );
+const canPinMessages = computed(
+  () => Boolean(activeRoom.value?.kind !== 'dm' && (session.value?.isAdmin || canManageActiveRoom.value))
+);
 const {
   messageMenu,
   closeMessageMenu,
@@ -137,6 +142,9 @@ const {
   startMessageLongPress,
   trackMessageLongPress
 } = useMessageContextMenu({ canModerateMessages });
+const selectedMessageIsPinned = computed(
+  () => Number(messageMenu.value.message?.id) === Number(pinnedMessage.value?.id)
+);
 
 const roomManagement = useRoomManagement({
   activeRoom, channels, users, error, refreshSidebar, refreshAndOpen, canManageActiveRoom,
@@ -144,6 +152,7 @@ const roomManagement = useRoomManagement({
   onRoomDeleted: () => {
     disconnectSocket();
     messages.value = [];
+    pinnedMessage.value = null;
   }
 });
 const { creation, members: memberManagement, settings: groupSettings, deleteGroup } = roomManagement;
@@ -291,6 +300,18 @@ function confirmDeleteMessage() {
     return;
   }
   deleteMessage(message.id);
+}
+
+function pinSelectedMessage() {
+  const message = messageMenu.value.message;
+  closeMessageMenu();
+  if (message) pinMessage(message.id);
+}
+
+function unpinSelectedMessage() {
+  const message = messageMenu.value.message;
+  closeMessageMenu();
+  if (message) unpinMessage(message.id);
 }
 
 onMounted(() => {
@@ -496,6 +517,14 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
+        <PinnedMessageBar
+          v-if="pinnedMessage && activeRoom.kind !== 'dm'"
+          :message="pinnedMessage"
+          :can-unpin="canPinMessages"
+          @reveal="revealPinnedMessage"
+          @unpin="unpinMessage(pinnedMessage.id)"
+        />
+
         <section ref="messagesEl" class="chat-messages">
           <button v-if="messages.length" type="button" class="load-more-btn" @click="loadOlder">{{ t('chat.loadEarlier') }}</button>
           <div v-if="loading" class="messages-hint">{{ t('chat.loadingMessages') }}</div>
@@ -503,6 +532,7 @@ onBeforeUnmount(() => {
 
           <article
             v-for="msg in messages" :key="msg.id"
+            :data-message-id="msg.id"
             class="message-row"
             :class="{
               'message-row--own': isOwnMessage(msg),
@@ -519,7 +549,10 @@ onBeforeUnmount(() => {
             />
             <div
               class="message-bubble"
-              :class="{ 'message-bubble--with-attachment': msg.attachment }"
+              :class="{
+                'message-bubble--with-attachment': msg.attachment,
+                'message-bubble--highlighted': Number(highlightedMessageId) === Number(msg.id)
+              }"
               @contextmenu="openMessageContextMenu($event, msg)"
               @pointerdown="startMessageLongPress($event, msg)"
               @pointermove="trackMessageLongPress"
@@ -541,7 +574,11 @@ onBeforeUnmount(() => {
           :open="Boolean(messageMenu.message)"
           :x="messageMenu.x"
           :y="messageMenu.y"
+          :can-pin="canPinMessages"
+          :pinned="selectedMessageIsPinned"
           @close="closeMessageMenu"
+          @pin="pinSelectedMessage"
+          @unpin="unpinSelectedMessage"
           @delete="confirmDeleteMessage"
         />
 
@@ -1037,6 +1074,12 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.message-bubble--highlighted {
+  outline: 3px solid rgba(0, 128, 105, 0.3);
+  outline-offset: 3px;
+  transition: outline-color 180ms ease;
+}
+
 .message-avatar {
   width: 34px;
   height: 34px;
@@ -1345,7 +1388,8 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .header-action,
-  .chat-header__button {
+  .chat-header__button,
+  .message-bubble--highlighted {
     transition: none;
   }
 }

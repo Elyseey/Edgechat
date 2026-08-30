@@ -4,6 +4,11 @@ import {
   submitRoomMessageIdempotent
 } from '../message-submission.js';
 import { deleteRoomMessage, MessageDeletionError } from '../message-deletion.js';
+import {
+  MessagePinningError,
+  pinRoomMessage,
+  unpinRoomMessage
+} from '../message-pinning.js';
 import { submitExternalMessage } from '../external-message-submission.js';
 import { forwardEdgeChatMessageToTelegram } from '../integrations/telegram/bridge.js';
 import { authorizeRoom } from '../room-access.js';
@@ -214,12 +219,26 @@ export class ChannelRoom {
         await this.broadcast(result.packet);
         return Response.json({ ok: true, messageId: result.messageId });
       }
+      if (action?.type === 'pin_message') {
+        const result = await pinRoomMessage(this.env, meta, action);
+        await this.broadcast(result.packet);
+        return Response.json({ ok: true, message: result.message });
+      }
+      if (action?.type === 'unpin_message') {
+        const result = await unpinRoomMessage(this.env, meta, action);
+        await this.broadcast(result.packet);
+        return Response.json({ ok: true, messageId: result.messageId });
+      }
       return Response.json(
         { error: { code: 'invalid_request', message: '不支持的消息操作' } },
         { status: 400 }
       );
     } catch (error) {
-      if (error instanceof MessageSubmissionError || error instanceof MessageDeletionError) {
+      if (
+        error instanceof MessageSubmissionError ||
+        error instanceof MessageDeletionError ||
+        error instanceof MessagePinningError
+      ) {
         return Response.json(
           { error: { code: error.code || 'invalid_request', message: error.message } },
           { status: error.status || 400 }
@@ -313,7 +332,7 @@ export class ChannelRoom {
       return;
     }
 
-    if (!['send', 'delete_message'].includes(payload.type)) {
+    if (!['send', 'delete_message', 'pin_message', 'unpin_message'].includes(payload.type)) {
       sendSocketError(ws, 'Unsupported message type');
       return;
     }
@@ -329,6 +348,16 @@ export class ChannelRoom {
         await this.broadcast(packet);
         return;
       }
+      if (payload.type === 'pin_message') {
+        const { packet } = await pinRoomMessage(this.env, currentMeta, payload);
+        await this.broadcast(packet);
+        return;
+      }
+      if (payload.type === 'unpin_message') {
+        const { packet } = await unpinRoomMessage(this.env, currentMeta, payload);
+        await this.broadcast(packet);
+        return;
+      }
 
       const { message: saved, packet } = await submitRoomMessage(
         this.env,
@@ -339,7 +368,11 @@ export class ChannelRoom {
       // 未读与外部桥接都属于提交后投影，异步执行以缩短 WebSocket 发送链路。
       this.runMessageProjections(currentMeta.room, saved);
     } catch (error) {
-      if (error instanceof MessageSubmissionError || error instanceof MessageDeletionError) {
+      if (
+        error instanceof MessageSubmissionError ||
+        error instanceof MessageDeletionError ||
+        error instanceof MessagePinningError
+      ) {
         sendSocketError(ws, error.message);
         return;
       }

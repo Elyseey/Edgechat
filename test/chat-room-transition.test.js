@@ -16,11 +16,14 @@ function createSocket(params, handlers) {
 	return {
 		params,
 		handlers,
+		sentFrames: [],
 		readyState: 1,
 		close() {
 			this.readyState = 3;
 		},
-		send() {},
+		send(frame) {
+			this.sentFrames.push(JSON.parse(frame));
+		},
 		emitMessage(message) {
 			handlers.onMessage(JSON.stringify(message), this);
 		},
@@ -66,4 +69,52 @@ test("快速切换房间时丢弃旧历史响应和旧连接消息", async () =>
 	assert.equal(await firstActivation, false);
 	assert.equal(await secondActivation, true);
 	assert.deepEqual(room.messages.value, [{ id: 2, content: "current history" }]);
+});
+
+test("房间置顶状态从历史与实时事件同步，并发送管理动作", async () => {
+	const activeRoom = ref({ id: 2, kind: "private" });
+	const sockets = [];
+	const room = useChatRoom({
+		activeRoom,
+		session: ref({ userId: 7 }),
+		error: ref(""),
+		roomApi: {
+			async getMessages() {
+				return {
+					messages: [{ id: 10, sender: { id: 7, kind: "local" } }],
+					pinnedMessage: { id: 10, sender: { id: 7, kind: "local" } },
+				};
+			},
+			async markRoomRead() {},
+		},
+		openRoomConnection(params) {
+			const handlers = { onStatus: params.onStatus, onMessage: params.onMessage };
+			const socket = createSocket(params, handlers);
+			sockets.push(socket);
+			handlers.onStatus({ status: "open", socket });
+			return socket;
+		},
+	});
+
+	assert.equal(await room.activateRoom(), true);
+	assert.equal(room.pinnedMessage.value.id, 10);
+	assert.equal(room.pinMessage(10), true);
+	assert.deepEqual(sockets[0].sentFrames.at(-1), { type: "pin_message", messageId: 10 });
+
+	sockets[0].emitMessage({
+		type: "message_pinned",
+		message: { id: 11, sender: { id: 7, kind: "local" } },
+	});
+	assert.equal(room.pinnedMessage.value.id, 11);
+	assert.equal(room.unpinMessage(11), true);
+	assert.deepEqual(sockets[0].sentFrames.at(-1), { type: "unpin_message", messageId: 11 });
+
+	sockets[0].emitMessage({ type: "message_unpinned", messageId: 11 });
+	assert.equal(room.pinnedMessage.value, null);
+	sockets[0].emitMessage({
+		type: "message_pinned",
+		message: { id: 10, sender: { id: 7, kind: "local" } },
+	});
+	sockets[0].emitMessage({ type: "message_deleted", messageId: 10 });
+	assert.equal(room.pinnedMessage.value, null);
 });

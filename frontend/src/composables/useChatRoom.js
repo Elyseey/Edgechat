@@ -21,6 +21,8 @@ export function useChatRoom({
 	openRoomConnection = connectRoomSocket,
 }) {
 	const messages = ref([]);
+	const pinnedMessage = ref(null);
+	const highlightedMessageId = ref(null);
 	const loading = ref(false);
 	const wsStatus = ref("closed");
 	const composerText = ref("");
@@ -28,17 +30,18 @@ export function useChatRoom({
 	const sending = ref(false);
 	const messagesEl = ref(null);
 	let messageLoadGeneration = 0;
+	let highlightTimer = null;
 
 	function roomKey(room = activeRoom.value) {
 		return room?.kind && room?.id ? `${room.kind}:${room.id}` : "";
 	}
 
-		function isOwnMessage(message) {
-			return (
-				message.sender.kind !== "external" &&
-				Number(message.sender.id) === Number(session.value?.userId)
-			);
-		}
+	function isOwnMessage(message) {
+		return (
+			message.sender.kind !== "external" &&
+			Number(message.sender.id) === Number(session.value?.userId)
+		);
+	}
 
 	function scrollToBottom() {
 		const element = messagesEl.value;
@@ -46,6 +49,44 @@ export function useChatRoom({
 			requestAnimationFrame(() => {
 				element.scrollTop = element.scrollHeight;
 			});
+		}
+	}
+
+	function mergeMessages(...collections) {
+		const byId = new Map();
+		for (const collection of collections) {
+			for (const message of collection || []) {
+				byId.set(Number(message.id), message);
+			}
+		}
+		return [...byId.values()].sort((left, right) => Number(left.id) - Number(right.id));
+	}
+
+	function highlightMessage(messageId) {
+		const numericMessageId = Number(messageId);
+		const element = messagesEl.value?.querySelector(
+			`[data-message-id="${numericMessageId}"]`,
+		);
+		if (!element) {
+			return false;
+		}
+		element.scrollIntoView({ behavior: "smooth", block: "center" });
+		highlightedMessageId.value = numericMessageId;
+		if (highlightTimer !== null) {
+			globalThis.clearTimeout(highlightTimer);
+		}
+		highlightTimer = globalThis.setTimeout(() => {
+			highlightedMessageId.value = null;
+			highlightTimer = null;
+		}, 1400);
+		return true;
+	}
+
+	function clearMessageHighlight() {
+		highlightedMessageId.value = null;
+		if (highlightTimer !== null) {
+			globalThis.clearTimeout(highlightTimer);
+			highlightTimer = null;
 		}
 	}
 
@@ -57,7 +98,7 @@ export function useChatRoom({
 		onRoomActivity({ room: activeRoom.value, message });
 
 		if (!isOwnMessage(message)) {
-				void roomApi
+			void roomApi
 				.markRoomRead(activeRoom.value.kind, activeRoom.value.id, message.id)
 				.catch(() => {});
 		}
@@ -71,6 +112,8 @@ export function useChatRoom({
 
 		disconnectSocket();
 		messages.value = [];
+		pinnedMessage.value = null;
+		clearMessageHighlight();
 		onRoomAccessRevoked(room);
 	}
 
@@ -78,7 +121,7 @@ export function useChatRoom({
 		const code = Number(event?.code || 0);
 		const reason = String(event?.reason || "");
 		if (code === WS_CLOSE_UNAUTHORIZED || reason === WS_REASON_UNAUTHORIZED) {
-				dispatchAuthInvalid(t('chat.sessionInvalid'));
+			dispatchAuthInvalid(t('chat.sessionInvalid'));
 			return;
 		}
 		if (code === WS_CLOSE_FORBIDDEN || reason === WS_REASON_FORBIDDEN) {
@@ -115,9 +158,21 @@ export function useChatRoom({
 				messages.value = messages.value.filter(
 					(message) => Number(message.id) !== messageId,
 				);
+				if (Number(pinnedMessage.value?.id) === messageId) {
+					pinnedMessage.value = null;
+				}
+			}
+			if (payload.type === "message_pinned" && payload.message) {
+				pinnedMessage.value = payload.message;
+			}
+			if (
+				payload.type === "message_unpinned" &&
+				Number(pinnedMessage.value?.id) === Number(payload.messageId)
+			) {
+				pinnedMessage.value = null;
 			}
 			if (payload.type === "error") {
-					error.value = localizeErrorMessage(payload.error);
+				error.value = localizeErrorMessage(payload.error);
 			}
 		},
 	});
@@ -138,8 +193,9 @@ export function useChatRoom({
 				return false;
 			}
 			messages.value = append
-				? [...payload.messages, ...messages.value]
+				? mergeMessages(payload.messages, messages.value)
 				: payload.messages;
+			pinnedMessage.value = payload.pinnedMessage || null;
 			await nextTick();
 			if (!append) {
 				scrollToBottom();
@@ -160,6 +216,8 @@ export function useChatRoom({
 	async function activateRoom() {
 		messageLoadGeneration += 1;
 		messages.value = [];
+		pinnedMessage.value = null;
+		clearMessageHighlight();
 		loading.value = false;
 		connectSocket();
 		return loadMessages();
@@ -168,6 +226,8 @@ export function useChatRoom({
 	function deactivateRoom() {
 		messageLoadGeneration += 1;
 		messages.value = [];
+		pinnedMessage.value = null;
+		clearMessageHighlight();
 		loading.value = false;
 		disconnectSocket();
 	}
@@ -192,7 +252,7 @@ export function useChatRoom({
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
 			: "";
 		if (!roomSession.isOpenFor(key)) {
-				error.value = t('chat.realtimeNotReady');
+			error.value = t('chat.realtimeNotReady');
 			return;
 		}
 		if (!composerText.value.trim() && !pendingAttachment.value) {
@@ -224,7 +284,7 @@ export function useChatRoom({
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
 			: "";
 		if (!roomSession.isOpenFor(key)) {
-				error.value = t('chat.realtimeNotReady');
+			error.value = t('chat.realtimeNotReady');
 			return false;
 		}
 
@@ -233,6 +293,62 @@ export function useChatRoom({
 			JSON.stringify({ type: "delete_message", messageId: Number(messageId) }),
 			key,
 		);
+	}
+
+	function pinMessage(messageId) {
+		const key = roomKey();
+		if (!roomSession.isOpenFor(key)) {
+			error.value = t('chat.realtimeNotReady');
+			return false;
+		}
+		error.value = "";
+		return roomSession.send(
+			JSON.stringify({ type: "pin_message", messageId: Number(messageId) }),
+			key,
+		);
+	}
+
+	function unpinMessage(messageId) {
+		const key = roomKey();
+		if (!roomSession.isOpenFor(key)) {
+			error.value = t('chat.realtimeNotReady');
+			return false;
+		}
+		error.value = "";
+		return roomSession.send(
+			JSON.stringify({ type: "unpin_message", messageId: Number(messageId) }),
+			key,
+		);
+	}
+
+	async function revealPinnedMessage() {
+		const targetId = Number(pinnedMessage.value?.id);
+		const key = roomKey();
+		if (!targetId || !key) {
+			return false;
+		}
+		await nextTick();
+		if (highlightMessage(targetId)) {
+			return true;
+		}
+
+		try {
+			const room = activeRoom.value;
+			const payload = await roomApi.getMessages(room.kind, room.id, targetId + 1);
+			if (roomKey() !== key || Number(pinnedMessage.value?.id) !== targetId) {
+				return false;
+			}
+			pinnedMessage.value = payload.pinnedMessage || null;
+			if (Number(pinnedMessage.value?.id) !== targetId) {
+				return false;
+			}
+			messages.value = mergeMessages(payload.messages, messages.value);
+			await nextTick();
+			return highlightMessage(targetId);
+		} catch (currentError) {
+			error.value = currentError.message;
+			return false;
+		}
 	}
 
 	async function uploadAttachment(event) {
@@ -280,6 +396,8 @@ export function useChatRoom({
 
 	return {
 		messages,
+		pinnedMessage,
+		highlightedMessageId,
 		loading,
 		wsStatus,
 		composerText,
@@ -294,6 +412,9 @@ export function useChatRoom({
 		disconnectSocket,
 		sendMessage,
 		deleteMessage,
+		pinMessage,
+		unpinMessage,
+		revealPinnedMessage,
 		uploadAttachment,
 		clearAttachment,
 		loadOlder,

@@ -323,7 +323,9 @@ export async function requestDemo(path, options = {}) {
     const index = demoState.channels.findIndex((channel) => Number(channel.id) === channelId);
     if (index >= 0) {
       const [channel] = demoState.channels.splice(index, 1);
-      delete demoState.messages[roomKey(channel.kind, channel.id)];
+      const key = roomKey(channel.kind, channel.id);
+      delete demoState.messages[key];
+      delete demoState.pinnedMessages[key];
     }
     return { ok: true };
   }
@@ -332,9 +334,13 @@ export async function requestDemo(path, options = {}) {
     const kind = url.searchParams.get('kind');
     const roomId = url.searchParams.get('roomId');
     const before = Number(url.searchParams.get('before') || 0);
-    const allMessages = demoState.messages[roomKey(kind, roomId)] || [];
+    const key = roomKey(kind, roomId);
+    const allMessages = demoState.messages[key] || [];
     const filtered = before ? allMessages.filter((message) => Number(message.id) < before) : allMessages;
-    return { messages: cloneDemo(filtered.slice(-30)) };
+    return {
+      messages: cloneDemo(filtered.slice(-30)),
+      pinnedMessage: cloneDemo(demoState.pinnedMessages[key] || null)
+    };
   }
   if (method === 'POST' && pathname === '/messages/read') {
     const room = body.kind === 'dm'

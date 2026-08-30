@@ -153,6 +153,36 @@ test('demo room socket echoes sent messages through the real-time contract', asy
   inboxSocket.close();
 });
 
+test('demo room socket persists pin, unpin and pinned-message deletion', async () => {
+  const frames = [];
+  let socket;
+  await new Promise((resolve) => {
+    socket = connectDemoRoomSocket({
+      kind: 'public',
+      roomId: 1,
+      onMessage(frame) {
+        frames.push(JSON.parse(frame));
+      },
+      onStatus(event) {
+        if (event.status === 'open') resolve();
+      }
+    });
+  });
+
+  socket.send(JSON.stringify({ type: 'pin_message', messageId: 104 }));
+  assert.equal(frames.at(-1).type, 'message_pinned');
+  assert.equal((await requestDemo('/messages?kind=public&roomId=1')).pinnedMessage.id, 104);
+
+  socket.send(JSON.stringify({ type: 'unpin_message', messageId: 104 }));
+  assert.equal(frames.at(-1).type, 'message_unpinned');
+  assert.equal((await requestDemo('/messages?kind=public&roomId=1')).pinnedMessage, null);
+
+  socket.send(JSON.stringify({ type: 'pin_message', messageId: 103 }));
+  socket.send(JSON.stringify({ type: 'delete_message', messageId: 103 }));
+  assert.equal((await requestDemo('/messages?kind=public&roomId=1')).pinnedMessage, null);
+  socket.close();
+});
+
 test('Telegram replies increment the inbox unread projection', async () => {
   const inboxFrames = [];
   await requestDemo('/messages/read', {

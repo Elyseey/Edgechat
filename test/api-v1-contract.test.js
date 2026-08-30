@@ -51,7 +51,15 @@ test("OpenAPI v1 keeps stable auth, idempotency, sync and error fields", () => {
 
 test("WebSocket v1 documents all supported frames and recovery rules", () => {
 	assert.match(websocket, /protocolVersion: 1/);
-	for (const type of ["ready", "message", "message_deleted", "room_message", "error"]) {
+	for (const type of [
+		"ready",
+		"message",
+		"message_deleted",
+		"message_pinned",
+		"message_unpinned",
+		"room_message",
+		"error",
+	]) {
 		assert.match(websocket, new RegExp(`\\b${type}\\b`));
 	}
 	assert.match(websocket, /1 second, 2 seconds and then 5 seconds/);

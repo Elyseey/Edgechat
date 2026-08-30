@@ -23,7 +23,11 @@ function getStyleRule(selector) {
 test("短文本消息为右下角时间戳预留末行空间", () => {
 	assert.match(
 		chatPage,
-		/:class="\{ 'message-bubble--with-attachment': msg\.attachment \}"/,
+		/'message-bubble--with-attachment': msg\.attachment/,
+	);
+	assert.match(
+		chatPage,
+		/'message-bubble--highlighted': Number\(highlightedMessageId\) === Number\(msg\.id\)/,
 	);
 
 	const bubble = getStyleRule(".message-bubble");

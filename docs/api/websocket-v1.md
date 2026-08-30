@@ -17,6 +17,8 @@ Every server frame is JSON and contains `protocolVersion: 1` plus `type`.
 - `ready`: the connection is authorized; room sockets include `room`.
 - `message`: includes the canonical `message`. Room clients merge by `message.id` and `message.clientMessageId`.
 - `message_deleted`: includes `messageId`.
+- `message_pinned`: includes the canonical pinned `message` for the room.
+- `message_unpinned`: includes `messageId`; clients clear the pin only when it still matches that ID.
 - `room_message`: inbox signal with `room`, `messageId`, `createdAt` and `unreadCount`; the client then runs room sync.
 - `error`: includes a client-safe `error` message and never contains a stack trace.
 

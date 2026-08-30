@@ -98,6 +98,34 @@ function handleRoomFrame(socket, frame) {
       type: 'message_deleted',
       messageId: Number(payload.messageId)
     });
+    if (Number(demoState.pinnedMessages[key]?.id) === Number(payload.messageId)) {
+      delete demoState.pinnedMessages[key];
+    }
+    return;
+  }
+
+  if (payload.type === 'pin_message' && socket.kind !== 'dm') {
+    const key = roomKey(socket.kind, socket.roomId);
+    const message = (demoState.messages[key] || []).find(
+      (item) => Number(item.id) === Number(payload.messageId)
+    );
+    if (!message) return;
+    demoState.pinnedMessages[key] = message;
+    publishRoom(socket.kind, socket.roomId, {
+      type: 'message_pinned',
+      message: cloneDemo(message)
+    });
+    return;
+  }
+
+  if (payload.type === 'unpin_message' && socket.kind !== 'dm') {
+    const key = roomKey(socket.kind, socket.roomId);
+    if (Number(demoState.pinnedMessages[key]?.id) !== Number(payload.messageId)) return;
+    delete demoState.pinnedMessages[key];
+    publishRoom(socket.kind, socket.roomId, {
+      type: 'message_unpinned',
+      messageId: Number(payload.messageId)
+    });
   }
 }
 

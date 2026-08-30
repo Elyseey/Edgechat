@@ -119,4 +119,9 @@ export const D1_MIGRATIONS = [
       "table:message_event_compaction",
     ],
   },
+  {
+    id: "2026-08-30-pinned-messages",
+    file: "worker/migrations/2026-08-30-pinned-messages.sql",
+    artifacts: ["table:channel_pins", "trigger:clear_pin_after_message_soft_delete"],
+  },
 ];

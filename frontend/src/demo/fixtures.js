@@ -279,6 +279,9 @@ export function createDemoFixtures() {
     channels,
     dms,
     messages,
+    pinnedMessages: {
+      'public:1': messages['public:1'][1]
+    },
     files: new Map(),
     invites: [
       {
