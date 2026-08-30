@@ -14,7 +14,6 @@ function createHarness(overrides = {}) {
 		{ id: 12, kind: "dm", otherUser: { id: 2, username: "bob", displayName: "Bob" } },
 	]);
 	const error = ref("");
-	const conversationItems = ref([{ id: 21, kind: "dm", source: { id: 21, kind: "dm" } }]);
 	const calls = [];
 	const conversationApi = {
 		async openDm(userId) {
@@ -27,14 +26,13 @@ function createHarness(overrides = {}) {
 		users,
 		dms,
 		error,
-		conversationItems,
-		refreshSidebar: async () => calls.push(["refreshSidebar"]),
-		openConversation: async (item) => calls.push(["openConversation", item]),
+		refreshAndOpen: async (identity, fallback) =>
+			calls.push(["refreshAndOpen", identity, fallback]),
 		openGroupDialog: () => calls.push(["openGroupDialog"]),
 		conversationApi,
 	});
 
-	return { creation, users, error, calls, conversationItems };
+	return { creation, users, error, calls };
 }
 
 test("添加人员入口同时保留新私聊和创建群聊动作", () => {
@@ -64,8 +62,19 @@ test("发起新私聊后刷新侧栏并自动打开对应会话", async () => {
 
 	assert.deepEqual(calls, [
 		["openDm", 1],
-		["refreshSidebar"],
-		["openConversation", { id: 21, kind: "dm", source: { id: 21, kind: "dm" } }],
+		[
+			"refreshAndOpen",
+			{ kind: "dm", id: 21 },
+			{
+				kind: "dm",
+				id: 21,
+				source: {
+					id: 21,
+					kind: "dm",
+					otherUser: users.value[0],
+				},
+			},
+		],
 	]);
 	assert.equal(creation.show.value, false);
 	assert.equal(creation.openingDmUserId.value, null);

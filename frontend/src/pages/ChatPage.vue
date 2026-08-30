@@ -4,25 +4,27 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { isDemoMode } from '../runtime.js';
 import AddConversationDialog from '../components/chat/AddConversationDialog.vue';
+import ConversationList from '../components/chat/ConversationList.vue';
 import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
 import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
+import MessageComposer from '../components/chat/MessageComposer.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
 import MobileNavigationDrawer from '../components/chat/MobileNavigationDrawer.vue';
 import SenderSourceBadge from '../components/chat/SenderSourceBadge.vue';
-import PendingAttachmentPreview from '../components/chat/PendingAttachmentPreview.vue';
 import PublicGroupDiscovery from '../components/chat/PublicGroupDiscovery.vue';
 import PublicGroupJoinDialog from '../components/chat/PublicGroupJoinDialog.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
-import UiTextarea from '../components/ui/Textarea.vue';
 import { useActiveRoom } from '../composables/useActiveRoom.js';
 import { useBrowserNotifications } from '../composables/useBrowserNotifications.js';
 import { useChatRoom } from '../composables/useChatRoom.js';
 import { useChatSidebar } from '../composables/useChatSidebar.js';
 import { useChatViewport } from '../composables/useChatViewport.js';
+import { useConversationFlow } from '../composables/useConversationFlow.ts';
 import { useConversationCreation } from '../composables/useConversationCreation.js';
+import { useMessageContextMenu } from '../composables/useMessageContextMenu.ts';
 import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
 import store from '../store.js';
@@ -38,7 +40,7 @@ const joiningPublicGroup = ref(false);
 const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
 
-const { activeRoomKey, canManageActiveRoom, applyActiveChannel, selectDm, roomLabel } =
+const { activeRoomKey, canManageActiveRoom, applyActiveChannel, selectDm, roomLabel, roomSubtitle } =
   useActiveRoom({ activeRoom });
 const {
   isMobileViewport,
@@ -56,9 +58,15 @@ const activeRoomAvatar = computed(() => {
 });
 
 const {
-  channels, dms, users, sidebarLoading, conversationItems, publicGroupItems, formatListTime,
+  channels, dms, users, sidebarLoading, conversationItems, publicGroupItems,
   refreshSidebar, openConversation, joinPublicChannel, markConversationRead, applyConversationActivity
 } = useChatSidebar({ applyActiveChannel, selectDm });
+const { openConversationItem, openByIdentity, refreshAndOpen } = useConversationFlow({
+  conversationItems,
+  refreshSidebar,
+  openConversation,
+  openConversationView
+});
 
 const {
   notificationsEnabled,
@@ -98,9 +106,9 @@ function handleRoomAccessRevoked(room) {
 
 const {
   messages, loading, wsStatus, composerText, pendingAttachment, sending,
-  messagesEl, fileInputEl, isOwnMessage,
-  loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, deleteMessage, handleComposerKeydown,
-  openFilePicker, uploadAttachment, clearAttachment, loadOlder
+  messagesEl, isOwnMessage,
+  loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, deleteMessage,
+  uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
   session,
@@ -117,78 +125,21 @@ const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
 });
 
 const wsConnected = computed(() => wsStatus.value === 'open');
-const activeRoomSubtitle = computed(() => {
-  if (!activeRoom.value) return '';
-  if (activeRoom.value.kind === 'dm') {
-    return activeRoom.value.otherUser?.username
-      ? `@${activeRoom.value.otherUser.username}`
-      : wsConnected.value ? t('chat.online') : t('chat.connecting');
-  }
-  if (activeRoom.value.memberCount) {
-    return t('chat.memberCount', { count: activeRoom.value.memberCount });
-  }
-  return activeRoom.value.isGeneral ? t('chat.generalGroup') : t('chat.groupConversation');
-});
+const activeRoomSubtitle = computed(() => roomSubtitle(activeRoom.value, wsConnected.value));
 const canModerateMessages = computed(
   () => Boolean(session.value?.isAdmin || canManageActiveRoom.value)
 );
-const messageMenu = ref({ message: null, x: 0, y: 0 });
-let longPressTimer = null;
-let longPressOrigin = null;
-
-function closeMessageMenu() {
-  messageMenu.value = { message: null, x: 0, y: 0 };
-}
-
-function openMessageMenuAt(message, x, y) {
-  if (!canModerateMessages.value) return;
-  messageMenu.value = { message, x, y };
-}
-
-function cancelMessageLongPress() {
-  if (longPressTimer !== null) {
-    window.clearTimeout(longPressTimer);
-    longPressTimer = null;
-  }
-  longPressOrigin = null;
-}
-
-function openMessageContextMenu(event, message) {
-  if (!canModerateMessages.value) return;
-  event.preventDefault();
-  cancelMessageLongPress();
-  openMessageMenuAt(message, event.clientX, event.clientY);
-}
-
-function startMessageLongPress(event, message) {
-  cancelMessageLongPress();
-  if (!canModerateMessages.value || event.pointerType === 'mouse') return;
-
-  const origin = {
-    pointerId: event.pointerId,
-    x: event.clientX,
-    y: event.clientY
-  };
-  longPressOrigin = origin;
-  longPressTimer = window.setTimeout(() => {
-    openMessageMenuAt(message, origin.x, origin.y);
-    longPressTimer = null;
-  }, 500);
-}
-
-function trackMessageLongPress(event) {
-  if (!longPressOrigin || event.pointerId !== longPressOrigin.pointerId) return;
-  if (
-    Math.abs(event.clientX - longPressOrigin.x) > 10 ||
-    Math.abs(event.clientY - longPressOrigin.y) > 10
-  ) {
-    cancelMessageLongPress();
-  }
-}
+const {
+  messageMenu,
+  closeMessageMenu,
+  cancelMessageLongPress,
+  openMessageContextMenu,
+  startMessageLongPress,
+  trackMessageLongPress
+} = useMessageContextMenu({ canModerateMessages });
 
 const roomManagement = useRoomManagement({
-  activeRoom, channels, users, error, refreshSidebar, conversationItems,
-  openConversation, canManageActiveRoom,
+  activeRoom, channels, users, error, refreshSidebar, refreshAndOpen, canManageActiveRoom,
   returnToConversationList,
   onRoomDeleted: () => {
     disconnectSocket();
@@ -217,9 +168,7 @@ const {
   users,
   dms,
   error,
-  refreshSidebar,
-  conversationItems,
-  openConversation,
+  refreshAndOpen,
   openGroupDialog: openCreateGroup
 });
 const {
@@ -247,8 +196,7 @@ const {
 
 async function selectConversation(item) {
   try {
-    await openConversation(item);
-    openConversationView();
+    await openConversationItem(item);
   } catch (currentError) {
     error.value = currentError.message;
   }
@@ -270,11 +218,8 @@ async function confirmPublicGroupJoin() {
   error.value = '';
   try {
     await joinPublicChannel(channel);
-    const item = conversationItems.value.find(
-      (conversation) => conversation.kind === channel.kind && Number(conversation.id) === Number(channel.id)
-    );
     publicGroupPreview.value = null;
-    if (item) await selectConversation(item);
+    await openByIdentity(channel);
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -282,11 +227,12 @@ async function confirmPublicGroupJoin() {
   }
 }
 
-function openRoomFromNotification(room) {
-  const item = conversationItems.value.find(
-    (conversation) => conversation.kind === room.kind && Number(conversation.id) === Number(room.id)
-  );
-  if (item) void selectConversation(item);
+async function openRoomFromNotification(room) {
+  try {
+    await openByIdentity(room);
+  } catch (currentError) {
+    error.value = currentError.message;
+  }
 }
 
 function toggleActiveRoomMute() {
@@ -470,38 +416,13 @@ onBeforeUnmount(() => {
 
         <div class="sidebar-divider"></div>
 
-        <div class="sidebar-section sidebar-list">
-          <div v-if="sidebarLoading" class="sidebar-hint">{{ t('chat.loadingConversations') }}</div>
-          <div v-else-if="!conversationItems.length" class="sidebar-hint">{{ t('chat.noConversations') }}</div>
-          <button
-            type="button"
-            v-for="item in conversationItems" :key="item.key"
-            class="sidebar-item" :class="{ 'sidebar-item--active': activeRoomKey === item.key }"
-            @click="selectConversation(item)"
-          >
-            <UiAvatar :src="item.avatarUrl" :fallback="item.fallback?.[0] || '?'" size="sm" />
-            <div class="sidebar-label-group">
-              <div class="sidebar-item__top">
-                <strong class="sidebar-label">{{ item.title }}</strong>
-                <span class="sidebar-label sidebar-item__time">{{ formatListTime(item.lastMessageAt) }}</span>
-              </div>
-              <div class="sidebar-item__bottom">
-                <p class="sidebar-label sidebar-item__preview">{{ item.subtitle }}</p>
-                <span
-                  v-if="isRoomMuted(item)"
-                  class="sidebar-muted-indicator"
-                  :title="t('chat.muted')"
-                  :aria-label="t('chat.muted')"
-                >
-                  <BellOff :size="14" aria-hidden="true" />
-                </span>
-                <span v-if="item.unreadCount > 0" class="sidebar-unread-badge">
-                  {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
-                </span>
-              </div>
-            </div>
-          </button>
-        </div>
+		<ConversationList
+		  :items="conversationItems"
+		  :active-key="activeRoomKey"
+		  :loading="sidebarLoading"
+		  :is-room-muted="isRoomMuted"
+		  @select="selectConversation"
+		/>
 
 		<PublicGroupDiscovery :items="publicGroupItems" @select="openPublicGroupPreview" />
       </div>
@@ -624,46 +545,16 @@ onBeforeUnmount(() => {
           @delete="confirmDeleteMessage"
         />
 
-        <footer class="chat-composer">
-          <div v-if="pendingAttachment" class="composer-attachment">
-            <PendingAttachmentPreview :attachment="pendingAttachment" @clear="clearAttachment" />
-          </div>
-          <div v-if="error" class="composer-error">{{ error }}</div>
-          <div class="composer-row">
-            <input ref="fileInputEl" type="file" class="composer-file-input" @change="uploadAttachment" />
-            <button
-              type="button"
-              class="composer-btn"
-              :disabled="!activeRoom"
-              :title="t('chat.addAttachment')"
-              :aria-label="t('chat.addAttachment')"
-              @click="openFilePicker"
-            >
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
-                <title>{{ t('chat.addAttachment') }}</title>
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-              </svg>
-            </button>
-            <UiTextarea
-              v-model="composerText" class="composer-input" auto-grow :max-height="120" rows="1"
-              :disabled="!activeRoom" :placeholder="t('chat.messagePlaceholder')" @keydown="handleComposerKeydown"
-            />
-            <button
-              type="button"
-              class="composer-send"
-              :disabled="sending || !activeRoom || (!composerText.trim() && !pendingAttachment)"
-              :title="t('chat.sendMessage')"
-              :aria-label="t('chat.sendMessage')"
-              @click="sendMessage"
-            >
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <title>{{ t('chat.send') }}</title>
-                <line x1="4" y1="12" x2="20" y2="12"/>
-                <polyline points="14 6 20 12 14 18"/>
-              </svg>
-            </button>
-          </div>
-        </footer>
+		<MessageComposer
+		  v-model="composerText"
+		  :pending-attachment="pendingAttachment"
+		  :sending="sending"
+		  :disabled="!activeRoom"
+		  :error="error"
+		  @send="sendMessage"
+		  @upload="uploadAttachment"
+		  @clear-attachment="clearAttachment"
+		/>
       </template>
 
       <div v-else class="chat-empty">
@@ -835,10 +726,7 @@ onBeforeUnmount(() => {
 }
 
 .header-action:active,
-.sidebar-item:active,
-.chat-header__button:active,
-.composer-btn:active:not(:disabled),
-.composer-send:active:not(:disabled) {
+.chat-header__button:active {
   background: rgba(0, 0, 0, 0.08);
 }
 
@@ -846,125 +734,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.sidebar-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0;
-  touch-action: pan-y;
-}
-
-.sidebar-list::-webkit-scrollbar { width: 4px; }
-.sidebar-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 2px; }
-
 .sidebar-divider {
   flex-shrink: 0;
   height: 1px;
   background: #f0f2f5;
-}
-
-.sidebar-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 8px;
-  font-size: 13px;
-  color: #8696a0;
-}
-
-.sidebar-item svg {
-  flex-shrink: 0;
-}
-
-.sidebar-label-group {
-  flex: 1;
-  min-width: 0;
-}
-
-/* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
-.sidebar-item :deep(.ui-avatar) {
-  flex-shrink: 0;
-}
-
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: calc(100% - 16px);
-  margin: 4px 8px;
-  padding: 12px 16px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  transition: background 150ms;
-  touch-action: manipulation;
-}
-
-.sidebar-item:hover {
-  background: #f5f6f6;
-}
-
-.sidebar-item--active {
-  background: #f0f2f5;
-}
-
-.sidebar-item__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.sidebar-item__top strong {
-  font-size: 15px;
-  font-weight: 500;
-  color: #111b21;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar-item__time {
-  font-size: 12px;
-  color: #667781;
-  flex-shrink: 0;
-}
-
-.sidebar-item__preview {
-  margin: 0;
-  font-size: 13px;
-  color: #667781;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar-item__bottom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  min-width: 0;
-}
-
-.sidebar-unread-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #25d366;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
 }
 
 .right-sidebar {
@@ -1016,14 +789,6 @@ onBeforeUnmount(() => {
   padding: 0;
   position: relative;
   touch-action: manipulation;
-}
-
-.sidebar-muted-indicator {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  color: #8696a0;
 }
 
 .right-sidebar-action:hover,
@@ -1341,123 +1106,6 @@ onBeforeUnmount(() => {
   height: 0;
 }
 
-.chat-composer {
-  margin-top: auto;
-  margin-bottom: 0;
-  padding: 10px 16px;
-  background: #f0f2f5;
-  border-top: 1px solid #e9edef;
-  position: relative;
-  z-index: 2;
-  margin-left: 0;
-  margin-right: 0;
-  border-radius: 0;
-}
-
-.composer-attachment {
-  min-width: 0;
-  margin-bottom: 10px;
-}
-
-.composer-error {
-  margin-bottom: 8px;
-  font-size: 12px;
-  color: #dc2626;
-  text-align: center;
-}
-
-.composer-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.composer-file-input {
-  display: none;
-}
-
-.composer-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: #54656f;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 150ms, color 150ms;
-  touch-action: manipulation;
-}
-
-.composer-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: #111b21;
-}
-
-.composer-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.composer-input {
-  flex: 1;
-  min-width: 0;
-}
-
-/* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
-:deep(.composer-input.ui-textarea) {
-  width: 100%;
-  min-width: 0;
-  border: none;
-  background: #ffffff;
-  box-shadow: none;
-  min-height: 40px;
-  border-radius: 8px;
-  padding: 10px 16px;
-  color: #111b21;
-  font-size: 15px;
-  resize: none;
-}
-
-/* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
-:deep(.composer-input.ui-textarea:focus) {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-/* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
-:deep(.composer-input.ui-textarea::placeholder) {
-  color: #8696a0;
-}
-
-.composer-send {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 150ms;
-  touch-action: manipulation;
-}
-
-.composer-send:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.composer-send:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
 .chat-empty {
   position: relative;
   flex: 1;
@@ -1577,23 +1225,6 @@ onBeforeUnmount(() => {
     display: inline-grid;
   }
 
-  .sidebar-list {
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
-    overscroll-behavior: contain;
-  }
-
-  .sidebar-item {
-    width: 100%;
-    min-height: 68px;
-    margin: 0;
-    padding: 11px max(16px, env(safe-area-inset-right)) 11px max(16px, env(safe-area-inset-left));
-    border-radius: 0;
-  }
-
-  .sidebar-item + .sidebar-item {
-    border-top: 1px solid #f0f2f5;
-  }
-
   .chat-header {
     min-height: 64px;
     gap: 8px;
@@ -1676,31 +1307,6 @@ onBeforeUnmount(() => {
     max-width: 88%;
   }
 
-  .chat-composer {
-    padding:
-      8px
-      max(8px, env(safe-area-inset-right))
-      max(8px, env(safe-area-inset-bottom))
-      max(8px, env(safe-area-inset-left));
-  }
-
-  .composer-row {
-    gap: 4px;
-  }
-
-  .composer-btn,
-  .composer-send {
-    width: 44px;
-    height: 44px;
-  }
-
-  /* biome-ignore lint/correctness/noUnknownPseudoClass: Vue deep selector */
-  :deep(.composer-input.ui-textarea) {
-    min-height: 44px;
-    padding: 11px 12px;
-    font-size: 16px;
-  }
-
   .room-management-layer {
     position: fixed;
     inset: 0;
@@ -1739,10 +1345,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .header-action,
-  .sidebar-item,
-  .chat-header__button,
-  .composer-btn,
-  .composer-send {
+  .chat-header__button {
     transition: none;
   }
 }

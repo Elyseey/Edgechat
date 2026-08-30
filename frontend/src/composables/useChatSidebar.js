@@ -2,6 +2,13 @@ import { computed, ref } from "vue";
 import api from "../api.js";
 import { compareLocalized, formatDate, t } from "../i18n.js";
 
+function formatListTime(value) {
+	if (!value) {
+		return "";
+	}
+	return formatDate(value, { month: "short", day: "numeric" });
+}
+
 function mapChannelItem(channel, subtitle) {
 	return {
 		key: `${channel.kind}:${channel.id}`,
@@ -13,6 +20,7 @@ function mapChannelItem(channel, subtitle) {
 		avatarUrl: channel.avatarUrl || "",
 		fallback: channel.name ? channel.name.slice(0, 1) : t('publicGroups.fallback'),
 		lastMessageAt: channel.lastMessageAt || "",
+		dateLabel: formatListTime(channel.lastMessageAt),
 		unreadCount: Number(channel.unreadCount || 0),
 		source: channel,
 	};
@@ -32,9 +40,10 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 			title: dm.otherUser.displayName,
 				subtitle: t('chat.contact', { username: dm.otherUser.username }),
 			avatarUrl: dm.otherUser.avatarUrl,
-			fallback: dm.otherUser.displayName,
-			lastMessageAt: dm.lastMessageAt || "",
-			unreadCount: Number(dm.unreadCount || 0),
+				fallback: dm.otherUser.displayName,
+				lastMessageAt: dm.lastMessageAt || "",
+				dateLabel: formatListTime(dm.lastMessageAt),
+				unreadCount: Number(dm.unreadCount || 0),
 			source: dm,
 		}));
 
@@ -77,13 +86,6 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 			)
 				.sort((left, right) => compareLocalized(left.title, right.title)),
 	);
-
-	function formatListTime(value) {
-		if (!value) {
-			return "";
-		}
-			return formatDate(value, { month: 'short', day: 'numeric' });
-	}
 
 	function findConversationSource(kind, roomId) {
 		const list = kind === "dm" ? dms.value : channels.value;
@@ -137,10 +139,6 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 		}
 	}
 
-	function selectChannel(channel) {
-		applyActiveChannel(channel);
-	}
-
 	async function joinPublicChannel(channel) {
 		await sidebarApi.joinChannel(channel.id);
 		const joinedChannel = channels.value.find(
@@ -160,7 +158,7 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 			return;
 		}
 
-		await selectChannel(item.source);
+		applyActiveChannel(item.source);
 		markConversationRead(item.kind, item.id);
 		void sidebarApi.markRoomRead(item.kind, item.id).catch(() => {});
 	}
@@ -172,7 +170,6 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 		sidebarLoading,
 		conversationItems,
 		publicGroupItems,
-		formatListTime,
 		markConversationRead,
 		applyConversationActivity,
 		refreshSidebar,

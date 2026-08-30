@@ -27,7 +27,6 @@ export function useChatRoom({
 	const pendingAttachment = ref(null);
 	const sending = ref(false);
 	const messagesEl = ref(null);
-	const fileInputEl = ref(null);
 	let messageLoadGeneration = 0;
 
 	function roomKey(room = activeRoom.value) {
@@ -236,17 +235,6 @@ export function useChatRoom({
 		);
 	}
 
-	function handleComposerKeydown(event) {
-		if (event.key === "Enter" && !event.shiftKey) {
-			event.preventDefault();
-			sendMessage();
-		}
-	}
-
-	function openFilePicker() {
-		fileInputEl.value?.click();
-	}
-
 	async function uploadAttachment(event) {
 		const file = event.target.files?.[0];
 		if (!file) {
@@ -298,7 +286,6 @@ export function useChatRoom({
 		pendingAttachment,
 		sending,
 		messagesEl,
-		fileInputEl,
 		isOwnMessage,
 		loadMessages,
 		activateRoom,
@@ -307,8 +294,6 @@ export function useChatRoom({
 		disconnectSocket,
 		sendMessage,
 		deleteMessage,
-		handleComposerKeydown,
-		openFilePicker,
 		uploadAttachment,
 		clearAttachment,
 		loadOlder,

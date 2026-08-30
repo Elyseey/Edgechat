@@ -15,6 +15,14 @@ const mobileDrawer = readFileSync(
 	new URL("../frontend/src/components/chat/MobileNavigationDrawer.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
+const conversationList = readFileSync(
+	new URL("../frontend/src/components/chat/ConversationList.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
+const messageComposer = readFileSync(
+	new URL("../frontend/src/components/chat/MessageComposer.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
 
 function getStyleRule(source, selector) {
 	const marker = `${selector} {`;
@@ -40,15 +48,15 @@ test("聊天界面使用原始控件尺寸铺满整个视口", () => {
 });
 
 test("移动端附件预览不会挤出发送按钮", () => {
-	assert.match(chatPage, /\.composer-attachment\s*{[^}]*min-width:\s*0;/s);
-	assert.match(chatPage, /\.composer-row\s*{[^}]*min-width:\s*0;/s);
-	assert.match(chatPage, /\.composer-send\s*{[^}]*flex-shrink:\s*0;/s);
+	assert.match(messageComposer, /\.composer-attachment\s*{[^}]*min-width:\s*0;/s);
+	assert.match(messageComposer, /\.composer-row\s*{[^}]*min-width:\s*0;/s);
+	assert.match(messageComposer, /\.composer-btn,\s*\.composer-send\s*{[^}]*flex-shrink:\s*0;/s);
 	assert.match(attachmentStyles, /\.pending-attachment\s*{[^}]*width:\s*100%;[^}]*min-width:\s*0;/s);
 	assert.match(attachmentStyles, /\.pending-attachment__name\s*{[^}]*min-width:\s*0;[^}]*text-overflow:\s*ellipsis;/s);
 });
 
 test("移动端前台滚动区允许纵向触摸滑动", () => {
-	assert.match(chatPage, /\.sidebar-list\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
+	assert.match(conversationList, /\.sidebar-list\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
 	assert.match(chatPage, /\.chat-messages\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
 	assert.match(mobileDrawer, /\.mobile-navigation-drawer\s*{[^}]*overflow-y:\s*auto;[^}]*touch-action:\s*pan-y;/s);
 });
@@ -68,8 +76,8 @@ test("移动端主要图标按钮保留四十四像素触控区域", () => {
 	assert.match(chatPage, /\.mobile-menu-action\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
 	assert.match(chatPage, /\.chat-header__back\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
 	assert.match(chatPage, /\.chat-header__button\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
-	assert.match(chatPage, /\.composer-btn,\s*\.composer-send\s*{\s*width:\s*44px;\s*height:\s*44px;/s);
-	assert.match(chatPage, /font-size:\s*16px;/);
+	assert.match(messageComposer, /\.composer-btn,\s*\.composer-send\s*{\s*width:\s*44px;\s*height:\s*44px;/s);
+	assert.match(messageComposer, /font-size:\s*16px;/);
 });
 
 test("聊天侧栏跟随全屏根节点且不污染后台根节点", () => {
@@ -111,4 +119,12 @@ test("聊天侧栏跟随全屏根节点且不污染后台根节点", () => {
 		assert.match(chatPage, /<LanguageSwitch class="chat-empty__language-switch" \/>/);
 		assert.match(chatPage, /<LanguageSwitch class="mobile-language-switch" \/>/);
 		assert.match(chatPage, /\.chat-empty__language-switch\s*{[^}]*position:\s*absolute;[^}]*right:\s*16px;/s);
-	});
+		});
+
+test("聊天页面通过专用组件编排会话列表和消息输入区", () => {
+	assert.match(chatPage, /<ConversationList/);
+	assert.match(chatPage, /:is-room-muted="isRoomMuted"/);
+	assert.match(chatPage, /<MessageComposer/);
+	assert.match(chatPage, /v-model="composerText"/);
+	assert.match(chatPage, /@upload="uploadAttachment"/);
+});

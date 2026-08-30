@@ -54,20 +54,16 @@ function createHarness(overrides = {}) {
 		},
 		...overrides.roomApi,
 	};
-	const conversationItems = ref([
-		{ id: 9, kind: "private" },
-		{ id: 9, kind: "public" },
-	]);
 	const refreshSidebar = async () => calls.push(["refreshSidebar"]);
-	const openConversation = async (item) => calls.push(["openConversation", item]);
+	const refreshAndOpen = async (identity) =>
+		calls.push(["refreshAndOpen", identity]);
 	const management = useRoomManagement({
 		activeRoom,
 		channels,
 		users,
 		error,
 		refreshSidebar,
-		conversationItems,
-		openConversation,
+		refreshAndOpen,
 		canManageActiveRoom: computed(() => Boolean(activeRoom.value?.canManage)),
 		onRoomDeleted: () => calls.push(["onRoomDeleted"]),
 		returnToConversationList: () => calls.push(["returnToConversationList"]),
@@ -89,8 +85,7 @@ test("创建群组状态和导航由 room management module 统一拥有", async
 
 	assert.deepEqual(calls, [
 		["createGroup", { name: "New team", kind: "private", memberUserIds: [2] }],
-		["refreshSidebar"],
-		["openConversation", { id: 9, kind: "private" }],
+		["refreshAndOpen", { id: 9, kind: "private" }],
 	]);
 	assert.equal(management.creation.show.value, false);
 	assert.deepEqual(management.creation.form, {
@@ -109,8 +104,7 @@ test("公开群组创建会保留类型并允许不预先邀请成员", async ()
 
 	assert.deepEqual(calls, [
 		["createGroup", { name: "公开讨论", kind: "public", memberUserIds: [] }],
-		["refreshSidebar"],
-		["openConversation", { id: 9, kind: "public" }],
+		["refreshAndOpen", { id: 9, kind: "public" }],
 	]);
 });
 

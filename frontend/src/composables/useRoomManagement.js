@@ -8,8 +8,7 @@ export function useRoomManagement({
 	users,
 	error,
 	refreshSidebar,
-	conversationItems,
-	openConversation,
+	refreshAndOpen,
 	canManageActiveRoom,
 	onRoomDeleted = () => {},
 	returnToConversationList = () => {},
@@ -83,15 +82,7 @@ export function useRoomManagement({
 				kind: createGroupForm.kind,
 				memberUserIds: createGroupForm.memberUserIds,
 			});
-			await refreshSidebar();
-			const item = conversationItems.value.find(
-				(conversation) =>
-					conversation.kind === payload.channel.kind &&
-					Number(conversation.id) === Number(payload.channel.id),
-			);
-			if (item) {
-				await openConversation(item);
-			}
+			await refreshAndOpen(payload.channel);
 			closeCreateGroup();
 		} catch (currentError) {
 			error.value = currentError.message;
