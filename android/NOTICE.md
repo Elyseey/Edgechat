@@ -11,3 +11,12 @@ has been substantially modified for its own data model, navigation, offline queu
 attachments, localization and adaptive layouts.
 
 Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+## Design reference
+
+The 2026 Android interface refresh studied the public user interface and design
+language of [Element X Android](https://github.com/element-hq/element-x-android).
+EdgeChat's Compose implementation is original and does not incorporate Element X
+source code, icons, trademarks or other brand assets. Element X Android is offered
+under AGPL-3.0-only or Element's commercial license; those licenses do not apply to
+the independently implemented EdgeChat interface.

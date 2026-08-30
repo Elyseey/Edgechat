@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,26 +16,29 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aozorae.edgechat.core.database.ConversationEntity
@@ -42,9 +47,12 @@ import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.network.dto.SessionDto
 import com.aozorae.edgechat.core.repository.PendingAttachment
 import com.aozorae.edgechat.core.repository.RoomIdentity
+import com.aozorae.edgechat.ui.components.EdgeAvatar
+import com.aozorae.edgechat.ui.components.EdgeChatBrandMark
+import com.aozorae.edgechat.ui.components.resolveServerUrl
+import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +79,7 @@ fun ChatPane(
     onManageGroup: () -> Unit,
 ) {
     val context = LocalContext.current
+    val colors = LocalEdgeChatColors.current
     LaunchedEffect(openAttachmentEvents) {
         openAttachmentEvents.collect { (uri, type) ->
             val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type)
@@ -81,10 +90,21 @@ fun ChatPane(
 
     if (room == null || conversation == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = if (language == "zh-CN") "选择一个会话开始聊天" else "Choose a conversation to start chatting",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                EdgeChatBrandMark(size = 72.dp)
+                Spacer(Modifier.size(20.dp))
+                Text(
+                    text = if (language == "zh-CN") "选择一个会话" else "Choose a conversation",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colors.textPrimary,
+                )
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    text = if (language == "zh-CN") "从左侧列表开始聊天" else "Select a chat from the list to begin.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary,
+                )
+            }
         }
         return
     }
@@ -100,54 +120,65 @@ fun ChatPane(
     val bottomInsets = WindowInsets.navigationBars.union(WindowInsets.ime)
 
     Scaffold(
+        containerColor = colors.canvas,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = conversation.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = if (conversation.kind == "dm") {
-                                conversation.subtitle
-                            } else {
-                                "${conversation.memberCount} ${if (language == "zh-CN") "位成员" else "members"}"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = if (language == "zh-CN") "返回会话列表" else "Back to conversations",
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        if (onBack != null) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = if (language == "zh-CN") "返回会话列表" else "Back to conversations",
+                                )
+                            }
+                        }
+                    },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            EdgeAvatar(
+                                imageUrl = resolveServerUrl(serverBaseUrl, conversation.avatarUrl),
+                                displayName = conversation.title,
+                                modifier = Modifier.size(40.dp),
                             )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f, fill = false)) {
+                                Text(
+                                    text = conversation.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = if (conversation.kind == "dm") {
+                                        conversation.subtitle
+                                    } else {
+                                        "${conversation.memberCount} ${if (language == "zh-CN") "位成员" else "members"}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
-                    }
-                },
-                actions = {
-                    if (conversation.canManage) {
-                        IconButton(onClick = onManageGroup) {
-                            Icon(Icons.Outlined.Group, contentDescription = if (language == "zh-CN") "管理群组" else "Manage group")
+                    },
+                    actions = {
+                        if (conversation.canManage) {
+                            IconButton(onClick = onManageGroup) {
+                                Icon(Icons.Outlined.Group, contentDescription = if (language == "zh-CN") "管理群组" else "Manage group")
+                            }
                         }
-                    }
-                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                },
-            )
+                        if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.canvas),
+                )
+                HorizontalDivider(color = colors.separator)
+            }
         },
-        contentWindowInsets = ScaffoldDefaults.contentWindowInsets
-            .exclude(bottomInsets),
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.exclude(bottomInsets),
     ) { paddingValues ->
-        // Edge-to-edge 下不能只依赖 adjustResize；取键盘与导航栏的较大底边，既避免遮挡，也避免两段高度相加形成空洞。
+        // Edge-to-edge 下统一消费键盘和导航栏的较大底边，避免输入区被遮挡或重复叠加高度。
         Column(
             Modifier
                 .fillMaxSize()

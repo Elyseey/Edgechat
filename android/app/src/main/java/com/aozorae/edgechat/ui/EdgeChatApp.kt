@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +37,7 @@ import com.aozorae.edgechat.feature.chat.ChatViewModel
 import com.aozorae.edgechat.feature.chat.GroupManagementDialog
 import com.aozorae.edgechat.feature.conversations.ConversationPane
 import com.aozorae.edgechat.feature.settings.SettingsSheet
+import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
 import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,6 +117,7 @@ fun EdgeChatApp(
             if (showSettings) {
                 SettingsSheet(
                     session = session,
+                    serverBaseUrl = server.baseUrl,
                     language = appState.language,
                     onDismiss = { showSettings = false },
                     onUpdateProfile = appViewModel::updateProfile,
@@ -151,7 +153,7 @@ fun EdgeChatApp(
             title = { Text(if (appState.language == "zh-CN") "操作失败" else "Something went wrong") },
             text = { Text(failure) },
             confirmButton = {
-                Button(onClick = { appViewModel.clearError(); chatViewModel.clearError() }) {
+                TextButton(onClick = { appViewModel.clearError(); chatViewModel.clearError() }) {
                     Text(if (appState.language == "zh-CN") "知道了" else "OK")
                 }
             },
@@ -171,11 +173,12 @@ private fun AuthenticatedShell(
     onSettings: () -> Unit,
     onManageGroup: () -> Unit,
 ) {
+    val colors = LocalEdgeChatColors.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val expanded = maxWidth >= 840.dp
         if (expanded) {
             Row(Modifier.fillMaxSize()) {
-                Box(Modifier.width(336.dp)) {
+                Box(Modifier.width(360.dp)) {
                     ConversationContent(
                         server,
                         session,
@@ -185,7 +188,7 @@ private fun AuthenticatedShell(
                         onSettings,
                     )
                 }
-                VerticalDivider()
+                VerticalDivider(color = colors.separator)
                 Box(Modifier.weight(1f)) {
                     ChatContent(
                         server = server,
@@ -227,7 +230,6 @@ private fun ConversationContent(
 ) {
     ConversationPane(
         siteName = server.siteName,
-        siteIconUrl = server.siteIconUrl,
         serverBaseUrl = server.baseUrl,
         currentUser = session,
         conversations = chatState.conversations,

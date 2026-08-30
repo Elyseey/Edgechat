@@ -1,76 +1,98 @@
 package com.aozorae.edgechat.ui.theme
 
-import android.os.Build
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF4D6384),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFD9E3F6),
-    onPrimaryContainer = Color(0xFF10213A),
-    secondary = Color(0xFF35685D),
-    secondaryContainer = Color(0xFFB8EEE0),
-    onSecondaryContainer = Color(0xFF06201A),
-    tertiary = Color(0xFF705680),
-    tertiaryContainer = Color(0xFFF2D9FF),
-    onTertiaryContainer = Color(0xFF291037),
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    surfaceVariant = Color(0xFFE5E8EF),
-    outlineVariant = Color(0xFFC6C9D1),
+    primary = LightEdgeChatColors.accent,
+    onPrimary = LightEdgeChatColors.onAccent,
+    primaryContainer = LightEdgeChatColors.accentSubtle,
+    onPrimaryContainer = LightEdgeChatColors.onAccentSubtle,
+    secondary = LightEdgeChatColors.textSecondary,
+    onSecondary = LightEdgeChatColors.onAccent,
+    secondaryContainer = LightEdgeChatColors.subtlePrimary,
+    onSecondaryContainer = LightEdgeChatColors.textPrimary,
+    tertiary = LightEdgeChatColors.accent,
+    onTertiary = LightEdgeChatColors.onAccent,
+    tertiaryContainer = LightEdgeChatColors.accentSubtle,
+    onTertiaryContainer = LightEdgeChatColors.onAccentSubtle,
+    background = LightEdgeChatColors.canvas,
+    onBackground = LightEdgeChatColors.textPrimary,
+    surface = LightEdgeChatColors.canvas,
+    onSurface = LightEdgeChatColors.textPrimary,
+    surfaceVariant = LightEdgeChatColors.subtleSecondary,
+    onSurfaceVariant = LightEdgeChatColors.textSecondary,
+    outline = LightEdgeChatColors.iconSecondary,
+    outlineVariant = LightEdgeChatColors.separator,
+    error = LightEdgeChatColors.critical,
+    errorContainer = LightEdgeChatColors.criticalSubtle,
+    onErrorContainer = LightEdgeChatColors.onCriticalSubtle,
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFB4C7EA),
-    onPrimary = Color(0xFF1E3555),
-    primaryContainer = Color(0xFF354B6B),
-    onPrimaryContainer = Color(0xFFD9E3F6),
-    secondary = Color(0xFF9CD1C4),
-    secondaryContainer = Color(0xFF1B5046),
-    onSecondaryContainer = Color(0xFFB8EEE0),
-    tertiary = Color(0xFFDDBCEB),
-    tertiaryContainer = Color(0xFF573E66),
-    onTertiaryContainer = Color(0xFFF2D9FF),
-    background = Color(0xFF121316),
-    surface = Color(0xFF121316),
-    surfaceVariant = Color(0xFF44474E),
-    outlineVariant = Color(0xFF44474E),
+    primary = DarkEdgeChatColors.accent,
+    onPrimary = DarkEdgeChatColors.onAccent,
+    primaryContainer = DarkEdgeChatColors.accentSubtle,
+    onPrimaryContainer = DarkEdgeChatColors.onAccentSubtle,
+    secondary = DarkEdgeChatColors.textSecondary,
+    onSecondary = DarkEdgeChatColors.onAccent,
+    secondaryContainer = DarkEdgeChatColors.subtlePrimary,
+    onSecondaryContainer = DarkEdgeChatColors.textPrimary,
+    tertiary = DarkEdgeChatColors.accent,
+    onTertiary = DarkEdgeChatColors.onAccent,
+    tertiaryContainer = DarkEdgeChatColors.accentSubtle,
+    onTertiaryContainer = DarkEdgeChatColors.onAccentSubtle,
+    background = DarkEdgeChatColors.canvas,
+    onBackground = DarkEdgeChatColors.textPrimary,
+    surface = DarkEdgeChatColors.canvas,
+    onSurface = DarkEdgeChatColors.textPrimary,
+    surfaceVariant = DarkEdgeChatColors.subtleSecondary,
+    onSurfaceVariant = DarkEdgeChatColors.textSecondary,
+    outline = DarkEdgeChatColors.iconSecondary,
+    outlineVariant = DarkEdgeChatColors.separator,
+    error = DarkEdgeChatColors.critical,
+    errorContainer = DarkEdgeChatColors.criticalSubtle,
+    onErrorContainer = DarkEdgeChatColors.onCriticalSubtle,
 )
 
 private val EdgeChatShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
     large = RoundedCornerShape(12.dp),
-    extraLarge = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(20.dp),
 )
 
 @Composable
 fun EdgeChatTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val colors = if (Build.VERSION.SDK_INT >= 31) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (dark) {
-        DarkColors
-    } else {
-        LightColors
+    val semanticColors = if (dark) DarkEdgeChatColors else LightEdgeChatColors
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            // Compose 负责绘制系统栏背景，这里只同步图标明暗，避免深色模式仍显示浅色导航栏。
+            val controller = WindowCompat.getInsetsController((view.context as Activity).window, view)
+            controller.isAppearanceLightStatusBars = !dark
+            controller.isAppearanceLightNavigationBars = !dark
+        }
     }
-    MaterialTheme(
-        colorScheme = colors,
-        typography = EdgeChatTypography,
-        shapes = EdgeChatShapes,
-        content = content,
-    )
+    CompositionLocalProvider(LocalEdgeChatColors provides semanticColors) {
+        MaterialTheme(
+            colorScheme = if (dark) DarkColors else LightColors,
+            typography = EdgeChatTypography,
+            shapes = EdgeChatShapes,
+            content = content,
+        )
+    }
 }

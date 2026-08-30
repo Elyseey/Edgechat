@@ -5,27 +5,27 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -51,11 +53,11 @@ import com.aozorae.edgechat.core.repository.RoomIdentity
 import com.aozorae.edgechat.ui.components.EdgeAvatar
 import com.aozorae.edgechat.ui.components.resolveServerUrl
 import com.aozorae.edgechat.ui.formatConversationTime
+import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
 
 @Composable
 fun ConversationPane(
     siteName: String,
-    siteIconUrl: String,
     serverBaseUrl: String,
     currentUser: SessionDto,
     conversations: List<ConversationEntity>,
@@ -69,54 +71,53 @@ fun ConversationPane(
     onSettings: () -> Unit,
 ) {
     var showNew by remember { mutableStateOf(false) }
+    val colors = LocalEdgeChatColors.current
 
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxHeight().statusBarsPadding()) {
-            ConversationHeader(
-                siteName = siteName,
-                siteIconUrl = resolveServerUrl(serverBaseUrl, siteIconUrl),
-                language = language,
-                onNewConversation = { showNew = true },
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text(
-                text = if (language == "zh-CN") "会话" else "Chats",
-                modifier = Modifier.padding(start = 28.dp, top = 20.dp, bottom = 8.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+    Surface(color = colors.canvas) {
+        Box(Modifier.fillMaxHeight().statusBarsPadding()) {
+            Column(Modifier.fillMaxSize()) {
+                ConversationHeader(
+                    siteName = siteName,
+                    currentUser = currentUser,
+                    serverBaseUrl = serverBaseUrl,
+                    language = language,
+                    onSettings = onSettings,
+                )
+                HorizontalDivider(color = colors.separator)
                 if (conversations.isEmpty()) {
-                    item {
-                        Text(
-                            text = if (language == "zh-CN") "还没有会话，创建一个或加入公开群组。" else "No conversations yet. Create one or join a public group.",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    EmptyConversationList(language, Modifier.weight(1f))
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = 96.dp),
+                    ) {
+                        items(conversations, key = { "${it.kind}:${it.id}" }) { item ->
+                            ConversationRow(
+                                item = item,
+                                selected = selected?.kind == item.kind && selected.id == item.id,
+                                serverBaseUrl = serverBaseUrl,
+                                language = language,
+                                onClick = {
+                                    if (item.isMember) onSelect(RoomIdentity(item.kind, item.id)) else onJoin(item.id)
+                                },
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp),
+                                color = colors.separator,
+                            )
+                        }
                     }
                 }
-                items(conversations, key = { "${it.kind}:${it.id}" }) { item ->
-                    ConversationRow(
-                        item = item,
-                        selected = selected?.kind == item.kind && selected.id == item.id,
-                        serverBaseUrl = serverBaseUrl,
-                        language = language,
-                        onClick = {
-                            if (item.isMember) onSelect(RoomIdentity(item.kind, item.id)) else onJoin(item.id)
-                        },
-                    )
-                }
             }
-            CurrentUserRow(
-                currentUser = currentUser,
-                serverBaseUrl = serverBaseUrl,
-                language = language,
-                onSettings = onSettings,
-            )
+            FloatingActionButton(
+                onClick = { showNew = true },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).size(56.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                containerColor = colors.accent,
+                contentColor = colors.onAccent,
+            ) {
+                Icon(Icons.Outlined.Add, contentDescription = if (language == "zh-CN") "新建会话" else "New conversation")
+            }
         }
     }
 
@@ -137,33 +138,79 @@ fun ConversationPane(
 @Composable
 private fun ConversationHeader(
     siteName: String,
-    siteIconUrl: String,
+    currentUser: SessionDto,
+    serverBaseUrl: String,
     language: String,
-    onNewConversation: () -> Unit,
+    onSettings: () -> Unit,
 ) {
+    val colors = LocalEdgeChatColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        EdgeAvatar(siteIconUrl, siteName, Modifier.size(36.dp))
-        Spacer(Modifier.width(12.dp))
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .clickable(role = Role.Button, onClick = onSettings)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = if (language == "zh-CN") "设置" else "Settings"
+                },
+        ) {
+            EdgeAvatar(
+                imageUrl = resolveServerUrl(serverBaseUrl, currentUser.avatarUrl),
+                displayName = currentUser.displayName,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
+                text = if (language == "zh-CN") "聊天" else "Chats",
+                style = MaterialTheme.typography.headlineSmall,
+                color = colors.textPrimary,
+                maxLines = 1,
+            )
+            Text(
                 text = siteName,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = "EdgeChat",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        }
+    }
+}
+
+@Composable
+private fun EmptyConversationList(language: String, modifier: Modifier = Modifier) {
+    val colors = LocalEdgeChatColors.current
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(color = colors.subtleSecondary, shape = MaterialTheme.shapes.extraLarge) {
+            Icon(
+                Icons.Outlined.Forum,
+                contentDescription = null,
+                modifier = Modifier.padding(20.dp).size(36.dp),
+                tint = colors.iconSecondary,
             )
         }
-        IconButton(onClick = onNewConversation) {
-            Icon(Icons.Outlined.Add, contentDescription = if (language == "zh-CN") "新建会话" else "New conversation")
-        }
+        Spacer(Modifier.size(20.dp))
+        Text(
+            text = if (language == "zh-CN") "还没有会话" else "No conversations yet",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.textPrimary,
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = if (language == "zh-CN") "新建会话或加入公开群组" else "Start a conversation or join a public group.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textSecondary,
+        )
     }
 }
 
@@ -175,44 +222,24 @@ private fun ConversationRow(
     language: String,
     onClick: () -> Unit,
 ) {
-    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-
+    val colors = LocalEdgeChatColors.current
+    val rowBackground = if (selected) colors.subtleSecondary else colors.canvas
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(CircleShape)
-            .background(background)
+            .background(rowBackground)
             .semantics { this.selected = selected }
             .clickable(role = Role.Button, onClick = onClick)
             .testTag("conversation:${item.kind}:${item.id}")
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            EdgeAvatar(
-                imageUrl = resolveServerUrl(serverBaseUrl, item.avatarUrl),
-                displayName = item.title,
-                modifier = Modifier.size(46.dp),
-                borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-            )
-            if (item.kind != "dm") {
-                Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd).size(18.dp),
-                    shape = CircleShape,
-                    color = if (item.kind == "private") MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Icon(
-                        imageVector = if (item.kind == "private") Icons.Outlined.Lock else Icons.Outlined.Group,
-                        contentDescription = if (item.kind == "private") {
-                            if (language == "zh-CN") "私有群组" else "Private group"
-                        } else if (language == "zh-CN") "公开群组" else "Public group",
-                        modifier = Modifier.padding(3.dp),
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.width(12.dp))
+        EdgeAvatar(
+            imageUrl = resolveServerUrl(serverBaseUrl, item.avatarUrl),
+            displayName = item.title,
+            modifier = Modifier.size(52.dp),
+        )
+        Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -220,20 +247,27 @@ private fun ConversationRow(
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = contentColor,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.textPrimary,
                     fontWeight = if (item.unreadCount > 0) FontWeight.SemiBold else FontWeight.Medium,
                 )
-                val time = formatConversationTime(item.lastMessageAt, language)
-                if (time.isNotBlank()) {
-                    Text(
-                        text = time,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (item.kind != "dm") {
+                    Icon(
+                        imageVector = if (item.kind == "private") Icons.Outlined.Lock else Icons.Outlined.Group,
+                        contentDescription = if (item.kind == "private") {
+                            if (language == "zh-CN") "私有群组" else "Private group"
+                        } else if (language == "zh-CN") "公开群组" else "Public group",
+                        modifier = Modifier.padding(start = 6.dp).size(15.dp),
+                        tint = colors.iconSecondary,
                     )
                 }
+                val time = formatConversationTime(item.lastMessageAt, language)
+                if (time.isNotBlank()) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(text = time, style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                }
             }
-            Spacer(Modifier.size(2.dp))
+            Spacer(Modifier.size(3.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val subtitle = if (!item.isMember) {
                     if (language == "zh-CN") "点按加入公开群组" else "Tap to join public group"
@@ -245,50 +279,18 @@ private fun ConversationRow(
                 Text(
                     text = subtitle,
                     modifier = Modifier.weight(1f),
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary,
                 )
                 if (item.unreadCount > 0) {
-                    Spacer(Modifier.width(8.dp))
-                    Badge { Text(if (item.unreadCount > 99) "99+" else item.unreadCount.toString()) }
+                    Spacer(Modifier.width(10.dp))
+                    Badge(containerColor = colors.accent, contentColor = colors.onAccent) {
+                        Text(if (item.unreadCount > 99) "99+" else item.unreadCount.toString())
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CurrentUserRow(
-    currentUser: SessionDto,
-    serverBaseUrl: String,
-    language: String,
-    onSettings: () -> Unit,
-) {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onSettings)
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        EdgeAvatar(
-            imageUrl = resolveServerUrl(serverBaseUrl, currentUser.avatarUrl),
-            displayName = currentUser.displayName,
-            modifier = Modifier.size(40.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(currentUser.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text("@${currentUser.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Icon(
-            Icons.Outlined.Settings,
-            contentDescription = if (language == "zh-CN") "设置" else "Settings",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

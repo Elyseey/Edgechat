@@ -5,13 +5,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,11 +27,11 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,10 +46,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,20 +60,15 @@ import com.aozorae.edgechat.ui.components.resolveServerUrl
 import com.aozorae.edgechat.ui.formatDayLabel
 import com.aozorae.edgechat.ui.formatMessageTime
 import com.aozorae.edgechat.ui.messageDate
+import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
 import kotlinx.coroutines.launch
 
-private val IncomingChatBubbleShape = RoundedCornerShape(
-    topStart = 4.dp,
-    topEnd = 20.dp,
-    bottomEnd = 20.dp,
-    bottomStart = 20.dp,
-)
-private val OwnChatBubbleShape = RoundedCornerShape(
-    topStart = 20.dp,
-    topEnd = 4.dp,
-    bottomEnd = 20.dp,
-    bottomStart = 20.dp,
-)
+private enum class MessageGroupPosition {
+    None,
+    First,
+    Middle,
+    Last,
+}
 
 @Composable
 fun ChatMessages(
@@ -92,12 +86,27 @@ fun ChatMessages(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val colors = LocalEdgeChatColors.current
     Box(modifier) {
         if (messages.isEmpty() && outbox.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Surface(color = colors.subtleSecondary, shape = MaterialTheme.shapes.extraLarge) {
+                    Icon(
+                        Icons.Outlined.Forum,
+                        contentDescription = null,
+                        modifier = Modifier.padding(18.dp).size(32.dp),
+                        tint = colors.iconSecondary,
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
                 Text(
                     text = if (language == "zh-CN") "这里还没有消息" else "No messages here yet",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.textPrimary,
                 )
             }
         }
@@ -122,16 +131,12 @@ fun ChatMessages(
             newestFirst.forEachIndexed { index, message ->
                 val newer = newestFirst.getOrNull(index - 1)
                 val older = newestFirst.getOrNull(index + 1)
-                val senderKey = "${message.senderKind}:${message.senderId}"
-                val showAuthor = startsMessageGroup(message, older)
-                val endsAuthorGroup = newer?.let { "${it.senderKind}:${it.senderId}" } != senderKey
-
                 item(key = message.id) {
                     MessageItem(
                         message = message,
                         own = message.senderKind == "local" && message.senderId == currentUser.userId.toString(),
-                        showAuthor = showAuthor,
-                        endsAuthorGroup = endsAuthorGroup,
+                        groupPosition = messageGroupPosition(message, newer, older),
+                        showAuthor = startsMessageGroup(message, older),
                         serverBaseUrl = serverBaseUrl,
                         language = language,
                         onDelete = onDeleteMessage,
@@ -147,7 +152,7 @@ fun ChatMessages(
 
             item(key = "load-older") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    TextButton(onClick = onLoadOlder, modifier = Modifier.padding(vertical = 4.dp)) {
+                    TextButton(onClick = onLoadOlder, modifier = Modifier.padding(vertical = 6.dp)) {
                         Icon(Icons.Outlined.Refresh, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text(if (language == "zh-CN") "加载更早消息" else "Load older messages")
@@ -168,7 +173,11 @@ fun ChatMessages(
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
         ) {
-            SmallFloatingActionButton(onClick = { scope.launch { scrollState.animateScrollToItem(0) } }) {
+            SmallFloatingActionButton(
+                onClick = { scope.launch { scrollState.animateScrollToItem(0) } },
+                containerColor = colors.canvasLevel1,
+                contentColor = colors.iconPrimary,
+            ) {
                 Icon(
                     Icons.Outlined.KeyboardArrowDown,
                     contentDescription = if (language == "zh-CN") "回到最新消息" else "Jump to latest message",
@@ -184,19 +193,41 @@ internal fun startsMessageGroup(message: MessageEntity, older: MessageEntity?): 
         older.senderKind != message.senderKind ||
         older.senderId != message.senderId
 
+private fun messageGroupPosition(
+    message: MessageEntity,
+    newer: MessageEntity?,
+    older: MessageEntity?,
+): MessageGroupPosition {
+    fun MessageEntity?.sameGroup(): Boolean =
+        this != null &&
+            senderKind == message.senderKind &&
+            senderId == message.senderId &&
+            messageDate(createdAt) == messageDate(message.createdAt)
+
+    val hasNewer = newer.sameGroup()
+    val hasOlder = older.sameGroup()
+    return when {
+        !hasOlder && !hasNewer -> MessageGroupPosition.None
+        !hasOlder && hasNewer -> MessageGroupPosition.First
+        hasOlder && hasNewer -> MessageGroupPosition.Middle
+        else -> MessageGroupPosition.Last
+    }
+}
+
 @Composable
 private fun MessageItem(
     message: MessageEntity,
     own: Boolean,
+    groupPosition: MessageGroupPosition,
     showAuthor: Boolean,
-    endsAuthorGroup: Boolean,
     serverBaseUrl: String,
     language: String,
     onDelete: (Long) -> Unit,
     onOpenAttachment: (String, String, String) -> Unit,
 ) {
+    val colors = LocalEdgeChatColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = if (showAuthor) 8.dp else 0.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = if (showAuthor) 10.dp else 2.dp),
         verticalAlignment = Alignment.Top,
     ) {
         if (!own) {
@@ -204,81 +235,66 @@ private fun MessageItem(
                 EdgeAvatar(
                     imageUrl = resolveServerUrl(serverBaseUrl, message.senderAvatarUrl),
                     displayName = message.senderDisplayName,
-                    modifier = Modifier.padding(horizontal = 4.dp).size(42.dp),
-                    borderColor = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(end = 8.dp).size(36.dp),
                 )
             } else {
-                Spacer(Modifier.width(50.dp))
+                Spacer(Modifier.width(44.dp))
             }
         }
         Column(
-            modifier = Modifier.weight(1f).padding(start = if (own) 50.dp else 0.dp, end = 4.dp),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = if (own) 52.dp else 0.dp, end = if (own) 4.dp else 48.dp),
             horizontalAlignment = if (own) Alignment.End else Alignment.Start,
         ) {
-            if (showAuthor) {
-                AuthorAndTimestamp(message, own, language)
+            if (showAuthor && !own) {
+                Row(
+                    modifier = Modifier.padding(start = 4.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = message.senderDisplayName,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.textPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (message.source != "edgechat") {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(color = colors.accentSubtle, shape = MaterialTheme.shapes.small) {
+                            Text(
+                                text = "Telegram",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.onAccentSubtle,
+                            )
+                        }
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = if (own) Arrangement.End else Arrangement.Start,
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.Bottom,
             ) {
                 if (own) {
-                    IconButton(
-                        onClick = { onDelete(message.id) },
-                        modifier = Modifier.size(40.dp),
-                    ) {
+                    IconButton(onClick = { onDelete(message.id) }, modifier = Modifier.size(36.dp)) {
                         Icon(
                             Icons.Outlined.DeleteOutline,
                             contentDescription = if (language == "zh-CN") "删除消息" else "Delete message",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(19.dp),
+                            tint = colors.iconSecondary,
                         )
                     }
                 }
                 MessageBubble(
                     message = message,
                     own = own,
+                    groupPosition = groupPosition,
                     language = language,
                     onOpenAttachment = onOpenAttachment,
                     modifier = Modifier.testTag("message_bubble:${message.id}"),
                 )
             }
-            Spacer(Modifier.height(if (endsAuthorGroup) 8.dp else 4.dp))
-        }
-    }
-}
-
-@Composable
-private fun AuthorAndTimestamp(message: MessageEntity, own: Boolean, language: String) {
-    Row(
-        modifier = Modifier
-            .padding(start = if (own) 0.dp else 4.dp, end = if (own) 4.dp else 0.dp, bottom = 6.dp)
-            .semantics(mergeDescendants = true) {},
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = if (own) {
-                if (language == "zh-CN") "我" else "You"
-            } else {
-                message.senderDisplayName
-            },
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = formatMessageTime(message.createdAt, language),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (message.source != "edgechat") {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Telegram",
-                modifier = Modifier.background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-            )
         }
     }
 }
@@ -287,52 +303,81 @@ private fun AuthorAndTimestamp(message: MessageEntity, own: Boolean, language: S
 private fun MessageBubble(
     message: MessageEntity,
     own: Boolean,
+    groupPosition: MessageGroupPosition,
     language: String,
     onOpenAttachment: (String, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bubbleColor = if (own) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val contentColor = if (own) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Surface(
-        modifier = modifier,
-        color = bubbleColor,
-        contentColor = contentColor,
-        shape = if (own) OwnChatBubbleShape else IncomingChatBubbleShape,
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            if (message.content.isNotBlank()) {
-                Text(message.content, style = MaterialTheme.typography.bodyLarge)
-            }
-            val attachmentUrl = message.attachmentUrl
-            if (attachmentUrl != null) {
-                if (message.content.isNotBlank()) Spacer(Modifier.height(8.dp))
-                AttachmentTile(
-                    name = message.attachmentName ?: "attachment",
-                    type = message.attachmentType ?: "application/octet-stream",
-                    own = own,
-                    language = language,
-                    onClick = {
-                        onOpenAttachment(
-                            attachmentUrl,
-                            message.attachmentName ?: "attachment",
-                            message.attachmentType ?: "application/octet-stream",
-                        )
-                    },
+    val colors = LocalEdgeChatColors.current
+    BoxWithConstraints {
+        Surface(
+            modifier = modifier.widthIn(min = 80.dp, max = maxWidth * 0.78f),
+            color = if (own) colors.messageFromMe else colors.messageFromOther,
+            contentColor = colors.textPrimary,
+            shape = messageBubbleShape(groupPosition, own),
+        ) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                if (message.content.isNotBlank()) {
+                    Text(message.content, style = MaterialTheme.typography.bodyLarge)
+                }
+                val attachmentUrl = message.attachmentUrl
+                if (attachmentUrl != null) {
+                    if (message.content.isNotBlank()) Spacer(Modifier.height(8.dp))
+                    AttachmentTile(
+                        name = message.attachmentName ?: "attachment",
+                        type = message.attachmentType ?: "application/octet-stream",
+                        language = language,
+                        onClick = {
+                            onOpenAttachment(
+                                attachmentUrl,
+                                message.attachmentName ?: "attachment",
+                                message.attachmentType ?: "application/octet-stream",
+                            )
+                        },
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = formatMessageTime(message.createdAt, language),
+                    modifier = Modifier.align(Alignment.End),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary,
                 )
             }
         }
     }
 }
 
+private fun messageBubbleShape(position: MessageGroupPosition, own: Boolean): RoundedCornerShape {
+    val radius = 12.dp
+    return when (position) {
+        MessageGroupPosition.None -> RoundedCornerShape(radius)
+        MessageGroupPosition.First -> if (own) {
+            RoundedCornerShape(radius, radius, 0.dp, radius)
+        } else {
+            RoundedCornerShape(4.dp, radius, radius, 0.dp)
+        }
+        MessageGroupPosition.Middle -> if (own) {
+            RoundedCornerShape(radius, 0.dp, 0.dp, radius)
+        } else {
+            RoundedCornerShape(0.dp, radius, radius, 0.dp)
+        }
+        MessageGroupPosition.Last -> if (own) {
+            RoundedCornerShape(radius, 0.dp, radius, radius)
+        } else {
+            RoundedCornerShape(0.dp, radius, radius, radius)
+        }
+    }
+}
+
 @Composable
-private fun AttachmentTile(name: String, type: String, own: Boolean, language: String, onClick: () -> Unit) {
-    val tileColor = if (own) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface
+private fun AttachmentTile(name: String, type: String, language: String, onClick: () -> Unit) {
+    val colors = LocalEdgeChatColors.current
     Surface(
-        color = tileColor,
-        shape = RoundedCornerShape(8.dp),
+        color = colors.canvas.copy(alpha = 0.72f),
+        shape = MaterialTheme.shapes.small,
         modifier = Modifier.clickable(
-            role = androidx.compose.ui.semantics.Role.Button,
+            role = Role.Button,
             onClickLabel = if (language == "zh-CN") "打开附件" else "Open attachment",
             onClick = onClick,
         ),
@@ -345,10 +390,17 @@ private fun AttachmentTile(name: String, type: String, own: Boolean, language: S
                     else -> Icons.Outlined.Description
                 },
                 contentDescription = null,
+                tint = colors.iconSecondary,
             )
             Spacer(Modifier.width(8.dp))
-            Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-            Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(
+                name,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = colors.iconSecondary)
         }
     }
 }
@@ -360,75 +412,63 @@ private fun PendingMessageItem(
     onRetry: (String) -> Unit,
     onCancel: (String) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
-        Column(
-            modifier = Modifier.weight(1f).padding(start = 50.dp, end = 4.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            Text(
-                text = if (language == "zh-CN") "我" else "You",
-                modifier = Modifier.padding(end = 4.dp, bottom = 6.dp),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.Top,
+    val colors = LocalEdgeChatColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 52.dp, end = 4.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        if (item.state == "RETRY") {
+            IconButton(onClick = { onRetry(item.clientMessageId) }, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Refresh, contentDescription = if (language == "zh-CN") "重试发送" else "Retry sending")
+            }
+        }
+        IconButton(onClick = { onCancel(item.clientMessageId) }, modifier = Modifier.size(36.dp)) {
+            Icon(Icons.Outlined.Close, contentDescription = if (language == "zh-CN") "取消发送" else "Cancel sending")
+        }
+        BoxWithConstraints {
+            Surface(
+                color = colors.messageFromMe,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .widthIn(min = 80.dp, max = maxWidth * 0.78f)
+                    .testTag("pending_message_bubble:${item.clientMessageId}"),
             ) {
-                if (item.state == "RETRY") {
-                    IconButton(onClick = { onRetry(item.clientMessageId) }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = if (language == "zh-CN") "重试发送" else "Retry sending")
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    if (item.content.isNotBlank()) Text(item.content, style = MaterialTheme.typography.bodyLarge)
+                    item.attachmentName?.let {
+                        if (item.content.isNotBlank()) Spacer(Modifier.height(6.dp))
+                        Text(it, style = MaterialTheme.typography.bodySmall)
                     }
-                }
-                IconButton(onClick = { onCancel(item.clientMessageId) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Close, contentDescription = if (language == "zh-CN") "取消发送" else "Cancel sending")
-                }
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = OwnChatBubbleShape,
-                    modifier = Modifier.testTag("pending_message_bubble:${item.clientMessageId}"),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        if (item.content.isNotBlank()) Text(item.content, style = MaterialTheme.typography.bodyLarge)
-                        item.attachmentName?.let {
-                            if (item.content.isNotBlank()) Spacer(Modifier.height(6.dp))
-                            Text(it, style = MaterialTheme.typography.bodySmall)
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = when (item.state) {
-                                "UPLOADING" -> if (language == "zh-CN") "正在上传" else "Uploading"
-                                "SENDING" -> if (language == "zh-CN") "正在发送" else "Sending"
-                                "RETRY" -> item.failure ?: if (language == "zh-CN") "发送失败" else "Failed"
-                                else -> if (language == "zh-CN") "等待发送" else "Queued"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        text = when (item.state) {
+                            "UPLOADING" -> if (language == "zh-CN") "正在上传" else "Uploading"
+                            "SENDING" -> if (language == "zh-CN") "正在发送" else "Sending"
+                            "RETRY" -> item.failure ?: if (language == "zh-CN") "发送失败" else "Failed"
+                            else -> if (language == "zh-CN") "等待发送" else "Queued"
+                        },
+                        modifier = Modifier.align(Alignment.End),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (item.state == "RETRY") colors.critical else colors.textSecondary,
+                    )
                 }
             }
-            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
 private fun DayHeader(label: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        DayHeaderLine()
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 14.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        DayHeaderLine()
+    val colors = LocalEdgeChatColors.current
+    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+        Surface(color = colors.canvasLevel1, shape = MaterialTheme.shapes.extraLarge) {
+            Text(
+                text = label,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textSecondary,
+            )
+        }
     }
-}
-
-@Composable
-private fun RowScope.DayHeaderLine() {
-    HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
 }
