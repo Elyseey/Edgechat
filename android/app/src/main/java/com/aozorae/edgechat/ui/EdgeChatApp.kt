@@ -1,5 +1,6 @@
 package com.aozorae.edgechat.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +30,7 @@ import com.aozorae.edgechat.core.session.ServerProfile
 import com.aozorae.edgechat.feature.app.AppViewModel
 import com.aozorae.edgechat.feature.auth.LoginScreen
 import com.aozorae.edgechat.feature.auth.ServerSetupScreen
+import com.aozorae.edgechat.feature.auth.WelcomeScreen
 import com.aozorae.edgechat.feature.chat.ChatPane
 import com.aozorae.edgechat.feature.chat.ChatUiState
 import com.aozorae.edgechat.feature.chat.ChatViewModel
@@ -48,9 +51,16 @@ fun EdgeChatApp(
     val preset by deepLinkServer.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
     var showGroup by remember { mutableStateOf(false) }
+    var showServerSetup by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(preset) {
-        if (!preset.isNullOrBlank() && preset != appState.server?.baseUrl) appViewModel.connect(requireNotNull(preset))
+        if (!preset.isNullOrBlank() && preset != appState.server?.baseUrl) {
+            showServerSetup = true
+            appViewModel.connect(requireNotNull(preset))
+        }
+    }
+    BackHandler(enabled = appState.server == null && showServerSetup) {
+        showServerSetup = false
     }
 
     when {
@@ -58,7 +68,20 @@ fun EdgeChatApp(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         }
         appState.server == null -> {
-            ServerSetupScreen(appState.loading, preset, appState.language, appViewModel::connect)
+            if (showServerSetup) {
+                ServerSetupScreen(
+                    loading = appState.loading,
+                    preset = preset,
+                    language = appState.language,
+                    onConnect = appViewModel::connect,
+                    onBack = { showServerSetup = false },
+                )
+            } else {
+                WelcomeScreen(
+                    language = appState.language,
+                    onContinue = { showServerSetup = true },
+                )
+            }
         }
         appState.session == null -> {
             LoginScreen(
@@ -66,7 +89,10 @@ fun EdgeChatApp(
                 loading = appState.loading,
                 language = appState.language,
                 onLogin = appViewModel::login,
-                onChangeServer = appViewModel::disconnect,
+                onChangeServer = {
+                    showServerSetup = true
+                    appViewModel.disconnect()
+                },
             )
         }
         else -> {
