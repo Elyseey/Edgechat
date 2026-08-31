@@ -36,6 +36,20 @@
 
 EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系、公开群组、私有群组、私信、实时消息、文件上传、管理员后台一应俱全。目标很直接——在 Cloudflare 生态里，用尽量低的运维成本，跑起一套能直接落地使用的站内 IM。
 
+## 最近更新
+
+> **实验性 WebMCP 支持**：EdgeChat 已率先接入 OpenAI 最近推出的实验性 [Site tools（WebMCP）](https://learn.chatgpt.com/docs/webmcp) 能力。在 ChatGPT 桌面应用的内置浏览器中使用 ChatGPT Work 或 Codex 打开并登录 EdgeChat 后，AI 可以直接发现并调用站点提供的聊天工具；普通浏览器、现有界面和 Worker 核心协议完全不受影响。
+
+| 工具 | 功能 | 状态 |
+|---|---|---|
+| `edgechat.login` | 登录并建立当前浏览器会话 | ✅ |
+| `edgechat.list_channels` | 查询用户可见群聊 | ✅ |
+| `edgechat.read_messages` | 获取某聊天室最近消息 | ✅ |
+| `edgechat.send_message` | 向指定房间发送消息 | ✅ |
+| `edgechat.open_dm` | 找到或打开与某人的私聊 | ✅ |
+
+登录工具沿用现有认证与浏览器安全确认，工具结果不会返回密码或 session token。
+
 ## 目录
 
 - [界面预览](#界面预览)

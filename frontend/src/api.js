@@ -39,7 +39,7 @@ async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
-    const rawMessage = payload?.error || payload || 'Request failed';
+    const rawMessage = payload?.error?.message || payload?.error || payload || 'Request failed';
     const error = new Error(localizeErrorMessage(rawMessage));
     error.status = response.status;
     error.payload = payload;
@@ -138,6 +138,19 @@ export default {
       query.set('before', String(before));
     }
     return request(`/messages?${query.toString()}`);
+  },
+  getRecentMessages(kind, roomId, limit = 30) {
+    const query = new URLSearchParams({ limit: String(limit) });
+    return request(
+      `/v1/rooms/${encodeURIComponent(kind)}/${Number(roomId)}/messages?${query.toString()}`
+    );
+  },
+  sendRoomMessage(kind, roomId, payload) {
+    return request(`/v1/rooms/${encodeURIComponent(kind)}/${Number(roomId)}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
   },
   markRoomRead(kind, roomId, messageId) {
     return request('/messages/read', {
