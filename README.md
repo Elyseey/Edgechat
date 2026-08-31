@@ -38,6 +38,7 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
 
 ## 最近更新
 
+> [!IMPORTANT]
 > **实验性 WebMCP 支持**：EdgeChat 已率先接入 OpenAI 最近推出的实验性 [Site tools（WebMCP）](https://learn.chatgpt.com/docs/webmcp) 能力。在 ChatGPT 桌面应用的内置浏览器中使用 ChatGPT Work 或 Codex 打开并登录 EdgeChat 后，AI 可以直接发现并调用站点提供的聊天工具。
 
 | 工具 | 功能 | 状态 |
