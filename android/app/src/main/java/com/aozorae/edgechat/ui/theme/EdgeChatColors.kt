@@ -25,6 +25,7 @@ data class EdgeChatColors(
     val critical: Color,
     val criticalSubtle: Color,
     val onCriticalSubtle: Color,
+    val topBarGradient: List<Color>,
 )
 
 internal val LightEdgeChatColors = EdgeChatColors(
@@ -47,6 +48,14 @@ internal val LightEdgeChatColors = EdgeChatColors(
     critical = Color(0xFFB3261E),
     criticalSubtle = Color(0xFFFFEDEA),
     onCriticalSubtle = Color(0xFF7A1A14),
+    topBarGradient = listOf(
+        Color(0x6904B96A),
+        Color(0x3B07B661),
+        Color(0x1C00B85C),
+        Color(0x0F16BB69),
+        Color(0x0816BB79),
+        Color.Transparent,
+    ),
 )
 
 internal val DarkEdgeChatColors = EdgeChatColors(
@@ -69,6 +78,14 @@ internal val DarkEdgeChatColors = EdgeChatColors(
     critical = Color(0xFFFFB4AB),
     criticalSubtle = Color(0xFF5F1512),
     onCriticalSubtle = Color(0xFFFFDAD5),
+    topBarGradient = listOf(
+        Color(0xFF003D29),
+        Color(0xFF002E1B),
+        Color(0xFF002412),
+        Color(0xFF001F0E),
+        Color(0xFF001F0C),
+        Color.Transparent,
+    ),
 )
 
 internal val LocalEdgeChatColors = staticCompositionLocalOf { LightEdgeChatColors }

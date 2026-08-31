@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -74,7 +75,7 @@ fun ConversationPane(
     val colors = LocalEdgeChatColors.current
 
     Surface(color = colors.canvas) {
-        Box(Modifier.fillMaxHeight().statusBarsPadding()) {
+        Box(Modifier.fillMaxHeight()) {
             Column(Modifier.fillMaxSize()) {
                 ConversationHeader(
                     siteName = siteName,
@@ -145,7 +146,11 @@ private fun ConversationHeader(
 ) {
     val colors = LocalEdgeChatColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(colors.topBarGradient))
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
