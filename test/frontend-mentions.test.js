@@ -4,7 +4,7 @@ import test from "node:test";
 import {
 	resolveMentionUserIds,
 	tokenizeMentionText,
-} from "../frontend/src/mentions.ts";
+} from "../frontend/src/mentions.js";
 
 test("网页端发送只提交正文中仍存在的提及", () => {
 	const users = [
