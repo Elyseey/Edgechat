@@ -289,6 +289,15 @@ private fun ConversationRow(
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.textSecondary,
                 )
+                if (item.mentionUnreadCount > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (language == "zh-CN") "有人@我" else "Mentioned you",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.critical,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 if (item.unreadCount > 0) {
                     Spacer(Modifier.width(10.dp))
                     Badge(containerColor = colors.accent, contentColor = colors.onAccent) {

@@ -9,6 +9,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aozorae.edgechat.core.database.EdgeChatDatabase
 import com.aozorae.edgechat.core.database.OutboxEntity
+import com.aozorae.edgechat.core.database.decodeMentionUserIds
+import com.aozorae.edgechat.core.database.encodeMentionUserIds
 import com.aozorae.edgechat.core.database.toEntity
 import com.aozorae.edgechat.core.network.EdgeChatApi
 import com.aozorae.edgechat.core.network.bodyOrThrow
@@ -48,7 +50,12 @@ class OutboxRepository @Inject constructor(
     fun observe(room: RoomIdentity): Flow<List<OutboxEntity>> =
         database.outbox().observeRoom(room.kind, room.id)
 
-    suspend fun enqueue(room: RoomIdentity, content: String, attachment: PendingAttachment? = null) {
+    suspend fun enqueue(
+        room: RoomIdentity,
+        content: String,
+        attachment: PendingAttachment? = null,
+        mentionUserIds: List<Long> = emptyList(),
+    ) {
         val messageId = UUID.randomUUID().toString()
         database.outbox().upsert(
             OutboxEntity(
@@ -63,6 +70,7 @@ class OutboxRepository @Inject constructor(
                 clientUploadId = attachment?.let { UUID.randomUUID().toString() },
                 uploadedKey = null,
                 uploadedUrl = null,
+                mentionUserIds = encodeMentionUserIds(mentionUserIds),
                 state = "PENDING",
                 failure = null,
                 attempts = 0,
@@ -91,7 +99,12 @@ class OutboxRepository @Inject constructor(
             val sent = api.sendMessage(
                 item.roomKind,
                 item.roomId,
-                SendMessageRequest(item.clientMessageId, item.content, attachment),
+                SendMessageRequest(
+                    item.clientMessageId,
+                    item.content,
+                    attachment,
+                    decodeMentionUserIds(item.mentionUserIds),
+                ),
             ).bodyOrThrow(json)
             database.messages().upsert(sent.message.toEntity(item.roomKind, item.roomId))
             database.outbox().delete(item.clientMessageId)

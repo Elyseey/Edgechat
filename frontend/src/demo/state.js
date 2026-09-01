@@ -63,7 +63,8 @@ export function projectDemoDm(dm) {
     kind: 'dm',
     otherUser: projectDemoUser(dm.otherUser),
     lastMessageAt: dm.lastMessageAt,
-    unreadCount: dm.unreadCount
+    unreadCount: dm.unreadCount,
+    mentionUnreadCount: 0
   };
 }
 
@@ -78,13 +79,23 @@ export function getDemoMembers(channel) {
     }));
 }
 
-export function createDemoMessage({ kind, roomId, content, attachment, sender }) {
+export function createDemoMessage({ kind, roomId, content, attachment, sender, mentionUserIds = [] }) {
+  const normalizedMentionUserIds = [...new Set(mentionUserIds.map(Number))];
   const message = {
     id: demoState.nextMessageId++,
     content: String(content || ''),
     createdAt: new Date().toISOString(),
     sender: cloneDemo(sender),
-    attachment: attachment ? cloneDemo(attachment) : null
+    attachment: attachment ? cloneDemo(attachment) : null,
+    mentionUserIds: normalizedMentionUserIds,
+    mentions: normalizedMentionUserIds
+      .map((userId) => findDemoUser(userId))
+      .filter(Boolean)
+      .map((user) => ({
+        userId: Number(user.id),
+        username: user.username,
+        displayName: user.displayName
+      }))
   };
   const key = roomKey(kind, roomId);
   demoState.messages[key] ||= [];

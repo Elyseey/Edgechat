@@ -62,6 +62,12 @@ test("general 在私信和其他群组之前永久置顶", () => {
 		["public:4"],
 	);
 	assert.equal(sidebar.publicGroupItems.value[0].subtitle, "3 位成员");
+	sidebar.channels.value[1].unreadCount = 4;
+	sidebar.channels.value[1].mentionUnreadCount = 2;
+	assert.equal(sidebar.conversationItems.value.find((item) => item.id === 2).mentionUnreadCount, 2);
+	sidebar.markConversationRead("private", 2);
+	assert.equal(sidebar.channels.value[1].unreadCount, 0);
+	assert.equal(sidebar.channels.value[1].mentionUnreadCount, 0);
 });
 
 test("未加入公开群确认加入后才进入普通会话列表", async () => {

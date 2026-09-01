@@ -247,7 +247,7 @@ export function useChatRoom({
 		roomSession.disconnect();
 	}
 
-	async function sendMessage() {
+	async function sendMessage(mentionUserIds = []) {
 		const key = activeRoom.value
 			? `${activeRoom.value.kind}:${activeRoom.value.id}`
 			: "";
@@ -267,6 +267,7 @@ export function useChatRoom({
 					type: "send",
 					content: composerText.value,
 					attachment: pendingAttachment.value,
+					mentionUserIds,
 				}),
 				key,
 			);

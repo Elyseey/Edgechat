@@ -1,8 +1,9 @@
 <script setup>
 import { ArrowRight, Paperclip } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { t } from "../../i18n.js";
 import UiTextarea from "../ui/Textarea.vue";
+import UiAvatar from "../ui/Avatar.vue";
 import PendingAttachmentPreview from "./PendingAttachmentPreview.vue";
 
 const props = defineProps({
@@ -26,6 +27,10 @@ const props = defineProps({
 		type: String,
 		default: "",
 	},
+	mentionCandidates: {
+		type: Array,
+		default: () => [],
+	},
 });
 
 const emit = defineEmits([
@@ -35,6 +40,24 @@ const emit = defineEmits([
 	"clear-attachment",
 ]);
 const fileInput = ref(null);
+const textarea = ref(null);
+const mentionStart = ref(-1);
+const mentionQuery = ref("");
+const activeMentionIndex = ref(0);
+const filteredMentions = computed(() => {
+	const query = mentionQuery.value.toLocaleLowerCase();
+	return props.mentionCandidates
+		.filter((member) => {
+			if (!query) return true;
+			return [member.username, member.displayName].some((value) =>
+				String(value || "").toLocaleLowerCase().includes(query),
+			);
+		})
+		.slice(0, 8);
+});
+const mentionMenuOpen = computed(
+	() => mentionStart.value >= 0 && filteredMentions.value.length > 0,
+);
 const sendDisabled = computed(
 	() =>
 		props.disabled ||
@@ -43,6 +66,26 @@ const sendDisabled = computed(
 );
 
 function handleKeydown(event) {
+	if (mentionMenuOpen.value) {
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			event.preventDefault();
+			const direction = event.key === "ArrowDown" ? 1 : -1;
+			activeMentionIndex.value =
+				(activeMentionIndex.value + direction + filteredMentions.value.length) %
+				filteredMentions.value.length;
+			return;
+		}
+		if (event.key === "Enter" || event.key === "Tab") {
+			event.preventDefault();
+			selectMention(filteredMentions.value[activeMentionIndex.value]);
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			closeMentionMenu();
+			return;
+		}
+	}
 	if (event.key === "Enter" && !event.shiftKey) {
 		event.preventDefault();
 		if (sendDisabled.value) {
@@ -50,6 +93,43 @@ function handleKeydown(event) {
 		}
 		emit("send");
 	}
+}
+
+function syncMentionQuery(event) {
+	const input = event.target;
+	const cursor = input.selectionStart;
+	const match = input.value.slice(0, cursor).match(/(^|[\s([{])@([^\s@]*)$/u);
+	if (!match || props.mentionCandidates.length === 0) {
+		closeMentionMenu();
+		return;
+	}
+	mentionQuery.value = match[2];
+	mentionStart.value = cursor - match[2].length - 1;
+	activeMentionIndex.value = 0;
+}
+
+function closeMentionMenu() {
+	mentionStart.value = -1;
+	mentionQuery.value = "";
+	activeMentionIndex.value = 0;
+}
+
+function selectMention(member) {
+	if (!member || mentionStart.value < 0) return;
+	const input = textarea.value?.element;
+	const cursor = input?.selectionStart ?? props.modelValue.length;
+	const replacement = `@${member.username} `;
+	const nextValue =
+		props.modelValue.slice(0, mentionStart.value) +
+		replacement +
+		props.modelValue.slice(cursor);
+	const nextCursor = mentionStart.value + replacement.length;
+	emit("update:modelValue", nextValue);
+	closeMentionMenu();
+	nextTick(() => {
+		textarea.value?.focus();
+		textarea.value?.element?.setSelectionRange(nextCursor, nextCursor);
+	});
 }
 
 function openPicker() {
@@ -66,6 +146,29 @@ function openPicker() {
 			/>
 		</div>
 		<div v-if="error" class="composer-error">{{ error }}</div>
+		<div v-if="mentionMenuOpen" class="mention-menu" role="listbox">
+			<button
+				v-for="(member, index) in filteredMentions"
+				:key="member.id"
+				type="button"
+				class="mention-option"
+				:class="{ 'mention-option--active': index === activeMentionIndex }"
+				role="option"
+				:aria-selected="index === activeMentionIndex"
+				@mousedown.prevent
+				@click="selectMention(member)"
+			>
+				<UiAvatar
+					:src="member.avatarUrl"
+					:fallback="member.displayName || member.username"
+					size="xs"
+				/>
+				<span class="mention-option__label">
+					<strong>{{ member.displayName }}</strong>
+					<small>@{{ member.username }}</small>
+				</span>
+			</button>
+		</div>
 		<div class="composer-row">
 			<input
 				ref="fileInput"
@@ -84,6 +187,7 @@ function openPicker() {
 				<Paperclip :size="20" aria-hidden="true" />
 			</button>
 			<UiTextarea
+				ref="textarea"
 				:model-value="modelValue"
 				class="composer-input"
 				auto-grow
@@ -92,6 +196,7 @@ function openPicker() {
 				:disabled="disabled"
 				:placeholder="t('chat.messagePlaceholder')"
 				@update:model-value="emit('update:modelValue', $event)"
+				@input="syncMentionQuery"
 				@keydown="handleKeydown"
 			/>
 			<button
@@ -129,6 +234,63 @@ function openPicker() {
 	color: #dc2626;
 	font-size: 12px;
 	text-align: center;
+}
+
+.mention-menu {
+	position: absolute;
+	right: 68px;
+	bottom: calc(100% - 2px);
+	left: 68px;
+	z-index: 4;
+	max-height: 280px;
+	padding: 6px;
+	overflow-y: auto;
+	border: 1px solid #dfe5e2;
+	border-radius: 8px;
+	background: #ffffff;
+	box-shadow: 0 10px 28px rgba(17, 27, 33, 0.14);
+}
+
+.mention-option {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 6px 10px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	cursor: pointer;
+	text-align: left;
+}
+
+.mention-option:hover,
+.mention-option--active {
+	background: #edf8f2;
+}
+
+.mention-option__label {
+	display: grid;
+	min-width: 0;
+}
+
+.mention-option__label strong,
+.mention-option__label small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mention-option__label strong {
+	color: #111b21;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.mention-option__label small {
+	color: #667781;
+	font-size: 12px;
 }
 
 .composer-row {
@@ -227,6 +389,11 @@ function openPicker() {
 		padding: 8px max(8px, env(safe-area-inset-right))
 			max(8px, env(safe-area-inset-bottom))
 			max(8px, env(safe-area-inset-left));
+	}
+
+	.mention-menu {
+		right: max(56px, env(safe-area-inset-right));
+		left: max(56px, env(safe-area-inset-left));
 	}
 
 	.composer-row {

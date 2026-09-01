@@ -90,6 +90,7 @@ data class ChannelDto(
     val memberCount: Int = 0,
     val lastMessageAt: String? = null,
     val unreadCount: Int = 0,
+    val mentionUnreadCount: Int = 0,
 )
 
 @Serializable
@@ -130,6 +131,13 @@ data class AttachmentDto(
 )
 
 @Serializable
+data class MentionDto(
+    val userId: Long,
+    val username: String,
+    val displayName: String = "",
+)
+
+@Serializable
 data class MessageDto(
     val id: Long,
     val clientMessageId: String? = null,
@@ -138,6 +146,8 @@ data class MessageDto(
     val source: String = "edgechat",
     val sender: SenderDto,
     val attachment: AttachmentDto? = null,
+    val mentionUserIds: List<Long> = emptyList(),
+    val mentions: List<MentionDto> = emptyList(),
 )
 
 @Serializable
@@ -171,6 +181,7 @@ data class SendMessageRequest(
     val clientMessageId: String,
     val content: String,
     val attachment: AttachmentDto? = null,
+    val mentionUserIds: List<Long> = emptyList(),
 )
 
 @Serializable
@@ -276,6 +287,10 @@ data class RealtimeEnvelope(
     val messageId: Long? = null,
     val createdAt: String? = null,
     val unreadCount: Int? = null,
+    val mentionUnreadCount: Int? = null,
+    val mentionsMe: Boolean = false,
+    val contentPreview: String? = null,
+    val sender: SenderDto? = null,
     val error: String? = null,
 )
 

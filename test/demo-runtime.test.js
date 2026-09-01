@@ -139,15 +139,22 @@ test('demo room socket echoes sent messages through the real-time contract', asy
     });
   });
 
-  socket.send(JSON.stringify({ type: 'send', content: '浏览器本地消息', attachment: null }));
+	  socket.send(JSON.stringify({
+	    type: 'send',
+	    content: '@alice 浏览器本地消息',
+	    attachment: null,
+	    mentionUserIds: [2]
+	  }));
 
   assert.equal(frames.length, 1);
   assert.equal(frames[0].type, 'message');
-  assert.equal(frames[0].message.content, '浏览器本地消息');
-  assert.equal(frames[0].message.sender.id, 1);
+	  assert.equal(frames[0].message.content, '@alice 浏览器本地消息');
+	  assert.equal(frames[0].message.sender.id, 1);
+	  assert.deepEqual(frames[0].message.mentionUserIds, [2]);
 
   const history = await requestDemo('/messages?kind=public&roomId=1');
-  assert.equal(history.messages.at(-1).content, '浏览器本地消息');
+	  assert.equal(history.messages.at(-1).content, '@alice 浏览器本地消息');
+	  assert.equal(history.messages.at(-1).mentions[0].username, 'alice');
   assert.deepEqual(inboxFrames, []);
   socket.close();
   inboxSocket.close();

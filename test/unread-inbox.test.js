@@ -57,6 +57,8 @@ const messagePayload = {
 	messageId: 18,
 	createdAt: "2026-08-16T10:00:00.000Z",
 	unreadCount: 3,
+	mentionUnreadCount: 1,
+	mentionsMe: true,
 };
 
 test("正在查看且页面聚焦的会话直接标记已读，不弹通知", () => {
@@ -81,7 +83,7 @@ test("页面失焦或消息来自其他会话时保留未读并触发通知", ()
 	});
 	hiddenActiveRoom.emit(messagePayload);
 	assert.equal(hiddenActiveRoom.activity.length, 1);
-	assert.deepEqual(hiddenActiveRoom.notified, [messagePayload.room]);
+	assert.deepEqual(hiddenActiveRoom.notified, [messagePayload]);
 	assert.deepEqual(hiddenActiveRoom.read, []);
 
 	const otherRoom = createInboxHarness({
@@ -90,5 +92,6 @@ test("页面失焦或消息来自其他会话时保留未读并触发通知", ()
 	});
 	otherRoom.emit(messagePayload);
 	assert.equal(otherRoom.activity[0].unreadCount, 3);
-	assert.deepEqual(otherRoom.notified, [messagePayload.room]);
+	assert.equal(otherRoom.activity[0].mentionUnreadCount, 1);
+	assert.deepEqual(otherRoom.notified, [messagePayload]);
 });

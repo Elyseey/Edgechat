@@ -49,11 +49,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aozorae.edgechat.core.database.MessageEntity
 import com.aozorae.edgechat.core.database.OutboxEntity
+import com.aozorae.edgechat.core.database.decodeMentionUserIds
+import com.aozorae.edgechat.core.network.dto.MemberDto
 import com.aozorae.edgechat.core.network.dto.SessionDto
 import com.aozorae.edgechat.ui.components.EdgeAvatar
 import com.aozorae.edgechat.ui.components.resolveServerUrl
@@ -76,6 +80,7 @@ fun ChatMessages(
     messages: List<MessageEntity>,
     outbox: List<OutboxEntity>,
     currentUser: SessionDto,
+    members: List<MemberDto> = emptyList(),
     serverBaseUrl: String,
     language: String,
     scrollState: LazyListState,
@@ -138,6 +143,8 @@ fun ChatMessages(
                         own = message.senderKind == "local" && message.senderId == currentUser.userId.toString(),
                         groupPosition = messageGroupPosition(message, newer, older),
                         showAuthor = startsMessageGroup(message, older),
+                        currentUser = currentUser,
+                        members = members,
                         serverBaseUrl = serverBaseUrl,
                         language = language,
                         onDelete = onDeleteMessage,
@@ -221,6 +228,8 @@ private fun MessageItem(
     own: Boolean,
     groupPosition: MessageGroupPosition,
     showAuthor: Boolean,
+    currentUser: SessionDto,
+    members: List<MemberDto>,
     serverBaseUrl: String,
     language: String,
     onDelete: (Long) -> Unit,
@@ -291,6 +300,8 @@ private fun MessageItem(
                     message = message,
                     own = own,
                     groupPosition = groupPosition,
+                    currentUser = currentUser,
+                    members = members,
                     serverBaseUrl = serverBaseUrl,
                     language = language,
                     onOpenAttachment = onOpenAttachment,
@@ -306,6 +317,8 @@ private fun MessageBubble(
     message: MessageEntity,
     own: Boolean,
     groupPosition: MessageGroupPosition,
+    currentUser: SessionDto,
+    members: List<MemberDto>,
     serverBaseUrl: String,
     language: String,
     onOpenAttachment: (String, String, String) -> Unit,
@@ -321,7 +334,30 @@ private fun MessageBubble(
         ) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 if (message.content.isNotBlank()) {
-                    Text(message.content, style = MaterialTheme.typography.bodyLarge)
+                    val ranges = findMentionRanges(
+                        message.content,
+                        members,
+                        decodeMentionUserIds(message.mentionUserIds),
+                    )
+                    val annotatedContent = buildAnnotatedString {
+                        append(message.content)
+                        ranges.forEach { range ->
+                            addStyle(
+                                SpanStyle(
+                                    color = colors.accent,
+                                    background = if (range.userId == currentUser.userId) {
+                                        colors.accentSubtle
+                                    } else {
+                                        androidx.compose.ui.graphics.Color.Unspecified
+                                    },
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                range.start,
+                                range.end,
+                            )
+                        }
+                    }
+                    Text(annotatedContent, style = MaterialTheme.typography.bodyLarge)
                 }
                 val attachmentUrl = message.attachmentUrl
                 if (attachmentUrl != null) {

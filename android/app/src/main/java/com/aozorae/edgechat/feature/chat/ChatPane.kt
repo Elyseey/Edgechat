@@ -45,6 +45,7 @@ import com.aozorae.edgechat.core.database.ConversationEntity
 import com.aozorae.edgechat.core.database.MessageEntity
 import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.network.dto.SessionDto
+import com.aozorae.edgechat.core.network.dto.MemberDto
 import com.aozorae.edgechat.core.repository.PendingAttachment
 import com.aozorae.edgechat.core.repository.RoomIdentity
 import com.aozorae.edgechat.ui.components.EdgeAvatar
@@ -62,6 +63,7 @@ fun ChatPane(
     messages: List<MessageEntity>,
     outbox: List<OutboxEntity>,
     attachment: PendingAttachment?,
+    members: List<MemberDto>,
     currentUser: SessionDto,
     serverBaseUrl: String,
     busy: Boolean,
@@ -69,7 +71,7 @@ fun ChatPane(
     openAttachmentEvents: SharedFlow<Pair<android.net.Uri, String>>,
     onBack: (() -> Unit)?,
     onLoadOlder: () -> Unit,
-    onSend: (String) -> Unit,
+    onSend: (String, List<Long>) -> Unit,
     onChooseAttachment: (android.net.Uri) -> Unit,
     onClearAttachment: () -> Unit,
     onRetry: (String) -> Unit,
@@ -189,6 +191,7 @@ fun ChatPane(
                 messages = messages,
                 outbox = outbox,
                 currentUser = currentUser,
+                members = members,
                 serverBaseUrl = serverBaseUrl,
                 language = language,
                 scrollState = scrollState,
@@ -204,10 +207,12 @@ fun ChatPane(
                 roomTitle = conversation.title,
                 attachment = attachment,
                 language = language,
+                members = members,
+                currentUserId = currentUser.userId,
                 onChooseAttachment = { picker.launch("*/*") },
                 onClearAttachment = onClearAttachment,
-                onSend = { content ->
-                    onSend(content)
+                onSend = { content, mentionUserIds ->
+                    onSend(content, mentionUserIds)
                     scope.launch { scrollState.animateScrollToItem(0) }
                 },
             )

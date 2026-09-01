@@ -286,6 +286,9 @@ paths:
                 clientMessageId: { type: string, format: uuid }
                 content: { type: string }
                 attachment: { oneOf: [{ $ref: "#/components/schemas/Attachment" }, { type: "null" }] }
+                mentionUserIds:
+                  type: array
+                  items: { type: integer }
       responses:
         "200": { $ref: "#/components/responses/MessageSubmission" }
         "201": { $ref: "#/components/responses/MessageSubmission" }
@@ -548,6 +551,7 @@ components:
         memberCount: { type: integer }
         lastMessageAt: { type: [string, "null"] }
         unreadCount: { type: integer }
+        mentionUnreadCount: { type: integer }
     Member:
       type: object
       required: [id, username, displayName, avatarUrl, role]
@@ -577,6 +581,13 @@ components:
         displayName: { type: string }
         avatarUrl: { type: string }
         source: { type: string }
+    Mention:
+      type: object
+      required: [userId, username, displayName]
+      properties:
+        userId: { type: integer }
+        username: { type: string }
+        displayName: { type: string }
     Message:
       type: object
       required: [id, content, createdAt, source, sender, attachment]
@@ -588,6 +599,8 @@ components:
         source: { type: string }
         sender: { $ref: "#/components/schemas/Sender" }
         attachment: { oneOf: [{ $ref: "#/components/schemas/Attachment" }, { type: "null" }] }
+        mentionUserIds: { type: array, items: { type: integer } }
+        mentions: { type: array, items: { $ref: "#/components/schemas/Mention" } }
     Bootstrap:
       type: object
       required: [users, channels, dms]

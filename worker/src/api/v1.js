@@ -229,9 +229,10 @@ export function registerV1Routes(app) {
       action: {
         type: 'send',
         clientMessageId: payload.clientMessageId,
-        content: payload.content,
-        attachment: payload.attachment || null
-      }
+			content: payload.content,
+			attachment: payload.attachment || null,
+			mentionUserIds: payload.mentionUserIds || []
+		  }
     });
   });
 

@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         RoomSyncEntity::class,
         OutboxEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class EdgeChatDatabase : RoomDatabase() {

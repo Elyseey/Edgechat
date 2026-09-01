@@ -117,7 +117,8 @@ class ChatRepository @Inject constructor(
                 database.conversations().updateActivity(
                     room.kind,
                     room.id,
-                    envelope.unreadCount ?: 0,
+                    envelope.unreadCount,
+                    envelope.mentionUnreadCount,
                     envelope.createdAt,
                 )
                 sync(room)

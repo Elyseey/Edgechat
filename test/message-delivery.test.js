@@ -25,7 +25,13 @@ test("消息提交 module 统一持久化参数与广播 packet", async () => {
 
 	assert.deepEqual(calls, [{
 		env,
-		args: { channelId: 3, senderId: 7, content: "hello", attachment: { key: "a" } },
+		args: {
+			channelId: 3,
+			senderId: 7,
+			content: "hello",
+			attachment: { key: "a" },
+			mentionUserIds: [],
+		},
 	}]);
 	assert.equal(result.message, message);
 	assert.deepEqual(JSON.parse(result.packet), { protocolVersion: 1, type: "message", message });
@@ -63,6 +69,9 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 			countCalls.push(userId);
 			return new Promise((resolve) => resolvers.set(userId, resolve));
 		},
+		async countMentions(_db, { userId }) {
+			return userId === 2 ? 1 : 0;
+		},
 		async notifyInbox(_env, userId, payload) {
 			notifications.push({ userId, payload });
 		},
@@ -72,7 +81,13 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 		{
 			room: { id: "4", kind: "private", name: "Team" },
 			senderId: 1,
-			message: { id: "8", createdAt: "now" },
+			message: {
+				id: "8",
+				createdAt: "now",
+				content: "@bob hello",
+				mentionUserIds: [2],
+				sender: { displayName: "Alice" },
+			},
 		},
 	);
 	await Promise.resolve();
@@ -89,7 +104,11 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 				room: { id: 4, kind: "private", name: "Team" },
 				messageId: 8,
 				createdAt: "now",
-				unreadCount: 5,
+					unreadCount: 5,
+					mentionUnreadCount: 1,
+					mentionsMe: true,
+					contentPreview: "@bob hello",
+					sender: { displayName: "Alice" },
 			},
 		},
 		{
@@ -100,7 +119,10 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 				room: { id: 4, kind: "private", name: "Team" },
 				messageId: 8,
 				createdAt: "now",
-				unreadCount: 6,
+					unreadCount: 6,
+					mentionsMe: false,
+					contentPreview: "@bob hello",
+					sender: { displayName: "Alice" },
 			},
 		},
 	]);
@@ -116,6 +138,9 @@ test("单个未读收件人失败被隔离，成员查询失败也不阻塞提�
 		async countUnread(_db, { userId }) {
 			if (userId === 2) throw new Error("count failed");
 			return 1;
+		},
+		async countMentions() {
+			return 0;
 		},
 		async notifyInbox(_env, userId) {
 			notifications.push(userId);

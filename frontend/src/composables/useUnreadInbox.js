@@ -42,9 +42,10 @@ export function useUnreadInbox({
           kind: payload.room.kind,
           roomId: payload.room.id,
           lastMessageAt: payload.createdAt,
-          unreadCount: payload.unreadCount
-        });
-			notifyRoom(payload.room);
+	          unreadCount: payload.unreadCount,
+	          mentionUnreadCount: payload.mentionUnreadCount
+	        });
+				notifyRoom(payload);
 			},
 		});
 

@@ -55,6 +55,7 @@ class ChatViewModel @Inject constructor(
     private val members = MutableStateFlow<List<MemberDto>>(emptyList())
     private val busy = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
+    private var memberLoadGeneration = 0
     private val roomMessages = selectedRoom.flatMapLatest { room ->
         room?.let(chatRepository::messages) ?: flowOf(emptyList())
     }
@@ -90,13 +91,26 @@ class ChatViewModel @Inject constructor(
     fun refresh() = action { chatRepository.bootstrap() }
 
     fun select(room: RoomIdentity?) {
+        val generation = ++memberLoadGeneration
         selectedRoom.value = room
         members.value = emptyList()
         realtime.setRoom(room)
-        if (room != null) action {
+        if (room != null) {
+            if (room.kind != "dm") {
+                viewModelScope.launch {
+                    runCatching { chatRepository.members(room.id).members }
+                        .onSuccess { loadedMembers ->
+                            if (generation == memberLoadGeneration && selectedRoom.value == room) {
+                                members.value = loadedMembers
+                            }
+                        }
+                }
+            }
+            action {
             chatRepository.loadLatest(room)
             chatRepository.sync(room)
             chatRepository.markRead(room)
+			}
         }
     }
 
@@ -104,12 +118,12 @@ class ChatViewModel @Inject constructor(
         selectedRoom.value?.let { room -> action { chatRepository.loadOlder(room) } }
     }
 
-    fun send(content: String) {
+    fun send(content: String, mentionUserIds: List<Long>) {
         val room = selectedRoom.value ?: return
         val pending = attachment.value
         if (content.isBlank() && pending == null) return
         action {
-            outboxRepository.enqueue(room, content, pending)
+            outboxRepository.enqueue(room, content, pending, mentionUserIds)
             attachment.value = null
         }
     }
@@ -143,16 +157,16 @@ class ChatViewModel @Inject constructor(
         select(chatRepository.createGroup(name, description, kind, memberIds))
     }
 
-    fun loadMembers(channelId: Long) = action {
-        members.value = chatRepository.members(channelId).members
+    fun loadMembers(channelId: Long) = updateMembers(channelId) {
+        chatRepository.members(channelId).members
     }
 
-    fun invite(channelId: Long, userIds: List<Long>) = action {
-        members.value = chatRepository.invite(channelId, userIds)
+    fun invite(channelId: Long, userIds: List<Long>) = updateMembers(channelId) {
+        chatRepository.invite(channelId, userIds)
     }
 
-    fun removeMember(channelId: Long, userId: Long) = action {
-        members.value = chatRepository.removeMember(channelId, userId)
+    fun removeMember(channelId: Long, userId: Long) = updateMembers(channelId) {
+        chatRepository.removeMember(channelId, userId)
     }
 
     fun renameGroup(channelId: Long, name: String) = action {
@@ -166,6 +180,17 @@ class ChatViewModel @Inject constructor(
 
     fun clearError() {
         error.value = null
+    }
+
+    private fun updateMembers(channelId: Long, request: suspend () -> List<MemberDto>) {
+        val generation = memberLoadGeneration
+        action {
+            val loadedMembers = request()
+            val room = selectedRoom.value
+            if (generation == memberLoadGeneration && room?.kind != "dm" && room?.id == channelId) {
+                members.value = loadedMembers
+            }
+        }
     }
 
     private fun action(block: suspend () -> Unit) {

@@ -19,6 +19,10 @@ function publishInbox(kind, roomId, message, { incrementUnread = false } = {}) {
   if (room && incrementUnread) {
     room.unreadCount = Number(room.unreadCount || 0) + 1;
   }
+  const mentionsMe = (message.mentionUserIds || []).includes(Number(demoState.session.userId));
+  if (room && incrementUnread && mentionsMe) {
+    room.mentionUnreadCount = Number(room.mentionUnreadCount || 0) + 1;
+  }
   const payload = {
     type: 'room_message',
     room: {
@@ -28,7 +32,11 @@ function publishInbox(kind, roomId, message, { incrementUnread = false } = {}) {
     },
     messageId: message.id,
     createdAt: message.createdAt,
-    unreadCount: Number(room?.unreadCount || 0)
+    unreadCount: Number(room?.unreadCount || 0),
+    mentionUnreadCount: Number(room?.mentionUnreadCount || 0),
+    mentionsMe,
+    contentPreview: message.content,
+    sender: cloneDemo(message.sender)
   };
   for (const socket of inboxSockets) emit(socket, payload);
 }
@@ -69,7 +77,8 @@ function handleRoomFrame(socket, frame) {
       roomId: socket.roomId,
       content: payload.content,
       attachment: payload.attachment,
-      sender: currentSender()
+      sender: currentSender(),
+      mentionUserIds: payload.mentionUserIds || []
     });
     publishRoom(socket.kind, socket.roomId, { type: 'message', message: cloneDemo(message) });
 
@@ -78,9 +87,10 @@ function handleRoomFrame(socket, frame) {
         const reply = createDemoMessage({
           kind: socket.kind,
           roomId: socket.roomId,
-          content: 'Telegram 已收到这条消息，并把群内回复同步回 EdgeChat。',
+          content: '@admin Telegram 已收到这条消息，并把群内回复同步回 EdgeChat。',
           attachment: null,
-          sender: telegramSender()
+          sender: telegramSender(),
+          mentionUserIds: [demoState.session.userId]
         });
         publishRoom(socket.kind, socket.roomId, { type: 'message', message: cloneDemo(reply) });
         publishInbox(socket.kind, socket.roomId, reply, { incrementUnread: true });

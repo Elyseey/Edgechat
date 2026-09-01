@@ -35,6 +35,7 @@ export function useRoomManagement({
 		avatarUrl: "",
 		avatarKey: "",
 	});
+	let memberLoadGeneration = 0;
 
 	const availableInviteUsers = computed(() => {
 		const memberIds = new Set(
@@ -92,14 +93,23 @@ export function useRoomManagement({
 	}
 
 	async function loadMembers() {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
+		const room = activeRoom.value;
+		if (!room || room.kind === "dm") {
 			groupMembers.value = [];
 			return;
 		}
 
+		const generation = ++memberLoadGeneration;
 		memberLoading.value = true;
 		try {
-				const payload = await roomApi.getChannelMembers(activeRoom.value.id);
+			const payload = await roomApi.getChannelMembers(room.id);
+			if (
+				generation !== memberLoadGeneration ||
+				activeRoom.value?.kind !== room.kind ||
+				Number(activeRoom.value?.id) !== Number(room.id)
+			) {
+				return;
+			}
 			groupMembers.value = payload.members;
 			activeRoom.value.canManage = payload.room.canManage;
 			activeRoom.value.myRole = payload.room.myRole;
@@ -110,9 +120,13 @@ export function useRoomManagement({
 			activeRoom.value.avatarKey = payload.room.avatarKey || "";
 			syncGroupSettingsForm();
 		} catch (currentError) {
-			error.value = currentError.message;
+			if (generation === memberLoadGeneration) {
+				error.value = currentError.message;
+			}
 		} finally {
-			memberLoading.value = false;
+			if (generation === memberLoadGeneration) {
+				memberLoading.value = false;
+			}
 		}
 	}
 
@@ -272,11 +286,15 @@ export function useRoomManagement({
 	watch(
 		() => activeRoom.value && `${activeRoom.value.kind}:${activeRoom.value.id}`,
 		() => {
+			memberLoadGeneration += 1;
 			groupMembers.value = [];
 			inviteUserId.value = "";
 			showGroupEditor.value = false;
 			showMemberPanel.value = false;
 			syncGroupSettingsForm();
+			if (activeRoom.value?.kind !== "dm") {
+				void loadMembers();
+			}
 		},
 	);
 

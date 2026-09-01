@@ -1,5 +1,5 @@
 <script setup>
-import { BellOff } from "@lucide/vue";
+import { AtSign, BellOff } from "@lucide/vue";
 import { t } from "../../i18n.js";
 import UiAvatar from "../ui/Avatar.vue";
 
@@ -60,8 +60,12 @@ const emit = defineEmits(["select"]);
 						:aria-label="t('chat.muted')"
 					>
 						<BellOff :size="14" aria-hidden="true" />
-					</span>
-					<span v-if="item.unreadCount > 0" class="sidebar-unread-badge">
+						</span>
+						<span v-if="item.mentionUnreadCount > 0" class="sidebar-mention-badge">
+							<AtSign :size="13" aria-hidden="true" />
+							{{ t("chat.mentionedMe") }}
+						</span>
+						<span v-if="item.unreadCount > 0" class="sidebar-unread-badge">
 						{{ item.unreadCount > 99 ? "99+" : item.unreadCount }}
 					</span>
 				</div>
@@ -200,6 +204,17 @@ const emit = defineEmits(["select"]);
 	font-variant-numeric: tabular-nums;
 	font-weight: 700;
 	line-height: 1;
+}
+
+.sidebar-mention-badge {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 2px;
+	color: #d93025;
+	font-size: 11px;
+	font-weight: 700;
+	white-space: nowrap;
 }
 
 @media (max-width: 960px) {

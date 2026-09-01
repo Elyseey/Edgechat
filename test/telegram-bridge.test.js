@@ -325,9 +325,10 @@ test("外部消息密文绑定来源和外部用户 ID", async () => {
 
 test("消息 projection 保留 Telegram 来源而不伪造 EdgeChat 账号", () => {
 	assert.deepEqual(
-		mapMessage({
-			id: 12,
-			content: "hello",
+			mapMessage({
+				id: 12,
+				content: "hello",
+				mentions_json: "[]",
 			created_at: "now",
 			sender_kind: "external",
 			external_sender_id: "42",
@@ -335,9 +336,11 @@ test("消息 projection 保留 Telegram 来源而不伪造 EdgeChat 账号", () 
 			external_sender_avatar_url: null,
 			source: "telegram",
 		}),
-		{
-			id: 12,
-			content: "hello",
+			{
+				id: 12,
+				content: "hello",
+				mentionUserIds: [],
+				mentions: [],
 			createdAt: "now",
 			source: "telegram",
 			sender: {

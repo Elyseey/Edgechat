@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
 import { useRoomManagement } from "../frontend/src/composables/useRoomManagement.js";
 
@@ -171,4 +171,33 @@ test("general 管理动作不会发出移除成员或删除群组请求", async 
 
 	assert.equal(calls.length, 0);
 	assert.notEqual(activeRoom.value, null);
+});
+
+test("快速切换群组时旧成员请求不会覆盖当前会话", async () => {
+	const resolvers = new Map();
+	const { management, activeRoom } = createHarness({
+		roomApi: {
+			getChannelMembers(id) {
+				return new Promise((resolve) => resolvers.set(Number(id), resolve));
+			},
+		},
+	});
+	const firstLoad = management.members.load();
+	activeRoom.value = { id: 5, kind: "private", name: "Next" };
+	await nextTick();
+
+	resolvers.get(4)({
+		room: { name: "Old" },
+		members: [{ id: 4, username: "old", displayName: "Old" }],
+	});
+	await firstLoad;
+	assert.deepEqual(management.members.items.value, []);
+	assert.equal(activeRoom.value.name, "Next");
+
+	resolvers.get(5)({
+		room: { name: "Next", canManage: false, myRole: "member" },
+		members: [{ id: 5, username: "next", displayName: "Next" }],
+	});
+	await nextTick();
+	assert.equal(management.members.items.value[0].username, "next");
 });

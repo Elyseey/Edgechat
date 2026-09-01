@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS messages (
   source_attachment_id TEXT,
   source_attachment_unique_id TEXT,
   client_message_id TEXT,
+  mention_user_ids TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT,
   CHECK (

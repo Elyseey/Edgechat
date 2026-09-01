@@ -27,6 +27,7 @@ data class ConversationEntity(
     val otherUserId: Long?,
     val lastMessageAt: String?,
     val unreadCount: Int,
+    val mentionUnreadCount: Int = 0,
 )
 
 @Entity(
@@ -51,6 +52,7 @@ data class MessageEntity(
     val attachmentType: String?,
     val attachmentSize: Long?,
     val attachmentUrl: String?,
+    val mentionUserIds: String = "",
 )
 
 @Entity(tableName = "room_sync", primaryKeys = ["kind", "roomId"])
@@ -69,6 +71,7 @@ data class OutboxEntity(
     val clientUploadId: String?,
     val uploadedKey: String?,
     val uploadedUrl: String?,
+    val mentionUserIds: String = "",
     val state: String,
     val failure: String?,
     val attempts: Int,

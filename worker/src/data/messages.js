@@ -1,5 +1,6 @@
 import { decryptMessageContent, encryptMessageContent } from "../encryption.js";
 import { pickAttachment, publicFileUrl } from "../utils.js";
+import { normalizeMentionUserIds } from "./mentions.js";
 import { fileBelongsToUser } from "./uploaded-files.js";
 
 function toNullableNumber(value) {
@@ -10,9 +11,16 @@ function toNullableNumber(value) {
 export function mapMessage(row, content = row.content) {
 	const isExternal = row.sender_kind === "external";
 	const isTelegramExternal = isExternal && row.source === "telegram";
+	const mentions = JSON.parse(row.mentions_json || "[]").map((mention) => ({
+		userId: Number(mention.userId),
+		username: mention.username,
+		displayName: mention.displayName,
+	}));
 	const message = {
 		id: Number(row.id),
 		content,
+		mentionUserIds: normalizeMentionUserIds(JSON.parse(row.mention_user_ids || "[]")),
+		mentions,
 		createdAt: row.created_at,
 		source: row.source || "edgechat",
 		sender: {
@@ -74,11 +82,21 @@ async function mapDecryptedMessage(env, row) {
 const MESSAGE_SELECT = `SELECT
 	  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
 	  m.attachment_size, m.sender_kind, m.external_sender_id, m.external_sender_name,
-	  m.external_sender_avatar_url, m.source, m.source_message_id,
-	  m.source_attachment_id, m.source_attachment_unique_id, m.client_message_id, m.created_at,
-  u.id AS sender_id, u.username AS sender_username,
-  u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key
- FROM messages m LEFT JOIN users u ON u.id = m.sender_id`;
+		  m.external_sender_avatar_url, m.source, m.source_message_id,
+		  m.source_attachment_id, m.source_attachment_unique_id, m.client_message_id,
+		  m.mention_user_ids, m.created_at,
+	  u.id AS sender_id, u.username AS sender_username,
+	  u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key,
+	  COALESCE((
+	    SELECT json_group_array(json_object(
+	      'userId', mentioned.id,
+	      'username', mentioned.username,
+	      'displayName', mentioned.display_name
+	    ))
+	    FROM json_each(COALESCE(m.mention_user_ids, '[]')) mention_ids
+	    JOIN users mentioned ON mentioned.id = CAST(mention_ids.value AS INTEGER)
+	  ), '[]') AS mentions_json
+	 FROM messages m LEFT JOIN users u ON u.id = m.sender_id`;
 
 export async function listMessages(env, roomId, before = null, limit = 30) {
 	const filters = ["m.channel_id = ?", "m.deleted_at IS NULL"];
@@ -251,6 +269,7 @@ async function persistMessage(env, {
 	sourceAttachmentId = null,
 	sourceAttachmentUniqueId = null,
 	clientMessageId = null,
+	mentionUserIds = [],
 }) {
 	const isExternal = externalSender !== null;
 	const normalizedSenderId = isExternal ? null : Number(senderId);
@@ -288,15 +307,19 @@ async function persistMessage(env, {
 	const normalizedClientMessageId = isExternal
 		? null
 		: String(clientMessageId || "").trim() || null;
+	const storedMentionUserIds = JSON.stringify(
+		isExternal ? [] : normalizeMentionUserIds(mentionUserIds),
+	);
 	try {
 		const result = await env.DB
 			.prepare(
 				`INSERT INTO messages (
 				   channel_id, sender_id, content, attachment_key, attachment_name,
 				   attachment_type, attachment_size, sender_kind, external_sender_id,
-				   external_sender_name, external_sender_avatar_url, source, source_message_id,
-				   source_attachment_id, source_attachment_unique_id, client_message_id
-				 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					   external_sender_name, external_sender_avatar_url, source, source_message_id,
+					   source_attachment_id, source_attachment_unique_id, client_message_id,
+					   mention_user_ids
+					 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				Number(channelId),
@@ -313,9 +336,10 @@ async function persistMessage(env, {
 					String(source || "edgechat"),
 					sourceMessageId ? String(sourceMessageId) : null,
 					sourceAttachmentId ? String(sourceAttachmentId) : null,
-					sourceAttachmentUniqueId ? String(sourceAttachmentUniqueId) : null,
-					normalizedClientMessageId,
-				)
+						sourceAttachmentUniqueId ? String(sourceAttachmentUniqueId) : null,
+						normalizedClientMessageId,
+						storedMentionUserIds,
+					)
 			.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
 	} catch (error) {
@@ -356,6 +380,7 @@ export async function insertMessage(env, {
 	content,
 	attachment,
 	clientMessageId = null,
+	mentionUserIds = [],
 }) {
 	const result = await persistMessage(env, {
 		channelId,
@@ -363,6 +388,7 @@ export async function insertMessage(env, {
 		content,
 		attachment,
 		clientMessageId,
+		mentionUserIds,
 	});
 	return result.message;
 }

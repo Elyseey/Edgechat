@@ -10,6 +10,7 @@ import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageComposer from '../components/chat/MessageComposer.vue';
+import MentionText from '../components/chat/MentionText.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
 import PinnedMessageBar from '../components/chat/PinnedMessageBar.vue';
 import MobileNavigationDrawer from '../components/chat/MobileNavigationDrawer.vue';
@@ -28,6 +29,7 @@ import { useConversationCreation } from '../composables/useConversationCreation.
 import { useMessageContextMenu } from '../composables/useMessageContextMenu.ts';
 import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
+import { resolveMentionUserIds } from '../mentions.ts';
 import store from '../store.js';
 import { useI18n } from '../i18n.js';
 
@@ -89,8 +91,9 @@ function handleRoomActivity({ room, message }) {
   applyConversationActivity({
     kind: room.kind,
     roomId: room.id,
-    lastMessageAt: message.createdAt,
-    unreadCount: 0
+	    lastMessageAt: message.createdAt,
+	    unreadCount: 0,
+	    mentionUnreadCount: 0
   });
   markConversationRead(room.kind, room.id);
 }
@@ -192,6 +195,17 @@ const {
   invite: inviteMember,
   remove: removeMember
 } = memberManagement;
+const mentionCandidates = computed(() =>
+	activeRoom.value?.kind === 'dm'
+		? []
+		: groupMembers.value.filter((member) => Number(member.id) !== Number(session.value?.userId))
+);
+
+function sendComposerMessage() {
+	return sendMessage(
+		resolveMentionUserIds(composerText.value, mentionCandidates.value, session.value?.userId)
+	);
+}
 const {
   show: showGroupEditor,
   form: groupSettingsForm,
@@ -563,7 +577,13 @@ onBeforeUnmount(() => {
                 <span>{{ msg.sender.displayName }}</span>
                 <SenderSourceBadge :source="msg.sender.source" />
               </div>
-              <p v-if="msg.content">{{ msg.content }}</p>
+	              <p v-if="msg.content">
+				<MentionText
+				  :content="msg.content"
+				  :mentions="msg.mentions"
+				  :current-user-id="session?.userId"
+				/>
+			  </p>
               <MessageAttachment v-if="msg.attachment" :attachment="msg.attachment" />
               <span class="message-time">{{ formatBubbleTime(msg.createdAt) }}</span>
             </div>
@@ -586,9 +606,10 @@ onBeforeUnmount(() => {
 		  v-model="composerText"
 		  :pending-attachment="pendingAttachment"
 		  :sending="sending"
-		  :disabled="!activeRoom"
-		  :error="error"
-		  @send="sendMessage"
+			  :disabled="!activeRoom"
+			  :error="error"
+			  :mention-candidates="mentionCandidates"
+			  @send="sendComposerMessage"
 		  @upload="uploadAttachment"
 		  @clear-attachment="clearAttachment"
 		/>

@@ -22,7 +22,7 @@ interface UserDao {
 interface ConversationDao {
     @Query(
         """SELECT * FROM conversations
-           ORDER BY isGeneral DESC, unreadCount DESC,
+           ORDER BY isGeneral DESC, mentionUnreadCount DESC, unreadCount DESC,
                     CASE WHEN lastMessageAt IS NULL THEN 1 ELSE 0 END,
                     lastMessageAt DESC, title COLLATE NOCASE"""
     )
@@ -34,10 +34,14 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(conversations: List<ConversationEntity>)
 
-    @Query("UPDATE conversations SET unreadCount = :count, lastMessageAt = :createdAt WHERE kind = :kind AND id = :roomId")
-    suspend fun updateActivity(kind: String, roomId: Long, count: Int, createdAt: String?)
+    @Query(
+        "UPDATE conversations SET unreadCount = COALESCE(:count, unreadCount), " +
+            "mentionUnreadCount = COALESCE(:mentionCount, mentionUnreadCount), " +
+            "lastMessageAt = :createdAt WHERE kind = :kind AND id = :roomId"
+    )
+    suspend fun updateActivity(kind: String, roomId: Long, count: Int?, mentionCount: Int?, createdAt: String?)
 
-    @Query("UPDATE conversations SET unreadCount = 0 WHERE kind = :kind AND id = :roomId")
+    @Query("UPDATE conversations SET unreadCount = 0, mentionUnreadCount = 0 WHERE kind = :kind AND id = :roomId")
     suspend fun clearUnread(kind: String, roomId: Long)
 
     @Query("DELETE FROM conversations")

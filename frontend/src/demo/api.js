@@ -346,7 +346,10 @@ export async function requestDemo(path, options = {}) {
     const room = body.kind === 'dm'
       ? demoState.dms.find((dm) => Number(dm.id) === Number(body.roomId))
       : findDemoChannel(body.roomId);
-    if (room) room.unreadCount = 0;
+    if (room) {
+      room.unreadCount = 0;
+      room.mentionUnreadCount = 0;
+    }
     return { ok: true };
   }
   if (method === 'POST' && pathname === '/dm/open') {

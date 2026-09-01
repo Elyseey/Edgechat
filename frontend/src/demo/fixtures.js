@@ -107,6 +107,7 @@ export function createDemoFixtures() {
       memberIds: [1, 2, 3],
       lastMessageAt: '2026-08-14T09:35:00.000Z',
       unreadCount: 2,
+      mentionUnreadCount: 1,
       createdAt: '2026-07-10T10:00:00.000Z'
     },
     {
@@ -208,9 +209,11 @@ export function createDemoFixtures() {
       },
       {
         id: 112,
-        content: '收到，我会继续检查移动端消息列表。',
+        content: '@admin 收到，我会继续检查移动端消息列表。',
         createdAt: '2026-08-14T09:35:00.000Z',
         sender: internalSender(users[2]),
+        mentionUserIds: [1],
+        mentions: [{ userId: 1, username: 'admin', displayName: '演示管理员' }],
         attachment: null
       }
     ],

@@ -26,9 +26,11 @@ class MessageComposerTest {
                     roomTitle = "general",
                     attachment = null,
                     language = "en-US",
+                    members = emptyList(),
+                    currentUserId = 1,
                     onChooseAttachment = {},
                     onClearAttachment = {},
-                    onSend = { sent = it },
+                    onSend = { content, _ -> sent = content },
                 )
             }
         }
@@ -54,9 +56,11 @@ class MessageComposerTest {
                     roomTitle = "general",
                     attachment = null,
                     language = "en-US",
+                    members = emptyList(),
+                    currentUserId = 1,
                     onChooseAttachment = {},
                     onClearAttachment = {},
-                    onSend = {},
+                    onSend = { _, _ -> },
                 )
             }
         }

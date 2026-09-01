@@ -33,7 +33,7 @@ function createQueryDb(results) {
 	};
 }
 
-test("可见频道查询保持七个数值身份绑定与既有 projection", async () => {
+test("可见频道查询保持十个数值身份绑定与提及 projection", async () => {
 	const { db, capture } = createQueryDb([
 			{
 				id: "9",
@@ -48,13 +48,14 @@ test("可见频道查询保持七个数值身份绑定与既有 projection", asy
 			can_manage: 0,
 			member_count: "3",
 			last_message_at: null,
-			unread_count: "2",
+				unread_count: "2",
+				mention_unread_count: "1",
 		},
 	]);
 
 	const channels = await listVisibleChannels(db, "7");
 
-	assert.deepEqual(capture.binds, [7, 7, 7, 7, 7, 7, 7]);
+	assert.deepEqual(capture.binds, [7, 7, 7, 7, 7, 7, 7, 7, 7, 7]);
 	assert.deepEqual(channels[0], {
 		id: 9,
 			name: "General",
@@ -70,6 +71,7 @@ test("可见频道查询保持七个数值身份绑定与既有 projection", asy
 		memberCount: 3,
 		lastMessageAt: null,
 		unreadCount: 2,
+		mentionUnreadCount: 1,
 	});
 	assert.match(capture.sql, /CASE WHEN c\.name = 'general' THEN 0 ELSE 1 END/);
 });
@@ -224,9 +226,10 @@ test("站点设置 projection 使用稳定默认值", async () => {
 
 test("消息 projection 保持附件和发送者字段", () => {
 	assert.deepEqual(
-		mapMessage({
-			id: "5",
-			content: "hello",
+			mapMessage({
+				id: "5",
+				content: "hello",
+				mentions_json: "[]",
 			created_at: "2026-07-23",
 			sender_id: "2",
 			sender_username: "alice",
@@ -239,9 +242,11 @@ test("消息 projection 保持附件和发送者字段", () => {
 				source_attachment_id: null,
 				source_attachment_unique_id: null,
 		}),
-			{
-				id: 5,
-				content: "hello",
+				{
+					id: 5,
+					content: "hello",
+					mentionUserIds: [],
+					mentions: [],
 				createdAt: "2026-07-23",
 				source: "edgechat",
 				sender: {

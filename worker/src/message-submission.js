@@ -1,4 +1,5 @@
 import { insertMessage, insertMessageIdempotent } from "./data/messages.js";
+import { resolveMessageMentionUserIds } from "./data/mentions.js";
 
 export class MessageSubmissionError extends Error {
 	constructor(message, code = "invalid_request", status = 400) {
@@ -9,14 +10,25 @@ export class MessageSubmissionError extends Error {
 	}
 }
 
-export function createMessageSubmission({ persistMessage = insertMessage } = {}) {
+export function createMessageSubmission({
+	persistMessage = insertMessage,
+	resolveMentions = resolveMessageMentionUserIds,
+} = {}) {
 	return async function submitRoomMessage(env, meta, payload) {
 		try {
+			const mentionUserIds = await resolveMentions(env.DB, {
+				channelId: meta.room.id,
+				roomKind: meta.room.kind,
+				senderId: meta.principal.userId,
+				content: payload.content,
+				candidateUserIds: payload.mentionUserIds,
+			});
 			const persistencePayload = {
-					channelId: meta.room.id,
-					senderId: meta.principal.userId,
-					content: payload.content,
-					attachment: payload.attachment,
+						channelId: meta.room.id,
+						senderId: meta.principal.userId,
+						content: payload.content,
+						attachment: payload.attachment,
+						mentionUserIds,
 			};
 			if (payload.clientMessageId) {
 				persistencePayload.clientMessageId = payload.clientMessageId;

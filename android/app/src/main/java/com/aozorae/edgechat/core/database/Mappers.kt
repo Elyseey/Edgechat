@@ -21,6 +21,7 @@ fun ChannelDto.toEntity() = ConversationEntity(
     otherUserId = null,
     lastMessageAt = lastMessageAt,
     unreadCount = unreadCount,
+    mentionUnreadCount = mentionUnreadCount,
 )
 
 fun DmDto.toEntity() = ConversationEntity(
@@ -37,6 +38,7 @@ fun DmDto.toEntity() = ConversationEntity(
     otherUserId = otherUser.id,
     lastMessageAt = lastMessageAt,
     unreadCount = unreadCount,
+    mentionUnreadCount = 0,
 )
 
 fun MessageDto.toEntity(kind: String, roomId: Long) = MessageEntity(
@@ -57,4 +59,5 @@ fun MessageDto.toEntity(kind: String, roomId: Long) = MessageEntity(
     attachmentType = attachment?.type,
     attachmentSize = attachment?.size,
     attachmentUrl = attachment?.url,
+    mentionUserIds = encodeMentionUserIds(mentionUserIds),
 )

@@ -119,14 +119,24 @@ export function useBrowserNotifications(options = {}) {
 		return nextMutedRooms.has(key);
 	}
 
-	function notifyRoom(room) {
-		syncPermission();
-		if (!enabled.value || isRoomMuted(room)) {
+		function notifyRoom(event) {
+			const room = event?.room || event;
+			syncPermission();
+			if (!enabled.value || (isRoomMuted(room) && !event?.mentionsMe)) {
 			return false;
 		}
 
-		const notification = new notificationApi(room.name || "EdgeChat", {
-				body: room.kind === "dm" ? t('notifications.directMessage') : t('notifications.groupMessage'),
+			const title = event?.mentionsMe
+				? t("notifications.mentionedTitle", { room: room.name || "EdgeChat" })
+				: room.name || "EdgeChat";
+			const senderName = event?.sender?.displayName || event?.sender?.username || "";
+			const mentionBody = [senderName, event?.contentPreview].filter(Boolean).join(": ");
+			const notification = new notificationApi(title, {
+					body: event?.mentionsMe
+						? mentionBody || t("notifications.mentionedBody")
+						: room.kind === "dm"
+							? t('notifications.directMessage')
+							: t('notifications.groupMessage'),
 			tag: `edgechat:${browserNotificationRoomKey(room)}`,
 			renotify: true,
 		});

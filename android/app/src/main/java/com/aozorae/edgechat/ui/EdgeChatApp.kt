@@ -237,6 +237,7 @@ private fun ChatContent(
         messages = chatState.messages,
         outbox = chatState.outbox,
         attachment = chatState.attachment,
+        members = chatState.members,
         currentUser = session,
         serverBaseUrl = server.baseUrl,
         busy = chatState.busy,

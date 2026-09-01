@@ -1,6 +1,7 @@
 package com.aozorae.edgechat.feature.chat
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -38,9 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aozorae.edgechat.core.repository.PendingAttachment
+import com.aozorae.edgechat.core.network.dto.MemberDto
 import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
 
 @Composable
@@ -49,14 +53,30 @@ fun MessageComposer(
     roomTitle: String,
     attachment: PendingAttachment?,
     language: String,
+    members: List<MemberDto>,
+    currentUserId: Long,
     onChooseAttachment: () -> Unit,
     onClearAttachment: () -> Unit,
-    onSend: (String) -> Unit,
+    onSend: (String, List<Long>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var content by rememberSaveable(roomKey) { mutableStateOf("") }
-    val canSend = content.isNotBlank() || attachment != null
+    var content by rememberSaveable(roomKey, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue())
+    }
+    val canSend = content.text.isNotBlank() || attachment != null
     val colors = LocalEdgeChatColors.current
+    val activeMention = findActiveMentionQuery(content.text, content.selection.start)
+    val mentionCandidates = activeMention?.let { active ->
+        members
+            .filter { member ->
+                member.id != currentUserId && (
+                    active.query.isBlank() ||
+                        member.username.contains(active.query, ignoreCase = true) ||
+                        member.displayName.contains(active.query, ignoreCase = true)
+                )
+            }
+            .take(8)
+    }.orEmpty()
 
     Surface(modifier = modifier, color = colors.canvas) {
         Column {
@@ -82,6 +102,38 @@ fun MessageComposer(
                         )
                         IconButton(onClick = onClearAttachment) {
                             Icon(Icons.Outlined.Close, contentDescription = if (language == "zh-CN") "移除附件" else "Remove attachment")
+                        }
+                    }
+                }
+            }
+            if (mentionCandidates.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(start = 64.dp, end = 60.dp, top = 6.dp),
+                    color = colors.canvasLevel1,
+                    shape = RoundedCornerShape(8.dp),
+                    tonalElevation = 3.dp,
+                ) {
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        mentionCandidates.forEach { member ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clickable {
+                                        val active = activeMention ?: return@clickable
+                                        val replacement = "@${member.username} "
+                                        val nextText = content.text.replaceRange(active.start, active.end, replacement)
+                                        val nextCursor = active.start + replacement.length
+                                        content = TextFieldValue(nextText, TextRange(nextCursor))
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column {
+                                    Text(member.displayName, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
+                                    Text("@${member.username}", style = MaterialTheme.typography.labelMedium, color = colors.textSecondary)
+                                }
+                            }
                         }
                     }
                 }
@@ -124,7 +176,7 @@ fun MessageComposer(
                         maxLines = 5,
                         decorationBox = { input ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (content.isBlank()) {
+                                if (content.text.isBlank()) {
                                     Text(
                                         text = if (language == "zh-CN") "发送消息到 $roomTitle" else "Message $roomTitle",
                                         color = colors.textSecondary,
@@ -140,7 +192,10 @@ fun MessageComposer(
                 }
                 Spacer(Modifier.width(4.dp))
                 IconButton(
-                    onClick = { onSend(content); content = "" },
+                    onClick = {
+                        onSend(content.text, resolveMentionUserIds(content.text, members, currentUserId))
+                        content = TextFieldValue()
+                    },
                     enabled = canSend,
                     modifier = Modifier.size(48.dp).testTag("send_message"),
                 ) {

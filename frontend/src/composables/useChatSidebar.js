@@ -22,6 +22,7 @@ function mapChannelItem(channel, subtitle) {
 		lastMessageAt: channel.lastMessageAt || "",
 		dateLabel: formatListTime(channel.lastMessageAt),
 		unreadCount: Number(channel.unreadCount || 0),
+		mentionUnreadCount: Number(channel.mentionUnreadCount || 0),
 		source: channel,
 	};
 }
@@ -43,7 +44,8 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 				fallback: dm.otherUser.displayName,
 				lastMessageAt: dm.lastMessageAt || "",
 				dateLabel: formatListTime(dm.lastMessageAt),
-				unreadCount: Number(dm.unreadCount || 0),
+					unreadCount: Number(dm.unreadCount || 0),
+					mentionUnreadCount: 0,
 			source: dm,
 		}));
 
@@ -97,7 +99,8 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 	function markConversationRead(kind, roomId) {
 		const source = findConversationSource(kind, roomId);
 		if (source) {
-			source.unreadCount = 0;
+				source.unreadCount = 0;
+				source.mentionUnreadCount = 0;
 		}
 	}
 
@@ -105,8 +108,9 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 		kind,
 		roomId,
 		lastMessageAt,
-		unreadCount,
-	}) {
+			unreadCount,
+			mentionUnreadCount,
+		}) {
 		const source = findConversationSource(kind, roomId);
 		if (!source) {
 			return;
@@ -122,9 +126,12 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 			}
 		}
 
-		if (unreadCount !== undefined) {
-			source.unreadCount = Math.max(0, Number(unreadCount || 0));
-		}
+			if (unreadCount !== undefined) {
+				source.unreadCount = Math.max(0, Number(unreadCount || 0));
+			}
+			if (mentionUnreadCount !== undefined) {
+				source.mentionUnreadCount = Math.max(0, Number(mentionUnreadCount || 0));
+			}
 	}
 
 	async function refreshSidebar() {

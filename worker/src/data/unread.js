@@ -43,6 +43,27 @@ export async function countUnreadMessages(db, { channelId, userId }) {
 	return Number(results[0]?.unread_count || 0);
 }
 
+export async function countUnreadMentions(db, { channelId, userId }) {
+	const { results } = await db
+		.prepare(
+			`SELECT COUNT(*) AS unread_count
+			 FROM messages m
+			 WHERE m.channel_id = ?
+			   AND m.deleted_at IS NULL
+			   AND m.id > COALESCE((SELECT mr.last_read_message_id
+			                            FROM message_reads mr
+			                            WHERE mr.channel_id = ? AND mr.user_id = ?), 0)
+			   AND EXISTS (
+			     SELECT 1
+			     FROM json_each(COALESCE(m.mention_user_ids, '[]')) mention_ids
+			     WHERE CAST(mention_ids.value AS INTEGER) = ?
+			   )`,
+		)
+		.bind(Number(channelId), Number(channelId), Number(userId), Number(userId))
+		.all();
+	return Number(results[0]?.unread_count || 0);
+}
+
 export async function listRoomMemberIds(db, channelId) {
 	const { results } = await db
 		.prepare(
