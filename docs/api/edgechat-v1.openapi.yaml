@@ -289,6 +289,7 @@ paths:
                 mentionUserIds:
                   type: array
                   items: { type: integer }
+                replyMessageId: { type: [integer, "null"], minimum: 1 }
       responses:
         "200": { $ref: "#/components/responses/MessageSubmission" }
         "201": { $ref: "#/components/responses/MessageSubmission" }
@@ -551,7 +552,9 @@ components:
         memberCount: { type: integer }
         lastMessageAt: { type: [string, "null"] }
         unreadCount: { type: integer }
-        mentionUnreadCount: { type: integer }
+        mentionUnreadCount:
+          type: integer
+          description: Legacy field name for Telegram-style direct attention unread messages, including mentions and replies.
     Member:
       type: object
       required: [id, username, displayName, avatarUrl, role]
@@ -594,6 +597,15 @@ components:
         userId: { type: integer }
         username: { type: string }
         displayName: { type: string }
+    ReplyPreview:
+      type: object
+      required: [id, deleted]
+      properties:
+        id: { type: integer }
+        deleted: { type: boolean }
+        content: { type: string }
+        sender: { $ref: "#/components/schemas/Sender" }
+        attachment: { oneOf: [{ $ref: "#/components/schemas/Attachment" }, { type: "null" }] }
     Message:
       type: object
       required: [id, content, createdAt, source, sender, attachment]
@@ -607,6 +619,8 @@ components:
         attachment: { oneOf: [{ $ref: "#/components/schemas/Attachment" }, { type: "null" }] }
         mentionUserIds: { type: array, items: { type: integer } }
         mentions: { type: array, items: { $ref: "#/components/schemas/Mention" } }
+        replyToMessageId: { type: integer }
+        replyTo: { $ref: "#/components/schemas/ReplyPreview" }
     Bootstrap:
       type: object
       required: [users, channels, dms]

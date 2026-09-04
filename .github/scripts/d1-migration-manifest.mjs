@@ -129,13 +129,22 @@ export const D1_MIGRATIONS = [
 			file: "worker/migrations/2026-09-01-message-mentions.sql",
 			artifacts: ["column:messages.mention_user_ids"],
 		},
-	{
-		id: "2026-09-02-voice-messages",
+		{
+			id: "2026-09-02-voice-messages",
 		file: "worker/migrations/2026-09-02-voice-messages.sql",
 		artifacts: [
 			"column:messages.attachment_kind",
 			"column:messages.attachment_duration_ms",
 			"column:messages.attachment_waveform",
+			],
+		},
+	{
+		id: "2026-09-04-message-replies",
+		file: "worker/migrations/2026-09-04-message-replies.sql",
+		artifacts: [
+			"column:messages.reply_to_message_id",
+			"column:messages.reply_to_sender_id",
+			"index:idx_messages_reply_attention",
 		],
 	},
 ];

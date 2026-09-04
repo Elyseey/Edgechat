@@ -118,3 +118,50 @@ test("房间置顶状态从历史与实时事件同步，并发送管理动作",
 	sockets[0].emitMessage({ type: "message_deleted", messageId: 10 });
 	assert.equal(room.pinnedMessage.value, null);
 });
+
+test("网页发送回复字段，并在原消息删除后保留已删除引用状态", async () => {
+	const activeRoom = ref({ id: 2, kind: "private" });
+	const sockets = [];
+	const room = useChatRoom({
+		activeRoom,
+		session: ref({ userId: 7 }),
+		error: ref(""),
+		roomApi: {
+			async getMessages() {
+				return {
+					messages: [
+						{ id: 10, sender: { id: 3, kind: "local" } },
+						{
+							id: 11,
+							sender: { id: 7, kind: "local" },
+							replyToMessageId: 10,
+							replyTo: { id: 10, deleted: false, content: "原消息" },
+						},
+					],
+				};
+			},
+			async markRoomRead() {},
+		},
+		openRoomConnection(params) {
+			const handlers = { onStatus: params.onStatus, onMessage: params.onMessage };
+			const socket = createSocket(params, handlers);
+			sockets.push(socket);
+			handlers.onStatus({ status: "open", socket });
+			return socket;
+		},
+	});
+
+	await room.activateRoom();
+	room.composerText.value = "回复正文";
+	assert.equal(await room.sendMessage([], 10), true);
+	assert.deepEqual(sockets[0].sentFrames.at(-1), {
+		type: "send",
+		content: "回复正文",
+		attachment: null,
+		mentionUserIds: [],
+		replyMessageId: 10,
+	});
+
+	sockets[0].emitMessage({ type: "message_deleted", messageId: 10 });
+	assert.deepEqual(room.messages.value[0].replyTo, { id: 10, deleted: true });
+});

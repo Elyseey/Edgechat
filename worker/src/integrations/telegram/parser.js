@@ -74,7 +74,7 @@ export function parseTelegramMessageUpdate(update) {
 		return null;
 	}
 
-	return {
+	const parsed = {
 		telegramChatId: String(message.chat.id),
 		telegramChatTitle: message.chat.title || message.chat.username || "",
 		telegramMessageId: Number(message.message_id),
@@ -87,4 +87,8 @@ export function parseTelegramMessageUpdate(update) {
 			avatarUrl: "",
 		},
 	};
+	if (Number.isInteger(Number(message.reply_to_message?.message_id))) {
+		parsed.replySourceMessageId = `${message.chat.id}:${message.reply_to_message.message_id}`;
+	}
+	return parsed;
 }

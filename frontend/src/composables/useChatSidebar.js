@@ -45,7 +45,7 @@ export function useChatSidebar({ applyActiveChannel, selectDm, sidebarApi = api 
 				lastMessageAt: dm.lastMessageAt || "",
 				dateLabel: formatListTime(dm.lastMessageAt),
 					unreadCount: Number(dm.unreadCount || 0),
-					mentionUnreadCount: 0,
+					mentionUnreadCount: Number(dm.mentionUnreadCount || 0),
 			source: dm,
 		}));
 

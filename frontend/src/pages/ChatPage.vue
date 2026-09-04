@@ -1,6 +1,6 @@
 <script setup>
 import { ArrowLeft, Bell, BellOff, Menu, Settings, UsersRound } from '@lucide/vue';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { isDemoMode } from '../runtime.js';
 import AddConversationDialog from '../components/chat/AddConversationDialog.vue';
@@ -12,6 +12,7 @@ import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageComposer from '../components/chat/MessageComposer.vue';
 import MentionText from '../components/chat/MentionText.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
+import MessageReplyPreview from '../components/chat/MessageReplyPreview.vue';
 import PinnedMessageBar from '../components/chat/PinnedMessageBar.vue';
 import MobileNavigationDrawer from '../components/chat/MobileNavigationDrawer.vue';
 import SenderSourceBadge from '../components/chat/SenderSourceBadge.vue';
@@ -37,6 +38,8 @@ const router = useRouter();
 const { formatTime: formatLocaleTime, t } = useI18n();
 const error = ref('');
 const activeRoom = ref(null);
+const replyingTo = ref(null);
+const messageComposer = ref(null);
 const showMobileNavigation = ref(false);
 const publicGroupPreview = ref(null);
 const joiningPublicGroup = ref(false);
@@ -112,7 +115,7 @@ const {
   messages, pinnedMessage, highlightedMessageId, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, isOwnMessage,
   loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, sendVoiceMessage, deleteMessage,
-  pinMessage, unpinMessage, revealPinnedMessage,
+  pinMessage, unpinMessage, revealPinnedMessage, revealMessage,
   uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
@@ -144,7 +147,7 @@ const {
   openMessageContextMenu,
   startMessageLongPress,
   trackMessageLongPress
-} = useMessageContextMenu({ canModerateMessages });
+} = useMessageContextMenu();
 const selectedMessageIsPinned = computed(
   () => Number(messageMenu.value.message?.id) === Number(pinnedMessage.value?.id)
 );
@@ -201,10 +204,19 @@ const mentionCandidates = computed(() =>
 		: groupMembers.value.filter((member) => Number(member.id) !== Number(session.value?.userId))
 );
 
-function sendComposerMessage() {
-	return sendMessage(
-		resolveMentionUserIds(composerText.value, mentionCandidates.value, session.value?.userId)
+async function sendComposerMessage() {
+	const sent = await sendMessage(
+		resolveMentionUserIds(composerText.value, mentionCandidates.value, session.value?.userId),
+		replyingTo.value?.id,
 	);
+	if (sent) replyingTo.value = null;
+	return sent;
+}
+
+async function sendComposerVoice(recording) {
+	const sent = await sendVoiceMessage(recording, replyingTo.value?.id);
+	if (sent) replyingTo.value = null;
+	return sent;
 }
 const {
   show: showGroupEditor,
@@ -273,6 +285,7 @@ function navigateFromMobileDrawer(callback) {
 function returnToMobileConversationList() {
   closeMemberPanel();
   closeMessageMenu();
+  replyingTo.value = null;
   returnToConversationList();
 }
 
@@ -291,6 +304,7 @@ async function bootstrap() {
 watch(activeRoomKey, async (k) => {
   closeMessageMenu();
   cancelMessageLongPress();
+  replyingTo.value = null;
   if (!k) {
     deactivateRoom();
     return;
@@ -326,6 +340,14 @@ function unpinSelectedMessage() {
   const message = messageMenu.value.message;
   closeMessageMenu();
   if (message) unpinMessage(message.id);
+}
+
+function replyToSelectedMessage() {
+	const message = messageMenu.value.message;
+	closeMessageMenu();
+	if (!message) return;
+	replyingTo.value = message;
+	nextTick(() => messageComposer.value?.focus());
 }
 
 onMounted(() => {
@@ -550,7 +572,7 @@ onBeforeUnmount(() => {
             class="message-row"
             :class="{
               'message-row--own': isOwnMessage(msg),
-              'message-row--moderatable': canModerateMessages
+              'message-row--actionable': true
             }"
           >
             <UiAvatar
@@ -577,6 +599,13 @@ onBeforeUnmount(() => {
                 <span>{{ msg.sender.displayName }}</span>
                 <SenderSourceBadge :source="msg.sender.source" />
               </div>
+              <MessageReplyPreview
+                v-if="msg.replyTo"
+                class="message-bubble__reply"
+                :reply="msg.replyTo"
+                :clickable="!msg.replyTo.deleted"
+                @reveal="revealMessage(msg.replyToMessageId)"
+              />
 	              <p v-if="msg.content">
 				<MentionText
 				  :content="msg.content"
@@ -595,22 +624,27 @@ onBeforeUnmount(() => {
           :x="messageMenu.x"
           :y="messageMenu.y"
           :can-pin="canPinMessages"
+          :can-delete="canModerateMessages"
           :pinned="selectedMessageIsPinned"
           @close="closeMessageMenu"
+          @reply="replyToSelectedMessage"
           @pin="pinSelectedMessage"
           @unpin="unpinSelectedMessage"
           @delete="confirmDeleteMessage"
         />
 
 		<MessageComposer
+		  ref="messageComposer"
 		  v-model="composerText"
 		  :pending-attachment="pendingAttachment"
 		  :sending="sending"
 			  :disabled="!activeRoom"
 			  :error="error"
 			  :mention-candidates="mentionCandidates"
+			  :replying-to="replyingTo"
 			  @send="sendComposerMessage"
-			  @voice-recorded="sendVoiceMessage"
+			  @voice-recorded="sendComposerVoice"
+			  @cancel-reply="replyingTo = null"
 		  @upload="uploadAttachment"
 		  @clear-attachment="clearAttachment"
 		/>
@@ -1120,7 +1154,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
 }
 
-.message-row--moderatable .message-bubble {
+.message-row--actionable .message-bubble {
   touch-action: pan-y;
   -webkit-touch-callout: none;
 }
@@ -1152,6 +1186,10 @@ onBeforeUnmount(() => {
   color: #667781;
   white-space: nowrap;
   user-select: none;
+}
+
+.message-bubble__reply {
+	margin-bottom: 5px;
 }
 
 .message-bubble p {

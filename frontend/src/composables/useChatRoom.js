@@ -155,9 +155,13 @@ export function useChatRoom({
 			}
 			if (payload.type === "message_deleted") {
 				const messageId = Number(payload.messageId);
-				messages.value = messages.value.filter(
-					(message) => Number(message.id) !== messageId,
-				);
+				messages.value = messages.value
+					.filter((message) => Number(message.id) !== messageId)
+					.map((message) =>
+						Number(message.replyToMessageId) === messageId
+							? { ...message, replyTo: { id: messageId, deleted: true } }
+							: message,
+					);
 				if (Number(pinnedMessage.value?.id) === messageId) {
 					pinnedMessage.value = null;
 				}
@@ -247,16 +251,16 @@ export function useChatRoom({
 		roomSession.disconnect();
 	}
 
-		async function sendMessage(mentionUserIds = []) {
+		async function sendMessage(mentionUserIds = [], replyMessageId = null) {
 			const key = activeRoom.value
 				? `${activeRoom.value.kind}:${activeRoom.value.id}`
 				: "";
 			if (!roomSession.isOpenFor(key)) {
 				error.value = t('chat.realtimeNotReady');
-				return;
+				return false;
 			}
 			if (!composerText.value.trim() && !pendingAttachment.value) {
-				return;
+				return false;
 			}
 
 			sending.value = true;
@@ -268,23 +272,26 @@ export function useChatRoom({
 						content: composerText.value,
 						attachment: pendingAttachment.value,
 						mentionUserIds,
+						replyMessageId: replyMessageId ? Number(replyMessageId) : null,
 					}),
 					key,
 				);
 				composerText.value = "";
 				pendingAttachment.value = null;
+				return true;
 			} catch (currentError) {
 				error.value = currentError.message;
+				return false;
 			} finally {
 				sending.value = false;
 			}
 		}
 
-		async function sendVoiceMessage(recording) {
+		async function sendVoiceMessage(recording, replyMessageId = null) {
 			const key = roomKey();
 			if (!roomSession.isOpenFor(key)) {
 				error.value = t('chat.realtimeNotReady');
-				return;
+				return false;
 			}
 			sending.value = true;
 			error.value = "";
@@ -298,12 +305,20 @@ export function useChatRoom({
 					waveform: recording.waveform,
 				};
 				roomSession.send(
-					JSON.stringify({ type: "send", content: "", attachment, mentionUserIds: [] }),
+					JSON.stringify({
+						type: "send",
+						content: "",
+						attachment,
+						mentionUserIds: [],
+						replyMessageId: replyMessageId ? Number(replyMessageId) : null,
+					}),
 					key,
 				);
+				return true;
 			} catch (currentError) {
 				pendingAttachment.value = attachment;
 				error.value = currentError.message;
+				return false;
 			} finally {
 				sending.value = false;
 			}
@@ -351,8 +366,8 @@ export function useChatRoom({
 		);
 	}
 
-	async function revealPinnedMessage() {
-		const targetId = Number(pinnedMessage.value?.id);
+	async function revealMessage(messageId) {
+		const targetId = Number(messageId);
 		const key = roomKey();
 		if (!targetId || !key) {
 			return false;
@@ -365,13 +380,10 @@ export function useChatRoom({
 		try {
 			const room = activeRoom.value;
 			const payload = await roomApi.getMessages(room.kind, room.id, targetId + 1);
-			if (roomKey() !== key || Number(pinnedMessage.value?.id) !== targetId) {
+			if (roomKey() !== key) {
 				return false;
 			}
-			pinnedMessage.value = payload.pinnedMessage || null;
-			if (Number(pinnedMessage.value?.id) !== targetId) {
-				return false;
-			}
+			pinnedMessage.value = payload.pinnedMessage || pinnedMessage.value;
 			messages.value = mergeMessages(payload.messages, messages.value);
 			await nextTick();
 			return highlightMessage(targetId);
@@ -381,8 +393,11 @@ export function useChatRoom({
 		}
 	}
 
-	async function uploadAttachment(event) {
-		const file = event.target.files?.[0];
+	function revealPinnedMessage() {
+		return revealMessage(pinnedMessage.value?.id);
+	}
+
+	async function uploadAttachment(file) {
 		if (!file) {
 			return;
 		}
@@ -392,8 +407,6 @@ export function useChatRoom({
 			pendingAttachment.value = payload.file;
 		} catch (currentError) {
 			error.value = currentError.message;
-		} finally {
-			event.target.value = "";
 		}
 	}
 
@@ -444,8 +457,9 @@ export function useChatRoom({
 			sendVoiceMessage,
 		deleteMessage,
 		pinMessage,
-		unpinMessage,
-		revealPinnedMessage,
+			unpinMessage,
+			revealMessage,
+			revealPinnedMessage,
 		uploadAttachment,
 		clearAttachment,
 		loadOlder,

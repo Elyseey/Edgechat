@@ -27,7 +27,42 @@ function mapAttachment(row) {
 	return attachment;
 }
 
-export function mapMessage(row, content = row.content) {
+function mapReplyAttachment(row) {
+	if (!row.reply_attachment_key) return null;
+	const attachment = {
+		key: row.reply_attachment_key,
+		name: row.reply_attachment_name,
+		type: row.reply_attachment_type,
+		size: toNullableNumber(row.reply_attachment_size) || 0,
+		url: publicFileUrl(row.reply_attachment_key),
+	};
+	if (row.reply_attachment_kind === "voice" || row.reply_attachment_kind === "audio") {
+		attachment.kind = row.reply_attachment_kind;
+		attachment.durationMs = toNullableNumber(row.reply_attachment_duration_ms) || 0;
+	}
+	return attachment;
+}
+
+function mapReplySender(row) {
+	const isExternal = row.reply_sender_kind === "external";
+	const isTelegramExternal = isExternal && row.reply_source === "telegram";
+	return {
+		kind: isExternal ? "external" : "local",
+		id: isExternal ? String(row.reply_external_sender_id || "") : Number(row.reply_sender_id),
+		username: isExternal ? "" : row.reply_sender_username,
+		displayName: isExternal ? row.reply_external_sender_name : row.reply_sender_display_name,
+		avatarUrl: isExternal
+			? isTelegramExternal
+				? `/api/integrations/telegram/avatar/${row.reply_external_sender_id}`
+				: row.reply_external_sender_avatar_url || ""
+			: row.reply_sender_avatar_key
+				? publicFileUrl(row.reply_sender_avatar_key)
+				: "",
+		source: isExternal ? row.reply_source : "edgechat",
+	};
+}
+
+export function mapMessage(row, content = row.content, replyTo = null) {
 	const isExternal = row.sender_kind === "external";
 	const isTelegramExternal = isExternal && row.source === "telegram";
 	const mentions = JSON.parse(row.mentions_json || "[]").map((mention) => ({
@@ -61,6 +96,13 @@ export function mapMessage(row, content = row.content) {
 	if (row.client_message_id) {
 		message.clientMessageId = row.client_message_id;
 	}
+	if (row.reply_to_message_id) {
+		message.replyToMessageId = Number(row.reply_to_message_id);
+		message.replyTo = replyTo || {
+			id: Number(row.reply_to_message_id),
+			deleted: true,
+		};
+	}
 	return message;
 }
 
@@ -87,7 +129,30 @@ async function mapDecryptedMessage(env, row) {
 		senderContext:
 			row.sender_kind === "external" ? `${row.source}:${row.external_sender_id}` : "",
 	});
-	return mapMessage(row, content);
+	let replyTo = null;
+	if (row.reply_to_message_id) {
+		const replyId = Number(row.reply_to_message_id);
+		if (!row.reply_message_id || row.reply_deleted_at) {
+			replyTo = { id: replyId, deleted: true };
+		} else {
+			const replyContent = await decryptMessageContent(env, row.reply_content, {
+				channelId: row.channel_id,
+				senderId: row.reply_sender_id ?? 0,
+				senderContext:
+					row.reply_sender_kind === "external"
+						? `${row.reply_source}:${row.reply_external_sender_id}`
+						: "",
+			});
+			replyTo = {
+				id: replyId,
+				deleted: false,
+				content: replyContent,
+				sender: mapReplySender(row),
+				attachment: mapReplyAttachment(row),
+			};
+		}
+	}
+	return mapMessage(row, content, replyTo);
 }
 
 const MESSAGE_SELECT = `SELECT
@@ -96,9 +161,26 @@ const MESSAGE_SELECT = `SELECT
 		  m.sender_kind, m.external_sender_id, m.external_sender_name,
 		  m.external_sender_avatar_url, m.source, m.source_message_id,
 		  m.source_attachment_id, m.source_attachment_unique_id, m.client_message_id,
-		  m.mention_user_ids, m.created_at,
-	  u.id AS sender_id, u.username AS sender_username,
-	  u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key,
+			  m.mention_user_ids, m.reply_to_message_id, m.reply_to_sender_id, m.created_at,
+		  u.id AS sender_id, u.username AS sender_username,
+		  u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key,
+		  reply.id AS reply_message_id, reply.content AS reply_content,
+		  reply.deleted_at AS reply_deleted_at,
+		  reply.attachment_key AS reply_attachment_key,
+		  reply.attachment_name AS reply_attachment_name,
+		  reply.attachment_type AS reply_attachment_type,
+		  reply.attachment_size AS reply_attachment_size,
+		  reply.attachment_kind AS reply_attachment_kind,
+		  reply.attachment_duration_ms AS reply_attachment_duration_ms,
+		  reply.sender_kind AS reply_sender_kind,
+		  reply.external_sender_id AS reply_external_sender_id,
+		  reply.external_sender_name AS reply_external_sender_name,
+		  reply.external_sender_avatar_url AS reply_external_sender_avatar_url,
+		  reply.source AS reply_source,
+		  reply_user.id AS reply_sender_id,
+		  reply_user.username AS reply_sender_username,
+		  reply_user.display_name AS reply_sender_display_name,
+		  reply_user.avatar_key AS reply_sender_avatar_key,
 	  COALESCE((
 	    SELECT json_group_array(json_object(
 	      'userId', mentioned.id,
@@ -107,8 +189,11 @@ const MESSAGE_SELECT = `SELECT
 	    ))
 	    FROM json_each(COALESCE(m.mention_user_ids, '[]')) mention_ids
 	    JOIN users mentioned ON mentioned.id = CAST(mention_ids.value AS INTEGER)
-	  ), '[]') AS mentions_json
-	 FROM messages m LEFT JOIN users u ON u.id = m.sender_id`;
+		 ), '[]') AS mentions_json
+	 FROM messages m
+	 LEFT JOIN users u ON u.id = m.sender_id
+	 LEFT JOIN messages reply ON reply.id = m.reply_to_message_id
+	 LEFT JOIN users reply_user ON reply_user.id = reply.sender_id`;
 
 export async function listMessages(env, roomId, before = null, limit = 30) {
 	const filters = ["m.channel_id = ?", "m.deleted_at IS NULL"];
@@ -282,6 +367,8 @@ async function persistMessage(env, {
 	sourceAttachmentUniqueId = null,
 	clientMessageId = null,
 	mentionUserIds = [],
+	replyToMessageId = null,
+	replyToSenderId = null,
 }) {
 	const isExternal = externalSender !== null;
 	const normalizedSenderId = isExternal ? null : Number(senderId);
@@ -322,6 +409,8 @@ async function persistMessage(env, {
 	const storedMentionUserIds = JSON.stringify(
 		isExternal ? [] : normalizeMentionUserIds(mentionUserIds),
 	);
+	const normalizedReplyToMessageId = replyToMessageId ? Number(replyToMessageId) : null;
+	const normalizedReplyToSenderId = replyToSenderId ? Number(replyToSenderId) : null;
 	try {
 		const result = await env.DB
 				.prepare(
@@ -331,8 +420,8 @@ async function persistMessage(env, {
 					   attachment_waveform, sender_kind, external_sender_id,
 						   external_sender_name, external_sender_avatar_url, source, source_message_id,
 						   source_attachment_id, source_attachment_unique_id, client_message_id,
-						   mention_user_ids
-						 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+							   mention_user_ids, reply_to_message_id, reply_to_sender_id
+							 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				)
 			.bind(
 				Number(channelId),
@@ -357,9 +446,11 @@ async function persistMessage(env, {
 					sourceMessageId ? String(sourceMessageId) : null,
 					sourceAttachmentId ? String(sourceAttachmentId) : null,
 						sourceAttachmentUniqueId ? String(sourceAttachmentUniqueId) : null,
-						normalizedClientMessageId,
-						storedMentionUserIds,
-					)
+							normalizedClientMessageId,
+							storedMentionUserIds,
+							normalizedReplyToMessageId,
+							normalizedReplyToSenderId,
+						)
 			.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
 	} catch (error) {
@@ -401,6 +492,8 @@ export async function insertMessage(env, {
 	attachment,
 	clientMessageId = null,
 	mentionUserIds = [],
+	replyToMessageId = null,
+	replyToSenderId = null,
 }) {
 	const result = await persistMessage(env, {
 		channelId,
@@ -409,6 +502,8 @@ export async function insertMessage(env, {
 		attachment,
 		clientMessageId,
 		mentionUserIds,
+		replyToMessageId,
+		replyToSenderId,
 	});
 	return result.message;
 }

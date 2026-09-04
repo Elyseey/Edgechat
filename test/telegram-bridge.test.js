@@ -14,7 +14,10 @@ import {
 	formatTelegramMessage,
 	splitTelegramFormattedMessage,
 } from "../worker/src/integrations/telegram/bridge.js";
-import { sendTelegramMedia } from "../worker/src/integrations/telegram/client.js";
+import {
+	sendTelegramMedia,
+	sendTelegramText,
+} from "../worker/src/integrations/telegram/client.js";
 import {
 	importTelegramAttachment,
 	loadEdgeChatAttachment,
@@ -39,7 +42,8 @@ test("Telegram 文字消息转换为稳定的外部发送者模型", () => {
 				message_id: 9,
 				text: "hello 👋",
 				chat: { id: -100123, title: "Bridge room" },
-				from: { id: 42, first_name: "Alice", last_name: "Chen", is_bot: false },
+					from: { id: 42, first_name: "Alice", last_name: "Chen", is_bot: false },
+					reply_to_message: { message_id: 8 },
 			},
 		}),
 		{
@@ -47,6 +51,7 @@ test("Telegram 文字消息转换为稳定的外部发送者模型", () => {
 				telegramChatTitle: "Bridge room",
 				telegramMessageId: 9,
 				sourceMessageId: "-100123:9",
+				replySourceMessageId: "-100123:8",
 				content: "hello 👋",
 				attachment: null,
 			sender: { id: "42", displayName: "Alice Chen", avatarUrl: "" },
@@ -171,7 +176,8 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 			bytes: Uint8Array.from([1, 2, 3]),
 			filename: "clip.mp4",
 			contentType: "video/mp4",
-			caption: "<b>Alice:</b>\nhello",
+				caption: "<b>Alice:</b>\nhello",
+				replyToMessageId: 7,
 		});
 	} finally {
 		globalThis.fetch = originalFetch;
@@ -182,6 +188,7 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 	assert.equal(captured.init.body.get("chat_id"), "-1001");
 	assert.equal(captured.init.body.get("parse_mode"), "HTML");
 	assert.equal(captured.init.body.get("caption"), "<b>Alice:</b>\nhello");
+	assert.equal(captured.init.body.get("reply_parameters"), '{"message_id":7}');
 	assert.equal(captured.init.body.get("video").name, "clip.mp4");
 
 	globalThis.fetch = async (url, init) => {
@@ -203,6 +210,26 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 	assert.match(captured.url, /\/sendVoice$/);
 	assert.equal(captured.init.body.get("duration"), "8");
 	assert.equal(captured.init.body.get("voice").name, "voice.ogg");
+});
+
+test("Telegram 文字回复使用 reply_parameters 指向同群原消息", async () => {
+	const originalFetch = globalThis.fetch;
+	let captured;
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return Response.json({ ok: true, result: { message_id: 3 } });
+	};
+	try {
+		await sendTelegramText("123:token", {
+			chatId: "-1001",
+			text: "reply",
+			replyToMessageId: 2,
+		});
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+	assert.match(captured.url, /\/sendMessage$/);
+	assert.deepEqual(JSON.parse(captured.init.body).reply_parameters, { message_id: 2 });
 });
 
 test("Telegram 入站附件下载后加密写入 R2，超限时不下载", async () => {

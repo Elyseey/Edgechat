@@ -15,17 +15,17 @@ The ticket is bound to one device session and one scope. It is consumed once, in
 Every server frame is JSON and contains `protocolVersion: 1` plus `type`.
 
 - `ready`: the connection is authorized; room sockets include `room`.
-- `message`: includes the canonical `message`, including `mentionUserIds` and resolved `mentions`. Room clients merge by `message.id` and `message.clientMessageId`.
+- `message`: includes the canonical `message`, including `mentionUserIds`, resolved `mentions`, and optional `replyToMessageId` / `replyTo` preview fields. A deleted or expired target is represented by `replyTo.deleted: true`. Room clients merge by `message.id` and `message.clientMessageId`.
 - `message_deleted`: includes `messageId`.
 - `message_pinned`: includes the canonical pinned `message` for the room.
 - `message_unpinned`: includes `messageId`; clients clear the pin only when it still matches that ID.
-- `room_message`: inbox signal with `room`, `messageId`, `createdAt`, `unreadCount`, `mentionsMe`, `contentPreview` and `sender`; `mentionUnreadCount` is included for mentioned recipients and may be omitted otherwise so clients preserve their current value. The client then runs room sync.
+- `room_message`: inbox signal with `room`, `messageId`, `createdAt`, `unreadCount`, `mentionsMe`, `replyToMe`, `contentPreview` and `sender`; `mentionUnreadCount` keeps its legacy name but counts both mentions and replies, and is included only for directly addressed recipients so clients preserve their current value otherwise. The client then runs room sync.
 - `error`: includes a client-safe `error` message and never contains a stack trace.
 
 Example:
 
 ```json
-{"protocolVersion":1,"type":"room_message","room":{"id":7,"kind":"private","name":"team"},"messageId":52,"createdAt":"2026-09-01 12:00:00","unreadCount":3,"mentionUnreadCount":1,"mentionsMe":true,"contentPreview":"@alice please review","sender":{"kind":"local","id":4,"username":"bob","displayName":"Bob","avatarUrl":"","source":"edgechat"}}
+{"protocolVersion":1,"type":"room_message","room":{"id":7,"kind":"private","name":"team"},"messageId":52,"createdAt":"2026-09-04 12:00:00","unreadCount":3,"mentionUnreadCount":1,"mentionsMe":false,"replyToMe":true,"contentPreview":"handled","sender":{"kind":"local","id":4,"username":"bob","displayName":"Bob","avatarUrl":"","source":"edgechat"}}
 ```
 
 ## Lifecycle and recovery

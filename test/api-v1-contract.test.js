@@ -43,7 +43,9 @@ test("OpenAPI v1 keeps stable auth, idempotency, sync and error fields", () => {
 		"nextCursor",
 			"hasMore",
 			"mentionUserIds",
-			"mentionUnreadCount",
+				"mentionUnreadCount",
+				"replyMessageId",
+				"replyToMessageId",
 			"durationMs",
 			"waveform",
 			"required: [code, message]",
@@ -69,4 +71,5 @@ test("WebSocket v1 documents all supported frames and recovery rules", () => {
 	assert.match(websocket, /1 second, 2 seconds and then 5 seconds/);
 	assert.match(websocket, /HTTP room sync endpoint/);
 	assert.match(websocket, /mentionsMe/);
+	assert.match(websocket, /replyToMe/);
 });

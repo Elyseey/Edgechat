@@ -217,7 +217,10 @@ test('Telegram replies increment the inbox unread projection', async () => {
   roomSocket.send(JSON.stringify({ type: 'send', content: 'Telegram 未读测试' }));
   await new Promise((resolve) => setTimeout(resolve, 720));
 
-  assert.equal(inboxFrames.at(-1).unreadCount, 1);
+	  assert.equal(inboxFrames.at(-1).unreadCount, 1);
+	  assert.equal(inboxFrames.at(-1).mentionUnreadCount, 1);
+	  assert.equal(inboxFrames.at(-1).replyToMe, true);
+	  assert.equal(inboxFrames.at(-1).mentionsMe, false);
   assert.equal(inboxFrames.at(-1).room.name, 'Telegram 联动');
   roomSocket.close();
   inboxSocket.close();

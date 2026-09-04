@@ -20,7 +20,9 @@ function publishInbox(kind, roomId, message, { incrementUnread = false } = {}) {
     room.unreadCount = Number(room.unreadCount || 0) + 1;
   }
   const mentionsMe = (message.mentionUserIds || []).includes(Number(demoState.session.userId));
-  if (room && incrementUnread && mentionsMe) {
+  const replyToMe = message.replyTo?.sender?.kind !== 'external'
+    && Number(message.replyTo?.sender?.id) === Number(demoState.session.userId);
+  if (room && incrementUnread && (mentionsMe || replyToMe)) {
     room.mentionUnreadCount = Number(room.mentionUnreadCount || 0) + 1;
   }
   const payload = {
@@ -35,6 +37,7 @@ function publishInbox(kind, roomId, message, { incrementUnread = false } = {}) {
     unreadCount: Number(room?.unreadCount || 0),
     mentionUnreadCount: Number(room?.mentionUnreadCount || 0),
     mentionsMe,
+    replyToMe,
     contentPreview: message.content,
     sender: cloneDemo(message.sender)
   };
@@ -78,7 +81,8 @@ function handleRoomFrame(socket, frame) {
       content: payload.content,
       attachment: payload.attachment,
       sender: currentSender(),
-      mentionUserIds: payload.mentionUserIds || []
+	      mentionUserIds: payload.mentionUserIds || [],
+	      replyMessageId: payload.replyMessageId || null
     });
     publishRoom(socket.kind, socket.roomId, { type: 'message', message: cloneDemo(message) });
 
@@ -87,10 +91,11 @@ function handleRoomFrame(socket, frame) {
         const reply = createDemoMessage({
           kind: socket.kind,
           roomId: socket.roomId,
-          content: '@admin Telegram 已收到这条消息，并把群内回复同步回 EdgeChat。',
-          attachment: null,
-          sender: telegramSender(),
-          mentionUserIds: [demoState.session.userId]
+	        content: 'Telegram 已收到这条消息，并把群内回复同步回 EdgeChat。',
+	        attachment: null,
+	        sender: telegramSender(),
+	        mentionUserIds: [],
+	        replyMessageId: message.id
         });
         publishRoom(socket.kind, socket.roomId, { type: 'message', message: cloneDemo(reply) });
         publishInbox(socket.kind, socket.roomId, reply, { incrementUnread: true });
@@ -101,9 +106,11 @@ function handleRoomFrame(socket, frame) {
 
   if (payload.type === 'delete_message') {
     const key = roomKey(socket.kind, socket.roomId);
-    demoState.messages[key] = (demoState.messages[key] || []).filter(
-      (message) => Number(message.id) !== Number(payload.messageId)
-    );
+		demoState.messages[key] = (demoState.messages[key] || [])
+		  .filter((message) => Number(message.id) !== Number(payload.messageId))
+		  .map((message) => Number(message.replyToMessageId) === Number(payload.messageId)
+		    ? { ...message, replyTo: { id: Number(payload.messageId), deleted: true } }
+		    : message);
     publishRoom(socket.kind, socket.roomId, {
       type: 'message_deleted',
       messageId: Number(payload.messageId)

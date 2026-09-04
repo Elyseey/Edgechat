@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS messages (
   source_attachment_unique_id TEXT,
   client_message_id TEXT,
   mention_user_ids TEXT NOT NULL DEFAULT '[]',
+  reply_to_message_id INTEGER,
+  reply_to_sender_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT,
   CHECK (
@@ -336,8 +338,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_source
   WHERE source_message_id IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_channel_client_message
-  ON messages(channel_id, sender_id, client_message_id)
-  WHERE client_message_id IS NOT NULL;
+ON messages(channel_id, sender_id, client_message_id)
+WHERE client_message_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_messages_reply_attention
+ON messages(channel_id, reply_to_sender_id, id)
+WHERE reply_to_sender_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_message_reads_user
   ON message_reads(user_id, updated_at DESC);

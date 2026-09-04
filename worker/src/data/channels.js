@@ -16,7 +16,7 @@ function mapVisibleChannel(row) {
 		memberCount: Number(row.member_count || 0),
 		lastMessageAt: row.last_message_at || null,
 		unreadCount: Number(row.unread_count || 0),
-		mentionUnreadCount: Number(row.mention_unread_count || 0),
+			mentionUnreadCount: Number(row.attention_unread_count || 0),
 	};
 }
 
@@ -58,15 +58,19 @@ export async function listVisibleChannels(db, userId) {
 				             AND (m.sender_id IS NULL OR m.sender_id != ?)
 			             AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0))
 				     ELSE 0 END AS unread_count,
-				   CASE WHEN EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ?)
-				     THEN (SELECT COUNT(*) FROM messages m
-				           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
-				             AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0)
-				             AND EXISTS (
-				               SELECT 1 FROM json_each(COALESCE(m.mention_user_ids, '[]')) mention_ids
-				               WHERE CAST(mention_ids.value AS INTEGER) = ?
-				             ))
-				     ELSE 0 END AS mention_unread_count
+					   CASE WHEN EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ?)
+					     THEN (SELECT COUNT(*) FROM messages m
+					           WHERE m.channel_id = c.id AND m.deleted_at IS NULL
+					             AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0)
+					             AND (m.sender_id IS NULL OR m.sender_id != ?)
+					             AND (
+					               EXISTS (
+					                 SELECT 1 FROM json_each(COALESCE(m.mention_user_ids, '[]')) mention_ids
+					                 WHERE CAST(mention_ids.value AS INTEGER) = ?
+					               )
+					               OR m.reply_to_sender_id = ?
+					             ))
+					     ELSE 0 END AS attention_unread_count
 				 FROM channels c
 			 LEFT JOIN users owner ON owner.id = c.created_by
 			 WHERE c.kind IN ('public', 'private')
@@ -78,6 +82,8 @@ export async function listVisibleChannels(db, userId) {
 				   c.name ASC`,
 		)
 			.bind(
+					normalizedUserId,
+					normalizedUserId,
 					normalizedUserId,
 					normalizedUserId,
 					normalizedUserId,

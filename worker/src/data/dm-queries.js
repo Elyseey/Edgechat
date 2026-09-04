@@ -7,6 +7,7 @@ function mapUserDm(row) {
 		name: row.dm_key,
 		lastMessageAt: row.last_message_at || null,
 		unreadCount: Number(row.unread_count || 0),
+		mentionUnreadCount: Number(row.attention_unread_count || 0),
 		otherUser: {
 			id: Number(row.other_user_id),
 			username: row.other_username,
@@ -40,7 +41,12 @@ export async function listUserDms(db, userId) {
 				   (SELECT COUNT(*) FROM messages m
 				    WHERE m.channel_id = c.id AND m.deleted_at IS NULL
 				      AND (m.sender_id IS NULL OR m.sender_id != ?)
-			      AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0)) AS unread_count
+					      AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0)) AS unread_count,
+					   (SELECT COUNT(*) FROM messages m
+					    WHERE m.channel_id = c.id AND m.deleted_at IS NULL
+					      AND (m.sender_id IS NULL OR m.sender_id != ?)
+					      AND m.id > COALESCE((SELECT mr.last_read_message_id FROM message_reads mr WHERE mr.channel_id = c.id AND mr.user_id = ?), 0)
+					      AND m.reply_to_sender_id = ?) AS attention_unread_count
 			 FROM channels c
 			 JOIN channel_members me ON me.channel_id = c.id AND me.user_id = ?
 			 JOIN channel_members peer ON peer.channel_id = c.id AND peer.user_id != ?
@@ -48,7 +54,15 @@ export async function listUserDms(db, userId) {
 			 WHERE c.kind = 'dm' AND c.deleted_at IS NULL AND other.deleted_at IS NULL
 			 ORDER BY last_message_at DESC NULLS LAST, c.id DESC`,
 		)
-			.bind(normalizedUserId, normalizedUserId, normalizedUserId, normalizedUserId)
+				.bind(
+					normalizedUserId,
+					normalizedUserId,
+					normalizedUserId,
+					normalizedUserId,
+					normalizedUserId,
+					normalizedUserId,
+					normalizedUserId,
+				)
 		.all();
 	return results.map(mapUserDm);
 }

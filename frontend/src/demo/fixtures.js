@@ -169,8 +169,9 @@ export function createDemoFixtures() {
       canManage: true,
       memberCount: 4,
       memberIds: [1, 2, 3, 4],
-      lastMessageAt: '2026-08-14T09:50:00.000Z',
-      unreadCount: 1,
+	      lastMessageAt: '2026-08-14T09:50:00.000Z',
+	      unreadCount: 1,
+	      mentionUnreadCount: 1,
       createdAt: '2026-07-18T12:00:00.000Z'
     },
     {
@@ -289,15 +290,23 @@ export function createDemoFixtures() {
         id: 122,
         content: 'Telegram 群里的回复也会回到同一个 EdgeChat 频道。',
         createdAt: '2026-08-14T09:50:00.000Z',
-        sender: {
+	        sender: {
           id: 'telegram:-1002345678901:alice',
           username: '',
           displayName: 'Telegram · Alice',
           avatarUrl: '',
           kind: 'external',
-          source: 'telegram'
-        },
-        attachment: null
+	          source: 'telegram'
+	        },
+	        replyToMessageId: 121,
+	        replyTo: {
+	          id: 121,
+	          deleted: false,
+	          content: '这条消息由 EdgeChat 发送，并同步到了 Telegram 群。',
+	          sender: internalSender(users[0]),
+	          attachment: null
+	        },
+	        attachment: null
       }
     ],
     'public:4': [

@@ -1,5 +1,5 @@
 <script setup>
-import { Pin, PinOff, Trash2 } from '@lucide/vue';
+import { Pin, PinOff, Reply, Trash2 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { t } from '../../i18n.js';
 
@@ -8,14 +8,16 @@ const props = defineProps({
   x: { type: Number, default: 0 },
   y: { type: Number, default: 0 },
   canPin: { type: Boolean, default: false },
+  canDelete: { type: Boolean, default: false },
   pinned: { type: Boolean, default: false }
 });
-const emit = defineEmits(['close', 'pin', 'unpin', 'delete']);
+const emit = defineEmits(['close', 'reply', 'pin', 'unpin', 'delete']);
 
 const menuEl = ref(null);
+const menuHeight = computed(() => 16 + (1 + Number(props.canPin) + Number(props.canDelete)) * 40);
 const menuStyle = computed(() => ({
   left: `${Math.max(8, Math.min(props.x, window.innerWidth - 184))}px`,
-  top: `${Math.max(8, Math.min(props.y, window.innerHeight - (props.canPin ? 108 : 60)))}px`
+  top: `${Math.max(8, Math.min(props.y, window.innerHeight - menuHeight.value))}px`
 }));
 
 function handleWindowPointerDown(event) {
@@ -73,6 +75,10 @@ onBeforeUnmount(() => {
         :aria-label="t('messages.actions')"
         @contextmenu.prevent
       >
+		<button type="button" role="menuitem" @click="emit('reply')">
+		  <Reply :size="18" :stroke-width="1.8" aria-hidden="true" />
+		  {{ t('messages.reply') }}
+		</button>
         <button
           v-if="canPin"
           type="button"
@@ -84,6 +90,7 @@ onBeforeUnmount(() => {
           {{ pinned ? t('messages.unpin') : t('messages.pin') }}
         </button>
         <button
+		  v-if="canDelete"
           class="message-context-menu__danger"
           type="button"
           role="menuitem"

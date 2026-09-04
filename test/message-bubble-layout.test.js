@@ -10,6 +10,10 @@ const avatarComponent = readFileSync(
 	new URL("../frontend/src/components/ui/Avatar.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
+const replyPreview = readFileSync(
+	new URL("../frontend/src/components/chat/MessageReplyPreview.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
 
 function getStyleRule(selector) {
 	const marker = `${selector} {`;
@@ -66,4 +70,12 @@ test("远程头像加载失败时显示姓名缩写", () => {
 	assert.match(avatarComponent, /const showImage = computed/);
 	assert.match(avatarComponent, /failedSrc\.value !== props\.src/);
 	assert.match(avatarComponent, /@error="handleImageError"/);
+});
+
+test("回复气泡显示引用预览并复用消息定位能力", () => {
+	assert.match(chatPage, /<MessageReplyPreview/);
+	assert.match(chatPage, /@reveal="revealMessage\(msg\.replyToMessageId\)"/);
+	assert.match(chatPage, /:replying-to="replyingTo"/);
+	assert.match(replyPreview, /border-left:\s*3px solid #008069;/);
+	assert.match(replyPreview, /messages\.replyDeleted/);
 });

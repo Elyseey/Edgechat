@@ -1,4 +1,4 @@
-import { ref, type Ref } from "vue";
+import { ref } from "vue";
 
 type ContextMessage = {
 	id: number | string;
@@ -16,16 +16,10 @@ type LongPressOrigin = {
 	y: number;
 };
 
-type MessageContextMenuOptions = {
-	canModerateMessages: Readonly<Ref<boolean>>;
-};
-
 const LONG_PRESS_DELAY_MS = 500;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 
-export function useMessageContextMenu({
-	canModerateMessages,
-}: MessageContextMenuOptions) {
+export function useMessageContextMenu() {
 	const messageMenu = ref<MessageMenuState>({
 		message: null,
 		x: 0,
@@ -39,9 +33,6 @@ export function useMessageContextMenu({
 	}
 
 	function openMessageMenuAt(message: ContextMessage, x: number, y: number) {
-		if (!canModerateMessages.value) {
-			return;
-		}
 		messageMenu.value = { message, x, y };
 	}
 
@@ -54,9 +45,6 @@ export function useMessageContextMenu({
 	}
 
 	function openMessageContextMenu(event: MouseEvent, message: ContextMessage) {
-		if (!canModerateMessages.value) {
-			return;
-		}
 		event.preventDefault();
 		cancelMessageLongPress();
 		openMessageMenuAt(message, event.clientX, event.clientY);
@@ -64,7 +52,7 @@ export function useMessageContextMenu({
 
 	function startMessageLongPress(event: PointerEvent, message: ContextMessage) {
 		cancelMessageLongPress();
-		if (!canModerateMessages.value || event.pointerType === "mouse") {
+		if (event.pointerType === "mouse") {
 			return;
 		}
 

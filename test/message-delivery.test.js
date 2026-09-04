@@ -106,7 +106,8 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 				createdAt: "now",
 					unreadCount: 5,
 					mentionUnreadCount: 1,
-					mentionsMe: true,
+						mentionsMe: true,
+						replyToMe: false,
 					contentPreview: "@bob hello",
 					sender: { displayName: "Alice" },
 			},
@@ -120,7 +121,8 @@ test("未读投影排除发送者，并行投影所有收件人", async () => {
 				messageId: 8,
 				createdAt: "now",
 					unreadCount: 6,
-					mentionsMe: false,
+						mentionsMe: false,
+						replyToMe: false,
 					contentPreview: "@bob hello",
 					sender: { displayName: "Alice" },
 			},
@@ -170,4 +172,46 @@ test("单个未读收件人失败被隔离，成员查询失败也不阻塞提�
 		{ room: { id: 4 }, senderId: 1, message: { id: 8 } },
 	);
 	assert.equal(outerFailures[0].message, "unread projection failed");
+});
+
+test("回复原作者会触发与提及同级的有人@我投影", async () => {
+	const notifications = [];
+	const counted = [];
+	const project = createUnreadProjection({
+		async listMemberIds() {
+			return [1, 2, 3];
+		},
+		async countUnread() {
+			return 2;
+		},
+		async countMentions(_db, { userId }) {
+			counted.push(userId);
+			return 1;
+		},
+		async notifyInbox(_env, userId, payload) {
+			notifications.push({ userId, payload });
+		},
+	});
+
+	await project(
+		{ DB: {} },
+			{
+				room: { id: 4, kind: "private", name: "Team" },
+				senderId: 1,
+				message: {
+					id: 9,
+					createdAt: "now",
+					content: "done",
+					mentionUserIds: [],
+					replyTo: { id: 8, deleted: true },
+					sender: { displayName: "Alice" },
+				},
+				replyToSenderId: 2,
+			},
+		);
+
+	assert.deepEqual(counted, [2]);
+	assert.equal(notifications.find((item) => item.userId === 2).payload.replyToMe, true);
+	assert.equal(notifications.find((item) => item.userId === 2).payload.mentionUnreadCount, 1);
+	assert.equal(notifications.find((item) => item.userId === 3).payload.replyToMe, false);
 });

@@ -137,5 +137,10 @@ function resetDemo() {
     top: auto;
     bottom: calc(76px + env(safe-area-inset-bottom));
   }
+
+	/* 窄屏演示导航悬浮在输入区上方，因此给消息流留出同等空间，保证最新回复不会被遮住。 */
+	body:has(.pinned-message-bar) .chat-messages {
+		padding-bottom: calc(72px + env(safe-area-inset-bottom));
+	}
 }
 </style>

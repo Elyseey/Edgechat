@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowRight, Mic, Paperclip, Send, Trash2 } from "@lucide/vue";
+import { ArrowRight, Mic, Paperclip, Send, Trash2, X } from "@lucide/vue";
 import { computed, nextTick, ref } from "vue";
 import { t } from "../../i18n.js";
 import { useVoiceRecorder } from "../../composables/useVoiceRecorder.ts";
@@ -7,6 +7,7 @@ import { formatVoiceDuration } from "../../voice-message.js";
 import UiTextarea from "../ui/Textarea.vue";
 import UiAvatar from "../ui/Avatar.vue";
 import PendingAttachmentPreview from "./PendingAttachmentPreview.vue";
+import MessageReplyPreview from "./MessageReplyPreview.vue";
 
 const props = defineProps({
 	modelValue: {
@@ -33,6 +34,10 @@ const props = defineProps({
 		type: Array,
 		default: () => [],
 	},
+	replyingTo: {
+		type: Object,
+		default: null,
+	},
 });
 
 const emit = defineEmits([
@@ -41,6 +46,7 @@ const emit = defineEmits([
 	"upload",
 	"clear-attachment",
 	"voice-recorded",
+	"cancel-reply",
 ]);
 const fileInput = ref(null);
 const textarea = ref(null);
@@ -100,6 +106,10 @@ function handleKeydown(event) {
 			return;
 		}
 		emit("send");
+	}
+	if (event.key === "Escape" && props.replyingTo) {
+		event.preventDefault();
+		emit("cancel-reply");
 	}
 }
 
@@ -170,10 +180,28 @@ async function sendVoiceRecording() {
 	}
 	emit("voice-recorded", result);
 }
+
+defineExpose({
+	focus() {
+		textarea.value?.focus();
+	},
+});
 </script>
 
 <template>
 	<footer class="chat-composer">
+		<div v-if="replyingTo" class="composer-reply">
+			<MessageReplyPreview :reply="replyingTo" />
+			<button
+				type="button"
+				class="composer-reply__cancel"
+				:title="t('messages.cancelReply')"
+				:aria-label="t('messages.cancelReply')"
+				@click="emit('cancel-reply')"
+			>
+				<X :size="18" aria-hidden="true" />
+			</button>
+		</div>
 		<div v-if="pendingAttachment" class="composer-attachment">
 			<PendingAttachmentPreview
 				:attachment="pendingAttachment"
@@ -287,6 +315,33 @@ async function sendVoiceRecording() {
 .composer-attachment {
 	min-width: 0;
 	margin-bottom: 10px;
+}
+
+.composer-reply {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 32px;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.composer-reply__cancel {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: #667781;
+	cursor: pointer;
+}
+
+.composer-reply__cancel:hover,
+.composer-reply__cancel:focus-visible {
+	background: rgba(0, 0, 0, 0.08);
 }
 
 .composer-error {

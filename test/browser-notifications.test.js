@@ -138,6 +138,16 @@ test("会话免打扰阻止通知，取消后通知可聚合并打开会话", as
 	notifications.toggleRoomMuted(groupRoom);
 	assert.equal(notifications.notifyRoom(mentionEvent), true);
 	assert.equal(shown.length, 4);
+
+	const replyEvent = {
+		room: groupRoom,
+		replyToMe: true,
+		contentPreview: "已经处理好了",
+		sender: { displayName: "Bob" },
+	};
+	assert.equal(notifications.notifyRoom(replyEvent), true);
+	assert.equal(shown[4].title, "有人在 产品协作 回复你");
+	assert.equal(shown[4].options.body, "Bob: 已经处理好了");
 });
 
 test("浏览器拒绝通知权限时开关保持禁用", async () => {

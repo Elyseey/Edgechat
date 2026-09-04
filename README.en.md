@@ -116,6 +116,7 @@ Admins can bind any group in EdgeChat to a Telegram group. Once bound, messages 
 - Public groups, private groups, and direct message conversations
 - [Two-way Telegram group bridge](#featured-feature-telegram-two-way-message-bridge) — one Bot connects members on both sides
 - Real-time messaging, paginated history, Telegram-style voice messages, and file messages
+- The web client supports Telegram-style replies, quoted-message navigation, and reply-aware direct-attention alerts
 - Web and Android recording, waveform seeking, playback speed controls, and two-way Telegram voice/audio sync
 - File uploads and avatar management
 - Scheduled hard deletion of expired messages

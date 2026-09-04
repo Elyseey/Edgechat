@@ -150,13 +150,14 @@ export class ChannelRoom {
     }
   }
 
-  runMessageProjections(room, message) {
+  runMessageProjections(room, message, replyToSenderId = null) {
     this.state.waitUntil(
       Promise.all([
         projectUnreadMessage(this.env, {
           room,
           senderId: message.sender.kind === 'local' ? message.sender.id : null,
-          message
+          message,
+          replyToSenderId
         }),
         forwardEdgeChatMessageToTelegram(this.env, { room, message })
       ])
@@ -177,7 +178,7 @@ export class ChannelRoom {
     const result = await submitExternalMessage(this.env, { room, payload });
     if (result.created) {
       await this.broadcast(result.packet);
-      this.runMessageProjections(room, result.message);
+      this.runMessageProjections(room, result.message, result.replyToSenderId);
     }
     return Response.json({ ok: true, created: result.created, message: result.message });
   }
@@ -210,7 +211,7 @@ export class ChannelRoom {
         const result = await submitRoomMessageIdempotent(this.env, meta, action);
         if (result.created) {
           await this.broadcast(result.packet);
-          this.runMessageProjections(access.room, result.message);
+          this.runMessageProjections(access.room, result.message, result.replyToSenderId);
         }
         return Response.json({ created: result.created, message: result.message });
       }

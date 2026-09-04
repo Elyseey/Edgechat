@@ -71,12 +71,21 @@ export function getTelegramUserProfilePhotos(botToken, userId) {
 	});
 }
 
-export function sendTelegramText(botToken, { chatId, text, parseMode = "HTML" }) {
-	return callTelegramApi(botToken, "sendMessage", {
+export function sendTelegramText(botToken, {
+	chatId,
+	text,
+	parseMode = "HTML",
+	replyToMessageId = null,
+}) {
+	const payload = {
 		chat_id: String(chatId),
 		text: String(text),
 		parse_mode: parseMode,
-	});
+	};
+	if (replyToMessageId) {
+		payload.reply_parameters = { message_id: Number(replyToMessageId) };
+	}
+	return callTelegramApi(botToken, "sendMessage", payload);
 }
 
 export function getTelegramFile(botToken, fileId) {
@@ -112,6 +121,7 @@ export function sendTelegramMedia(botToken, {
 	contentType,
 	caption,
 	durationMs = 0,
+	replyToMessageId = null,
 }) {
 	const methods = {
 		photo: ["sendPhoto", "photo"],
@@ -124,6 +134,9 @@ export function sendTelegramMedia(botToken, {
 	const formData = new FormData();
 	formData.set("chat_id", String(chatId));
 	formData.set("parse_mode", "HTML");
+	if (replyToMessageId) {
+		formData.set("reply_parameters", JSON.stringify({ message_id: Number(replyToMessageId) }));
+	}
 	if (caption) formData.set("caption", String(caption));
 	if (durationMs > 0 && (kind === "voice" || kind === "audio")) {
 		formData.set("duration", String(Math.round(durationMs / 1000)));
