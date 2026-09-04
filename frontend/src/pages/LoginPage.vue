@@ -5,6 +5,7 @@ import store from '../store.js';
 import { useCursor } from '../composables/useCursor.js';
 import { useI18n } from '../i18n.js';
 import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
+import { getStoredNativeServerOrigin, isCapacitorAndroid } from '../capacitor-platform.ts';
 
 const route = useRoute();
 const router = useRouter();
@@ -12,6 +13,7 @@ const { t } = useI18n();
 const loading = ref(false);
 const error = ref('');
 const form = reactive({
+  serverOrigin: getStoredNativeServerOrigin(),
   username: '',
   password: ''
 });
@@ -19,10 +21,13 @@ const registered = computed(() => route.query.registered === '1');
 
 const usernameInput = ref(null);
 const passwordInput = ref(null);
+const serverInput = ref(null);
 const usernameCursor = ref(null);
 const passwordCursor = ref(null);
+const serverCursor = ref(null);
 
 useCursor([
+  [serverInput, serverCursor],
   [usernameInput, usernameCursor],
   [passwordInput, passwordCursor]
 ]);
@@ -31,10 +36,17 @@ async function submit() {
   loading.value = true;
   error.value = '';
   try {
-    await store.login(form);
+    if (isCapacitorAndroid) {
+      await store.configureNativeServer(form.serverOrigin);
+    }
+    await store.login({ username: form.username, password: form.password });
     router.push('/');
   } catch (currentError) {
-    error.value = currentError.message;
+    error.value = currentError.message === 'native_server_https_required'
+      ? t('auth.serverHttpsRequired')
+      : currentError.message === 'native_server_unavailable'
+        ? t('auth.serverUnavailable')
+        : currentError.message;
   } finally {
     loading.value = false;
   }
@@ -53,6 +65,19 @@ async function submit() {
       <p v-if="registered" class="success-hint">{{ t('auth.registerSuccess') }}</p>
 
       <form class="login-form" @submit.prevent="submit">
+        <div v-if="isCapacitorAndroid" class="input-wrapper">
+          <span ref="serverCursor" class="custom-cursor"></span>
+          <input
+            ref="serverInput"
+            v-model.trim="form.serverOrigin"
+            class="login-input"
+            :placeholder="t('auth.serverOrigin')"
+            autocomplete="url"
+            inputmode="url"
+            required
+            type="url"
+          />
+        </div>
         <div class="input-wrapper">
           <span ref="usernameCursor" class="custom-cursor"></span>
           <input

@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { getNativeNotificationBridge } from "../capacitor-platform.ts";
 import { t } from "../i18n.js";
 
 const STORAGE_KEY_PREFIX = "edgechat:browser-notifications";
@@ -26,21 +27,36 @@ function loadPreferences(storage, storageKey) {
 
 export function useBrowserNotifications(options = {}) {
 	const browserWindow =
-		options.browserWindow === undefined ? globalThis.window : options.browserWindow;
+		options.browserWindow === undefined
+			? globalThis.window
+			: options.browserWindow;
 	const notificationApi =
 		options.notificationApi === undefined
 			? browserWindow?.Notification
 			: options.notificationApi;
 	const storage =
-		options.storage === undefined ? browserWindow?.localStorage : options.storage;
+		options.storage === undefined
+			? browserWindow?.localStorage
+			: options.storage;
+	const nativeNotifications =
+		options.nativeNotifications === undefined
+			? getNativeNotificationBridge()
+			: options.nativeNotifications;
 	const storageKey = `${STORAGE_KEY_PREFIX}:${options.userId || "guest"}`;
 	const savedPreferences = loadPreferences(storage, storageKey);
-	const supported = computed(() => typeof notificationApi === "function");
+	const supported = computed(
+		() => Boolean(nativeNotifications) || typeof notificationApi === "function",
+	);
 	const permission = ref(
-		supported.value ? notificationApi.permission : "unsupported",
+		nativeNotifications
+			? "prompt"
+			: supported.value
+				? notificationApi.permission
+				: "unsupported",
 	);
 	const enabled = ref(
-		savedPreferences.enabled && permission.value === "granted",
+		savedPreferences.enabled &&
+			(Boolean(nativeNotifications) || permission.value === "granted"),
 	);
 	const mutedRoomKeys = ref(new Set(savedPreferences.mutedRooms));
 
@@ -55,6 +71,17 @@ export function useBrowserNotifications(options = {}) {
 	}
 
 	function syncPermission() {
+		if (nativeNotifications) {
+			return nativeNotifications.checkPermission().then((state) => {
+				permission.value = state;
+				if (state !== "granted" && enabled.value) {
+					enabled.value = false;
+					persistPreferences();
+				}
+				return state;
+			});
+		}
+
 		permission.value = supported.value
 			? notificationApi.permission
 			: "unsupported";
@@ -62,18 +89,22 @@ export function useBrowserNotifications(options = {}) {
 			enabled.value = false;
 			persistPreferences();
 		}
+		return Promise.resolve(permission.value);
 	}
 
-		const notificationStateLabel = computed(() => {
-			if (!supported.value) return t('notifications.unavailable');
-			if (permission.value === "denied") return t('notifications.permissionDenied');
-			return enabled.value ? t('notifications.on') : t('notifications.off');
-		});
+	const notificationStateLabel = computed(() => {
+		if (!supported.value) return t("notifications.unavailable");
+		if (permission.value === "denied")
+			return t("notifications.permissionDenied");
+		return enabled.value ? t("notifications.on") : t("notifications.off");
+	});
 
 	const notificationActionLabel = computed(() => {
-			if (!supported.value) return t('notifications.unsupported');
-			if (permission.value === "denied") return t('notifications.blocked');
-			return enabled.value ? t('notifications.disable') : t('notifications.enable');
+		if (!supported.value) return t("notifications.unsupported");
+		if (permission.value === "denied") return t("notifications.blocked");
+		return enabled.value
+			? t("notifications.disable")
+			: t("notifications.enable");
 	});
 
 	const notificationToggleDisabled = computed(
@@ -81,7 +112,7 @@ export function useBrowserNotifications(options = {}) {
 	);
 
 	async function toggleNotifications() {
-		syncPermission();
+		await syncPermission();
 		if (notificationToggleDisabled.value) {
 			return notificationActionLabel.value;
 		}
@@ -92,7 +123,9 @@ export function useBrowserNotifications(options = {}) {
 			return notificationActionLabel.value;
 		}
 
-		if (permission.value === "default") {
+		if (nativeNotifications) {
+			permission.value = await nativeNotifications.requestPermission();
+		} else if (permission.value === "default") {
 			permission.value = await notificationApi.requestPermission();
 		}
 		enabled.value = permission.value === "granted";
@@ -119,30 +152,46 @@ export function useBrowserNotifications(options = {}) {
 		return nextMutedRooms.has(key);
 	}
 
-		function notifyRoom(event) {
-			const room = event?.room || event;
-			syncPermission();
-			const needsAttention = Boolean(event?.mentionsMe || event?.replyToMe);
-			if (!enabled.value || (isRoomMuted(room) && !needsAttention)) {
+	function notifyRoom(event) {
+		const room = event?.room || event;
+		const needsAttention = Boolean(event?.mentionsMe || event?.replyToMe);
+		void syncPermission();
+		if (!enabled.value || (isRoomMuted(room) && !needsAttention)) {
 			return false;
 		}
 
-			const title = event?.replyToMe
-				? t("notifications.repliedTitle", { room: room.name || "EdgeChat" })
-				: event?.mentionsMe
-					? t("notifications.mentionedTitle", { room: room.name || "EdgeChat" })
-					: room.name || "EdgeChat";
-			const senderName = event?.sender?.displayName || event?.sender?.username || "";
-			const attentionBody = [senderName, event?.contentPreview].filter(Boolean).join(": ");
-			const notification = new notificationApi(title, {
-					body: needsAttention
-					? attentionBody ||
-						(event?.replyToMe
-							? t("notifications.repliedBody")
-							: t("notifications.mentionedBody"))
-					: room.kind === "dm"
-						? t('notifications.directMessage')
-						: t('notifications.groupMessage'),
+		const title = event?.replyToMe
+			? t("notifications.repliedTitle", { room: room.name || "EdgeChat" })
+			: event?.mentionsMe
+				? t("notifications.mentionedTitle", { room: room.name || "EdgeChat" })
+				: room.name || "EdgeChat";
+		const senderName =
+			event?.sender?.displayName || event?.sender?.username || "";
+		const attentionBody = [senderName, event?.contentPreview]
+			.filter(Boolean)
+			.join(": ");
+		const body = needsAttention
+			? attentionBody ||
+				(event?.replyToMe
+					? t("notifications.repliedBody")
+					: t("notifications.mentionedBody"))
+			: room.kind === "dm"
+				? t("notifications.directMessage")
+				: t("notifications.groupMessage");
+
+		if (nativeNotifications) {
+			void nativeNotifications.showNotification({
+				title,
+				body,
+				tag: `edgechat:${browserNotificationRoomKey(room)}`,
+				roomKind: room.kind,
+				roomId: Number(room.id),
+			});
+			return true;
+		}
+
+		const notification = new notificationApi(title, {
+			body,
 			tag: `edgechat:${browserNotificationRoomKey(room)}`,
 			renotify: true,
 		});

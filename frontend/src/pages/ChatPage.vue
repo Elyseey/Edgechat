@@ -2,6 +2,10 @@
 import { ArrowLeft, Bell, BellOff, Menu, Settings, UsersRound } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+  consumeNativeRoomTarget,
+  NATIVE_ROOM_OPEN_EVENT
+} from '../capacitor-platform.ts';
 import { isDemoMode } from '../runtime.js';
 import AddConversationDialog from '../components/chat/AddConversationDialog.vue';
 import ConversationList from '../components/chat/ConversationList.vue';
@@ -115,7 +119,8 @@ const {
   messages, pinnedMessage, highlightedMessageId, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, isOwnMessage,
   loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, sendVoiceMessage, deleteMessage,
-  pinMessage, unpinMessage, revealPinnedMessage, revealMessage,
+	  pinMessage, unpinMessage, revealPinnedMessage,
+	  revealMessage,
   uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
@@ -277,6 +282,12 @@ function toggleActiveRoomMute() {
 function logout() { store.logout(); router.push('/login'); }
 function openAdmin() { router.push('/admin'); }
 function openSettings() { router.push('/settings'); }
+let nativeRoomNavigationReady = false;
+function openNativeRoom() {
+  if (!nativeRoomNavigationReady) return;
+  const target = consumeNativeRoomTarget();
+  if (target) void openRoomFromNotification(target);
+}
 function closeMobileNavigation() { showMobileNavigation.value = false; }
 function navigateFromMobileDrawer(callback) {
   closeMobileNavigation();
@@ -351,9 +362,14 @@ function replyToSelectedMessage() {
 }
 
 onMounted(() => {
-  startViewportSync();
-  window.addEventListener('focus', syncNotificationPermission);
-  void bootstrap().then(connectUnreadInbox);
+	  startViewportSync();
+	  window.addEventListener('focus', syncNotificationPermission);
+	  window.addEventListener(NATIVE_ROOM_OPEN_EVENT, openNativeRoom);
+	  void bootstrap().then(() => {
+	    nativeRoomNavigationReady = true;
+	    connectUnreadInbox();
+	    openNativeRoom();
+	  });
 });
 function formatBubbleTime(value) {
   return value ? formatLocaleTime(value) : '';
@@ -361,7 +377,9 @@ function formatBubbleTime(value) {
 
 onBeforeUnmount(() => {
   cancelMessageLongPress();
-  window.removeEventListener('focus', syncNotificationPermission);
+	  nativeRoomNavigationReady = false;
+	  window.removeEventListener('focus', syncNotificationPermission);
+	  window.removeEventListener(NATIVE_ROOM_OPEN_EVENT, openNativeRoom);
   disconnectUnreadInbox();
   disconnectSocket();
   stopViewportSync();
@@ -570,10 +588,10 @@ onBeforeUnmount(() => {
             v-for="msg in messages" :key="msg.id"
             :data-message-id="msg.id"
             class="message-row"
-            :class="{
-              'message-row--own': isOwnMessage(msg),
-              'message-row--actionable': true
-            }"
+			:class="{
+			  'message-row--own': isOwnMessage(msg),
+			  'message-row--actionable': true
+			}"
           >
             <UiAvatar
               v-if="!isOwnMessage(msg)"
@@ -595,18 +613,18 @@ onBeforeUnmount(() => {
               @pointerup="cancelMessageLongPress"
               @pointercancel="cancelMessageLongPress"
             >
-              <div v-if="activeRoom.kind !== 'dm' && !isOwnMessage(msg)" class="message-sender-name">
+			  <div v-if="activeRoom.kind !== 'dm' && !isOwnMessage(msg)" class="message-sender-name">
                 <span>{{ msg.sender.displayName }}</span>
                 <SenderSourceBadge :source="msg.sender.source" />
-              </div>
-              <MessageReplyPreview
-                v-if="msg.replyTo"
-                class="message-bubble__reply"
-                :reply="msg.replyTo"
-                :clickable="!msg.replyTo.deleted"
-                @reveal="revealMessage(msg.replyToMessageId)"
-              />
-	              <p v-if="msg.content">
+			  </div>
+			  <MessageReplyPreview
+				v-if="msg.replyTo"
+				class="message-bubble__reply"
+				:reply="msg.replyTo"
+				:clickable="!msg.replyTo.deleted"
+				@reveal="revealMessage(msg.replyToMessageId)"
+			  />
+		              <p v-if="msg.content">
 				<MentionText
 				  :content="msg.content"
 				  :mentions="msg.mentions"
@@ -623,11 +641,11 @@ onBeforeUnmount(() => {
           :open="Boolean(messageMenu.message)"
           :x="messageMenu.x"
           :y="messageMenu.y"
-          :can-pin="canPinMessages"
-          :can-delete="canModerateMessages"
+		  :can-pin="canPinMessages"
+		  :can-delete="canModerateMessages"
           :pinned="selectedMessageIsPinned"
-          @close="closeMessageMenu"
-          @reply="replyToSelectedMessage"
+		  @close="closeMessageMenu"
+		  @reply="replyToSelectedMessage"
           @pin="pinSelectedMessage"
           @unpin="unpinSelectedMessage"
           @delete="confirmDeleteMessage"

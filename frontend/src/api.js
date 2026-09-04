@@ -1,8 +1,7 @@
 import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
+import { getEdgeChatServerOrigin, resolveServerUrl } from './capacitor-platform.ts';
 import { localizedError, localizeErrorMessage } from './localized-error.js';
 import { getRuntimeFileUrl, isDemoMode, requestRuntime } from './runtime.js';
-
-const API_PREFIX = '/api';
 
 function buildHeaders(extra = {}) {
   const headers = { ...extra };
@@ -22,7 +21,7 @@ async function request(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${API_PREFIX}${path}`, {
+  const response = await fetch(resolveServerUrl(`/api${path}`), {
     ...options,
     headers: buildHeaders(options.headers),
     body:
@@ -183,14 +182,14 @@ export default {
   },
   getRoomWebSocketUrl(kind, roomId) {
     const token = getStoredToken();
-    const url = new URL(`/api/ws/${kind}/${roomId}`, window.location.origin);
+    const url = new URL(`/api/ws/${kind}/${roomId}`, getEdgeChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');
     return url.toString();
   },
   getInboxWebSocketUrl() {
     const token = getStoredToken();
-    const url = new URL('/api/inbox/ws', window.location.origin);
+    const url = new URL('/api/inbox/ws', getEdgeChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');
     return url.toString();
@@ -205,13 +204,13 @@ export default {
     }
 
     const url = raw.startsWith('/files/')
-      ? new URL(raw, window.location.origin)
-      : new URL(`/files/${encodeURIComponent(raw)}`, window.location.origin);
+      ? new URL(resolveServerUrl(raw), getEdgeChatServerOrigin())
+      : new URL(resolveServerUrl(`/files/${encodeURIComponent(raw)}`), getEdgeChatServerOrigin());
     const token = getStoredToken();
     if (token) {
       url.searchParams.set('token', token);
     }
-    return url.pathname + url.search;
+    return resolveServerUrl(url.pathname + url.search);
   },
   adminUsers() {
     return request('/admin/users');

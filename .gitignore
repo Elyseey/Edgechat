@@ -27,3 +27,10 @@ android/local.properties
 android/signing.properties
 android/*.jks
 android/*.keystore
+capacitor/android/.gradle/
+capacitor/android/.kotlin/
+capacitor/android/**/build/
+capacitor/android/local.properties
+capacitor/android/signing.properties
+capacitor/android/*.jks
+capacitor/android/*.keystore

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { resolveServerAssetUrl } from '../../capacitor-platform.ts';
 
 const props = defineProps({
   src: {
@@ -22,7 +23,8 @@ const props = defineProps({
 
 const initials = computed(() => String(props.fallback || '?').slice(0, 2).toUpperCase());
 const failedSrc = ref('');
-const showImage = computed(() => Boolean(props.src) && failedSrc.value !== props.src);
+const resolvedSrc = computed(() => resolveServerAssetUrl(props.src));
+const showImage = computed(() => Boolean(resolvedSrc.value) && failedSrc.value !== props.src);
 
 function handleImageError() {
   failedSrc.value = props.src;
@@ -31,7 +33,7 @@ function handleImageError() {
 
 <template>
   <div class="ui-avatar" :class="`ui-avatar--${size}`">
-    <img v-if="showImage" :src="src" :alt="alt" @error="handleImageError" />
+    <img v-if="showImage" :src="resolvedSrc" :alt="alt" @error="handleImageError" />
     <span v-else>{{ initials }}</span>
   </div>
 </template>

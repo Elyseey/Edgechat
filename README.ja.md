@@ -162,7 +162,7 @@ GitHub Actions でのデプロイを優先的に推奨します。長期的な�
 - クイックスタート：<https://echat.azora.top/guide/getting-started.html>
 - 詳細チュートリアル：<https://echat.azora.top/guide/actions-deploy.html>
 
-### ネイティブ Android クライアント
+### Android クライアント
 
 リポジトリの `android/` は Android 8 / API 26 以降向けの独立した Kotlin + Jetpack Compose クライアントです。安定した `/api/v1` 契約だけを共有し、Vue コンポーネントや CSS は APK に含めません。未ログイン時は 1 つの画面で HTTPS サーバー URL、ユーザー名、パスワードを入力できます。`edgechat://connect?server=https%3A%2F%2Fchat.example.com` でサーバーを事前入力することもでき、送信後にサーバー機能を確認してからログインします。
 
@@ -170,6 +170,14 @@ GitHub Actions でのデプロイを優先的に推奨します。長期的な�
 - CI：`.github/workflows/android-ci.yml` が単体テスト、Lint、Debug APK ビルドを実行
 - リリース：`android-v*` タグ、または手動の `Android Release` を使用し、4 つの `ANDROID_KEYSTORE_*` Secret を設定
 - 制限：初版は FCM 非対応です。バックグラウンドでは WebSocket を閉じ、フォアグラウンド復帰時に差分同期するため、バックグラウンド即時通知は保証しません
+
+リポジトリには独立した `capacitor/` クライアントも含まれます。主要 UI と機能は Vue を再利用し、システムのファイル選択、ローカル通知、通知から会話を開く処理、外部リンクだけを小さな Kotlin プラグインで実装します。Application ID は `com.aozorae.edgechat.web` のため、Compose 版と同時にインストールできます。
+
+- 初回利用：ログイン画面で自分の EdgeChat HTTPS サーバー URL、ユーザー名、パスワードを入力
+- ローカルビルド：JDK 21 と Android SDK 36 を用意して `npm run build:capacitor` を実行
+- Debug APK：`capacitor/android/app/build/outputs/apk/debug/app-debug.apk`
+- CI：`.github/workflows/capacitor-android-ci.yml` が `edgechat-capacitor-debug` をアップロード
+- サーバー切替：ログアウト後に URL を変更でき、別インスタンスへ切り替えると以前のトークンを削除します
 
 詳細：<https://echat.azora.top/en/guide/android.html>
 

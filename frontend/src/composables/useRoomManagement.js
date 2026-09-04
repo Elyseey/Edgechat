@@ -223,8 +223,8 @@ export function useRoomManagement({
 		}
 	}
 
-	async function uploadGroupAvatar(event) {
-		const file = event.target.files?.[0];
+	async function uploadGroupAvatar(fileOrEvent) {
+		const file = fileOrEvent instanceof File ? fileOrEvent : fileOrEvent.target.files?.[0];
 		if (!file || !activeRoom.value) {
 			return;
 		}
@@ -239,7 +239,9 @@ export function useRoomManagement({
 			error.value = currentError.message;
 		} finally {
 			groupAvatarUploading.value = false;
-			event.target.value = "";
+			if (!(fileOrEvent instanceof File)) {
+				fileOrEvent.target.value = "";
+			}
 		}
 	}
 

@@ -1,4 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
+import { isCapacitorAndroid } from './capacitor-platform.ts';
 import { isDemoMode } from './runtime.js';
 import store from './store.js';
 import LoginPage from './pages/LoginPage.vue';
@@ -15,7 +16,7 @@ import SettingsPage from './pages/SettingsPage.vue';
 import { addAuthInvalidListener } from './auth-storage.js';
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: isCapacitorAndroid ? createWebHashHistory() : createWebHistory(),
   routes: [
     {
       path: '/login',

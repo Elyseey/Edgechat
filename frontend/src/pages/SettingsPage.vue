@@ -5,6 +5,7 @@ import api from '../api.js';
 import store from '../store.js';
 import UiAvatar from '../components/ui/Avatar.vue';
 import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
+import { isCapacitorAndroid, pickNativeFile } from '../capacitor-platform.ts';
 import { useI18n } from '../i18n.js';
 
 const router = useRouter();
@@ -68,14 +69,29 @@ async function saveProfile() {
   }
 }
 
-function openAvatarPicker() {
-  avatarInputEl.value?.click();
+async function openAvatarPicker() {
+  if (!isCapacitorAndroid) {
+    avatarInputEl.value?.click();
+    return;
+  }
+
+  clearMessage();
+  try {
+    const file = await pickNativeFile('image/*');
+    if (file) prepareAvatarFile(file);
+  } catch {
+    error.value = t('chat.fileSelectionFailed');
+  }
 }
 
 function onAvatarFileSelected(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
+  prepareAvatarFile(file);
+}
+
+function prepareAvatarFile(file) {
   cropFile.value = file;
   const url = URL.createObjectURL(file);
   cropImageUrl.value = url;

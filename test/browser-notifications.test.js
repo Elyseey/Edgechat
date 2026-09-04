@@ -135,19 +135,19 @@ test("会话免打扰阻止通知，取消后通知可聚合并打开会话", as
 	assert.equal(notifications.notifyRoom(mentionEvent), true);
 	assert.equal(shown[2].title, "有人在 产品协作 提及你");
 	assert.equal(shown[2].options.body, "Alice: @admin 请看一下");
-	notifications.toggleRoomMuted(groupRoom);
-	assert.equal(notifications.notifyRoom(mentionEvent), true);
-	assert.equal(shown.length, 4);
+		notifications.toggleRoomMuted(groupRoom);
+		assert.equal(notifications.notifyRoom(mentionEvent), true);
+		assert.equal(shown.length, 4);
 
-	const replyEvent = {
-		room: groupRoom,
-		replyToMe: true,
-		contentPreview: "已经处理好了",
-		sender: { displayName: "Bob" },
-	};
-	assert.equal(notifications.notifyRoom(replyEvent), true);
-	assert.equal(shown[4].title, "有人在 产品协作 回复你");
-	assert.equal(shown[4].options.body, "Bob: 已经处理好了");
+		const replyEvent = {
+			room: groupRoom,
+			replyToMe: true,
+			contentPreview: "已经处理好了",
+			sender: { displayName: "Bob" },
+		};
+		assert.equal(notifications.notifyRoom(replyEvent), true);
+		assert.equal(shown[4].title, "有人在 产品协作 回复你");
+		assert.equal(shown[4].options.body, "Bob: 已经处理好了");
 });
 
 test("浏览器拒绝通知权限时开关保持禁用", async () => {
@@ -163,4 +163,47 @@ test("浏览器拒绝通知权限时开关保持禁用", async () => {
 	assert.equal(notifications.notificationActionLabel.value, "浏览器已阻止通知");
 	await notifications.toggleNotifications();
 	assert.equal(notifications.notificationsEnabled.value, false);
+});
+
+test("Capacitor 通知复用会话偏好并交给原生插件展示", async () => {
+	const shown = [];
+	const nativeNotifications = {
+		async checkPermission() {
+			return "prompt";
+		},
+		async requestPermission() {
+			return "granted";
+		},
+		async showNotification(payload) {
+			shown.push(payload);
+			return { shown: true };
+		},
+	};
+	const notifications = useBrowserNotifications({
+		userId: 10,
+		browserWindow: {},
+		storage: createStorage(),
+		nativeNotifications,
+	});
+
+	await notifications.toggleNotifications();
+	assert.equal(notifications.notificationsEnabled.value, true);
+	assert.equal(
+		notifications.notifyRoom({
+			room: { kind: "private", id: 6, name: "项目组" },
+			contentPreview: "构建完成",
+			sender: { displayName: "Alice" },
+		}),
+		true,
+	);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.deepEqual(shown, [
+		{
+			title: "项目组",
+			body: "收到一条新群聊消息",
+			tag: "edgechat:private:6",
+			roomKind: "private",
+			roomId: 6,
+		},
+	]);
 });

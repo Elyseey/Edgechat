@@ -162,7 +162,7 @@ GitHub Actions deployment is recommended first — it suits long-term maintenanc
 - Quick start: <https://echat.azora.top/guide/getting-started.html>
 - Detailed guide: <https://echat.azora.top/guide/actions-deploy.html>
 
-### Native Android Client
+### Android Clients
 
 The repository's `android/` directory is an independent Kotlin + Jetpack Compose client for Android 8 / API 26 and newer. It depends only on the stable `/api/v1` contract and never packages Vue components or CSS. When signed out, enter the HTTPS server origin, username, and password on one screen, or use `edgechat://connect?server=https%3A%2F%2Fchat.example.com` to prefill the server. The app validates server capabilities before completing sign-in.
 
@@ -170,6 +170,14 @@ The repository's `android/` directory is an independent Kotlin + Jetpack Compose
 - CI: `.github/workflows/android-ci.yml` runs unit tests, Lint, and a Debug APK build
 - Release: push an `android-v*` tag or run `Android Release` manually after configuring `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`
 - Limitation: the first release has no FCM. WebSockets close in the background and incremental sync catches up after returning to the foreground, so background instant notifications are not promised
+
+The repository also ships an independent `capacitor/` client. Vue provides the primary UI and product behavior, while a small Kotlin plugin handles the system file picker, local notifications, notification room opening, and external links. Its application ID is `com.aozorae.edgechat.web`, so it can be installed beside the Compose client.
+
+- First use: enter the self-hosted EdgeChat HTTPS origin, username, and password on the sign-in screen
+- Local build: install JDK 21 and Android SDK 36, then run `npm run build:capacitor`
+- Debug APK: `capacitor/android/app/build/outputs/apk/debug/app-debug.apk`
+- CI: `.github/workflows/capacitor-android-ci.yml` uploads `edgechat-capacitor-debug`
+- Server switching: sign out and edit the URL; changing instances clears the previous instance token
 
 Full guide: <https://echat.azora.top/en/guide/android.html>
 

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, toRef } from 'vue';
+import { isCapacitorAndroid, pickNativeFile } from '../../capacitor-platform.ts';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
 import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
@@ -15,6 +16,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'upload-avatar', 'save']);
 const avatarInput = ref(null);
 const nameInputEl = ref(null);
+const pickerError = ref('');
 
 useOverlayLifecycle({
   open: toRef(props, 'show'),
@@ -22,8 +24,19 @@ useOverlayLifecycle({
   focusTarget: nameInputEl
 });
 
-function openAvatarPicker() {
-  avatarInput.value?.click();
+async function openAvatarPicker() {
+  pickerError.value = '';
+  if (!isCapacitorAndroid) {
+    avatarInput.value?.click();
+    return;
+  }
+
+  try {
+    const file = await pickNativeFile('image/*');
+    if (file) emit('upload-avatar', file);
+  } catch {
+    pickerError.value = t('chat.fileSelectionFailed');
+  }
 }
 </script>
 
@@ -40,6 +53,7 @@ function openAvatarPicker() {
             {{ avatarUploading ? t('common.uploading') : t('group.changeAvatar') }}
           </button>
         </div>
+        <p v-if="pickerError" class="room-dialog__error" role="alert">{{ pickerError }}</p>
 
         <label class="room-dialog__field">
           <span>{{ t('group.nameGeneric') }}</span>
@@ -76,6 +90,7 @@ function openAvatarPicker() {
 .room-dialog h2 { margin: 0 0 20px; font-size: 18px; color: #111b21; }
 .room-dialog__avatar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .room-dialog__file { display: none; }
+.room-dialog__error { margin: -12px 0 16px; color: #b42318; font-size: 13px; }
 .room-dialog__field { display: grid; gap: 8px; color: #6b7c93; font-size: 13px; }
 .room-dialog__input { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid #e8ecf0; border-radius: 8px; background: #f9fafb; font-size: 16px; }
 .room-dialog__actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }

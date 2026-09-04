@@ -1,6 +1,7 @@
 <script setup>
 import { ArrowRight, Mic, Paperclip, Send, Trash2, X } from "@lucide/vue";
 import { computed, nextTick, ref } from "vue";
+import { isCapacitorAndroid, pickNativeFile } from "../../capacitor-platform.ts";
 import { t } from "../../i18n.js";
 import { useVoiceRecorder } from "../../composables/useVoiceRecorder.ts";
 import { formatVoiceDuration } from "../../voice-message.js";
@@ -54,6 +55,7 @@ const mentionStart = ref(-1);
 const mentionQuery = ref("");
 const activeMentionIndex = ref(0);
 const recordingError = ref("");
+const pickerError = ref("");
 const { recording, elapsedMs, liveWaveform, start, finish, cancel } = useVoiceRecorder();
 const filteredMentions = computed(() => {
 	const query = mentionQuery.value.toLocaleLowerCase();
@@ -100,17 +102,17 @@ function handleKeydown(event) {
 			return;
 		}
 	}
-	if (event.key === "Enter" && !event.shiftKey) {
+		if (event.key === "Enter" && !event.shiftKey) {
 		event.preventDefault();
 		if (sendDisabled.value) {
 			return;
 		}
-		emit("send");
-	}
-	if (event.key === "Escape" && props.replyingTo) {
-		event.preventDefault();
-		emit("cancel-reply");
-	}
+			emit("send");
+		}
+		if (event.key === "Escape" && props.replyingTo) {
+			event.preventDefault();
+			emit("cancel-reply");
+		}
 }
 
 function syncMentionQuery(event) {
@@ -150,8 +152,25 @@ function selectMention(member) {
 	});
 }
 
-function openPicker() {
-	fileInput.value?.click();
+async function openPicker() {
+	pickerError.value = "";
+	if (!isCapacitorAndroid) {
+		fileInput.value?.click();
+		return;
+	}
+
+	try {
+		const file = await pickNativeFile();
+		if (file) emit("upload", file);
+	} catch {
+		pickerError.value = t("chat.fileSelectionFailed");
+	}
+}
+
+function handleFileSelected(event) {
+	const file = event.target.files?.[0];
+	if (file) emit("upload", file);
+	event.target.value = "";
 }
 
 async function startVoiceRecording() {
@@ -202,13 +221,13 @@ defineExpose({
 				<X :size="18" aria-hidden="true" />
 			</button>
 		</div>
-		<div v-if="pendingAttachment" class="composer-attachment">
+			<div v-if="pendingAttachment" class="composer-attachment">
 			<PendingAttachmentPreview
 				:attachment="pendingAttachment"
 				@clear="emit('clear-attachment')"
 			/>
 		</div>
-			<div v-if="error || recordingError" class="composer-error">{{ error || recordingError }}</div>
+				<div v-if="error || recordingError || pickerError" class="composer-error">{{ error || recordingError || pickerError }}</div>
 		<div v-if="mentionMenuOpen" class="mention-menu" role="listbox">
 			<button
 				v-for="(member, index) in filteredMentions"
@@ -250,7 +269,7 @@ defineExpose({
 				ref="fileInput"
 				type="file"
 				class="composer-file-input"
-				@change="emit('upload', $event)"
+				@change="handleFileSelected"
 			/>
 				<button
 					type="button"
