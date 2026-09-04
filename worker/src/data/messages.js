@@ -8,6 +8,25 @@ function toNullableNumber(value) {
 	return Number.isFinite(number) ? number : null;
 }
 
+function mapAttachment(row) {
+	if (!row.attachment_key) return null;
+	const attachment = {
+		key: row.attachment_key,
+		name: row.attachment_name,
+		type: row.attachment_type,
+		size: toNullableNumber(row.attachment_size) || 0,
+		url: publicFileUrl(row.attachment_key),
+	};
+	if (row.attachment_kind === "voice" || row.attachment_kind === "audio") {
+		attachment.kind = row.attachment_kind;
+		attachment.durationMs = toNullableNumber(row.attachment_duration_ms) || 0;
+		if (row.attachment_kind === "voice") {
+			attachment.waveform = JSON.parse(row.attachment_waveform || "[]");
+		}
+	}
+	return attachment;
+}
+
 export function mapMessage(row, content = row.content) {
 	const isExternal = row.sender_kind === "external";
 	const isTelegramExternal = isExternal && row.source === "telegram";
@@ -37,15 +56,7 @@ export function mapMessage(row, content = row.content) {
 						: "",
 				source: isExternal ? row.source : "edgechat",
 			},
-		attachment: row.attachment_key
-			? {
-					key: row.attachment_key,
-					name: row.attachment_name,
-					type: row.attachment_type,
-					size: toNullableNumber(row.attachment_size) || 0,
-					url: publicFileUrl(row.attachment_key),
-				}
-			: null,
+			attachment: mapAttachment(row),
 	};
 	if (row.client_message_id) {
 		message.clientMessageId = row.client_message_id;
@@ -80,8 +91,9 @@ async function mapDecryptedMessage(env, row) {
 }
 
 const MESSAGE_SELECT = `SELECT
-	  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
-	  m.attachment_size, m.sender_kind, m.external_sender_id, m.external_sender_name,
+		  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
+		  m.attachment_size, m.attachment_kind, m.attachment_duration_ms, m.attachment_waveform,
+		  m.sender_kind, m.external_sender_id, m.external_sender_name,
 		  m.external_sender_avatar_url, m.source, m.source_message_id,
 		  m.source_attachment_id, m.source_attachment_unique_id, m.client_message_id,
 		  m.mention_user_ids, m.created_at,
@@ -312,24 +324,32 @@ async function persistMessage(env, {
 	);
 	try {
 		const result = await env.DB
-			.prepare(
-				`INSERT INTO messages (
-				   channel_id, sender_id, content, attachment_key, attachment_name,
-				   attachment_type, attachment_size, sender_kind, external_sender_id,
-					   external_sender_name, external_sender_avatar_url, source, source_message_id,
-					   source_attachment_id, source_attachment_unique_id, client_message_id,
-					   mention_user_ids
-					 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			)
+				.prepare(
+					`INSERT INTO messages (
+					   channel_id, sender_id, content, attachment_key, attachment_name,
+					   attachment_type, attachment_size, attachment_kind, attachment_duration_ms,
+					   attachment_waveform, sender_kind, external_sender_id,
+						   external_sender_name, external_sender_avatar_url, source, source_message_id,
+						   source_attachment_id, source_attachment_unique_id, client_message_id,
+						   mention_user_ids
+						 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				)
 			.bind(
 				Number(channelId),
 				normalizedSenderId,
 				storedContent,
 				cleanAttachment?.key || null,
 				cleanAttachment?.name || null,
-				cleanAttachment?.type || null,
-				cleanAttachment?.size || null,
-				isExternal ? "external" : "local",
+					cleanAttachment?.type || null,
+					cleanAttachment?.size || null,
+					cleanAttachment?.kind || null,
+					cleanAttachment?.kind === "voice" || cleanAttachment?.kind === "audio"
+						? cleanAttachment.durationMs
+						: null,
+					cleanAttachment?.kind === "voice"
+						? JSON.stringify(cleanAttachment.waveform)
+						: null,
+					isExternal ? "external" : "local",
 					isExternal ? externalId : null,
 					isExternal ? externalName : null,
 					isExternal ? String(externalSender.avatarUrl || "") : null,

@@ -1,7 +1,9 @@
 <script setup>
-import { ArrowRight, Paperclip } from "@lucide/vue";
+import { ArrowRight, Mic, Paperclip, Send, Trash2 } from "@lucide/vue";
 import { computed, nextTick, ref } from "vue";
 import { t } from "../../i18n.js";
+import { useVoiceRecorder } from "../../composables/useVoiceRecorder.ts";
+import { formatVoiceDuration } from "../../voice-message.js";
 import UiTextarea from "../ui/Textarea.vue";
 import UiAvatar from "../ui/Avatar.vue";
 import PendingAttachmentPreview from "./PendingAttachmentPreview.vue";
@@ -38,12 +40,15 @@ const emit = defineEmits([
 	"send",
 	"upload",
 	"clear-attachment",
+	"voice-recorded",
 ]);
 const fileInput = ref(null);
 const textarea = ref(null);
 const mentionStart = ref(-1);
 const mentionQuery = ref("");
 const activeMentionIndex = ref(0);
+const recordingError = ref("");
+const { recording, elapsedMs, liveWaveform, start, finish, cancel } = useVoiceRecorder();
 const filteredMentions = computed(() => {
 	const query = mentionQuery.value.toLocaleLowerCase();
 	return props.mentionCandidates
@@ -63,6 +68,9 @@ const sendDisabled = computed(
 		props.disabled ||
 		props.sending ||
 		(!props.modelValue.trim() && !props.pendingAttachment),
+);
+const showVoiceButton = computed(
+	() => !props.modelValue.trim() && !props.pendingAttachment && !props.sending,
 );
 
 function handleKeydown(event) {
@@ -135,6 +143,33 @@ function selectMention(member) {
 function openPicker() {
 	fileInput.value?.click();
 }
+
+async function startVoiceRecording() {
+	recordingError.value = "";
+	closeMentionMenu();
+	try {
+		await start();
+	} catch (error) {
+		recordingError.value =
+			error?.message === "voice_recording_unsupported"
+				? t("voice.unsupported")
+				: t("voice.permissionDenied");
+	}
+}
+
+async function cancelVoiceRecording() {
+	await cancel();
+}
+
+async function sendVoiceRecording() {
+	const result = await finish();
+	if (!result) return;
+	if (result.durationMs < 500) {
+		recordingError.value = t("voice.tooShort");
+		return;
+	}
+	emit("voice-recorded", result);
+}
 </script>
 
 <template>
@@ -145,7 +180,7 @@ function openPicker() {
 				@clear="emit('clear-attachment')"
 			/>
 		</div>
-		<div v-if="error" class="composer-error">{{ error }}</div>
+			<div v-if="error || recordingError" class="composer-error">{{ error || recordingError }}</div>
 		<div v-if="mentionMenuOpen" class="mention-menu" role="listbox">
 			<button
 				v-for="(member, index) in filteredMentions"
@@ -169,15 +204,28 @@ function openPicker() {
 				</span>
 			</button>
 		</div>
-		<div class="composer-row">
+			<div v-if="recording" class="composer-recording" role="status" :aria-label="t('voice.recording')">
+				<button type="button" class="composer-btn composer-recording__cancel" :title="t('voice.cancel')" :aria-label="t('voice.cancel')" @click="cancelVoiceRecording">
+					<Trash2 :size="20" aria-hidden="true" />
+				</button>
+				<span class="composer-recording__dot" aria-hidden="true"></span>
+				<span class="composer-recording__time">{{ formatVoiceDuration(elapsedMs) }}</span>
+				<div class="composer-recording__wave" aria-hidden="true">
+					<span v-for="(sample, index) in liveWaveform" :key="index" :style="{ height: `${Math.max(18, sample)}%` }"></span>
+				</div>
+				<button type="button" class="composer-send composer-recording__send" :title="t('voice.send')" :aria-label="t('voice.send')" @click="sendVoiceRecording">
+					<Send :size="20" aria-hidden="true" />
+				</button>
+			</div>
+			<div v-else class="composer-row">
 			<input
 				ref="fileInput"
 				type="file"
 				class="composer-file-input"
 				@change="emit('upload', $event)"
 			/>
-			<button
-				type="button"
+				<button
+					type="button"
 				class="composer-btn"
 				:disabled="disabled"
 				:title="t('chat.addAttachment')"
@@ -198,9 +246,21 @@ function openPicker() {
 				@update:model-value="emit('update:modelValue', $event)"
 				@input="syncMentionQuery"
 				@keydown="handleKeydown"
-			/>
-			<button
-				type="button"
+				/>
+				<button
+					v-if="showVoiceButton"
+					type="button"
+					class="composer-send composer-voice"
+					:disabled="disabled"
+					:title="t('voice.record')"
+					:aria-label="t('voice.record')"
+					@click="startVoiceRecording"
+				>
+					<Mic :size="21" aria-hidden="true" />
+				</button>
+				<button
+					v-else
+					type="button"
 				class="composer-send"
 				:disabled="sendDisabled"
 				:title="t('chat.sendMessage')"
@@ -300,6 +360,58 @@ function openPicker() {
 	min-width: 0;
 }
 
+.composer-recording {
+	display: grid;
+	grid-template-columns: 40px auto auto minmax(80px, 1fr) 40px;
+	align-items: center;
+	gap: 10px;
+	min-height: 40px;
+}
+
+.composer-recording__cancel {
+	color: #d93025;
+}
+
+.composer-recording__dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #d93025;
+	animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+.composer-recording__time {
+	min-width: 38px;
+	color: #111b21;
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
+}
+
+.composer-recording__wave {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: 28px;
+	overflow: hidden;
+}
+
+.composer-recording__wave span {
+	flex: 1 1 2px;
+	min-width: 2px;
+	max-width: 4px;
+	border-radius: 2px;
+	background: #25a36f;
+}
+
+.composer-voice,
+.composer-recording__send {
+	color: #008069;
+}
+
+@keyframes recording-pulse {
+	50% { opacity: 0.35; }
+}
+
 .composer-file-input {
 	display: none;
 }
@@ -396,9 +508,14 @@ function openPicker() {
 		left: max(56px, env(safe-area-inset-left));
 	}
 
-	.composer-row {
-		gap: 4px;
-	}
+		.composer-row {
+			gap: 4px;
+		}
+
+		.composer-recording {
+			grid-template-columns: 44px auto auto minmax(48px, 1fr) 44px;
+			gap: 6px;
+		}
 
 	.composer-btn,
 	.composer-send {
@@ -416,8 +533,10 @@ function openPicker() {
 
 @media (prefers-reduced-motion: reduce) {
 	.composer-btn,
-	.composer-send {
+	.composer-send,
+	.composer-recording__dot {
 		transition: none;
+		animation: none;
 	}
 }
 </style>

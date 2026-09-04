@@ -124,9 +124,18 @@ export const D1_MIGRATIONS = [
     file: "worker/migrations/2026-08-30-pinned-messages.sql",
     artifacts: ["table:channel_pins", "trigger:clear_pin_after_message_soft_delete"],
   },
+		{
+			id: "2026-09-01-message-mentions",
+			file: "worker/migrations/2026-09-01-message-mentions.sql",
+			artifacts: ["column:messages.mention_user_ids"],
+		},
 	{
-		id: "2026-09-01-message-mentions",
-		file: "worker/migrations/2026-09-01-message-mentions.sql",
-		artifacts: ["column:messages.mention_user_ids"],
+		id: "2026-09-02-voice-messages",
+		file: "worker/migrations/2026-09-02-voice-messages.sql",
+		artifacts: [
+			"column:messages.attachment_kind",
+			"column:messages.attachment_duration_ms",
+			"column:messages.attachment_waveform",
+		],
 	},
 ];

@@ -571,6 +571,12 @@ components:
         type: { type: string }
         size: { type: integer }
         url: { type: string }
+        kind: { type: string, enum: [voice, audio] }
+        durationMs: { type: integer, minimum: 0 }
+        waveform:
+          type: array
+          maxItems: 64
+          items: { type: integer, minimum: 0, maximum: 100 }
     Sender:
       type: object
       required: [kind, id, username, displayName, avatarUrl, source]

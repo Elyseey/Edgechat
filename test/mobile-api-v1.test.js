@@ -43,7 +43,7 @@ function createEnvironment() {
         keys: { 'test-v1': encodedKey() }
       }),
       MAX_FILE_SIZE: '20971520',
-      ALLOWED_FILE_TYPES: 'image/,video/,text/,application/pdf,application/octet-stream',
+			ALLOWED_FILE_TYPES: 'image/,video/,audio/,text/,application/pdf,application/octet-stream',
       FILES: {
         files,
         async put(key, value, metadata) {
@@ -180,8 +180,14 @@ test('客户端消息和附件重试复用同一服务端记录', async () => {
   });
   assert.equal(firstUpload.created, true);
   assert.equal(retryUpload.created, false);
-  assert.equal(retryUpload.file.key, firstUpload.file.key);
-  assert.equal(env.FILES.files.size, 1);
+	assert.equal(retryUpload.file.key, firstUpload.file.key);
+	assert.equal(env.FILES.files.size, 1);
+	const voiceUpload = await saveUploadedFile(
+		env,
+		{ userId: user.id },
+		new File([Uint8Array.from([1, 2, 3])], 'voice.ogg', { type: 'audio/ogg' }),
+	);
+	assert.equal(voiceUpload.file.type, 'audio/ogg');
 
   database.run('UPDATE messages SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [
     firstMessage.message.id

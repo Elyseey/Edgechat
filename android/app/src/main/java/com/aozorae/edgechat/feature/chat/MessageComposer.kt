@@ -1,6 +1,8 @@
 package com.aozorae.edgechat.feature.chat
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -45,6 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aozorae.edgechat.core.repository.PendingAttachment
 import com.aozorae.edgechat.core.network.dto.MemberDto
+import com.aozorae.edgechat.core.media.VoiceRecordingState
+import com.aozorae.edgechat.core.media.formatVoiceDuration
 import com.aozorae.edgechat.ui.theme.LocalEdgeChatColors
 
 @Composable
@@ -54,9 +60,13 @@ fun MessageComposer(
     attachment: PendingAttachment?,
     language: String,
     members: List<MemberDto>,
-    currentUserId: Long,
-    onChooseAttachment: () -> Unit,
-    onClearAttachment: () -> Unit,
+	currentUserId: Long,
+	recording: VoiceRecordingState = VoiceRecordingState(),
+	onChooseAttachment: () -> Unit,
+	onClearAttachment: () -> Unit,
+	onStartVoiceRecording: () -> Unit = {},
+	onCancelVoiceRecording: () -> Unit = {},
+	onSendVoiceRecording: () -> Unit = {},
     onSend: (String, List<Long>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -138,10 +148,17 @@ fun MessageComposer(
                     }
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
+			if (recording.active) {
+				VoiceRecordingBar(
+					recording = recording,
+					language = language,
+					onCancel = onCancelVoiceRecording,
+					onSend = onSendVoiceRecording,
+				)
+			} else Row(
+				modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = 8.dp, vertical = 8.dp),
+				verticalAlignment = Alignment.Bottom,
+			) {
                 FilledIconButton(
                     onClick = onChooseAttachment,
                     modifier = Modifier.size(48.dp),
@@ -191,21 +208,84 @@ fun MessageComposer(
                     )
                 }
                 Spacer(Modifier.width(4.dp))
-                IconButton(
-                    onClick = {
-                        onSend(content.text, resolveMentionUserIds(content.text, members, currentUserId))
-                        content = TextFieldValue()
-                    },
-                    enabled = canSend,
-                    modifier = Modifier.size(48.dp).testTag("send_message"),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = if (language == "zh-CN") "发送消息" else "Send message",
-                        tint = if (canSend) colors.accent else colors.iconSecondary,
-                    )
-                }
+				if (canSend) {
+					IconButton(
+						onClick = {
+							onSend(content.text, resolveMentionUserIds(content.text, members, currentUserId))
+							content = TextFieldValue()
+						},
+						modifier = Modifier.size(48.dp).testTag("send_message"),
+					) {
+						Icon(
+							Icons.AutoMirrored.Filled.Send,
+							contentDescription = if (language == "zh-CN") "发送消息" else "Send message",
+							tint = colors.accent,
+						)
+					}
+				} else {
+					IconButton(
+						onClick = onStartVoiceRecording,
+						modifier = Modifier.size(48.dp).testTag("record_voice"),
+					) {
+						Icon(
+							Icons.Outlined.Mic,
+							contentDescription = if (language == "zh-CN") "录制语音消息" else "Record voice message",
+							tint = colors.accent,
+						)
+					}
+				}
+			}
+		}
+	}
+}
+
+@Composable
+private fun VoiceRecordingBar(
+    recording: VoiceRecordingState,
+    language: String,
+    onCancel: () -> Unit,
+    onSend: () -> Unit,
+) {
+    val colors = LocalEdgeChatColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onCancel, modifier = Modifier.size(48.dp).testTag("cancel_voice")) {
+            Icon(
+                Icons.Outlined.DeleteOutline,
+                contentDescription = if (language == "zh-CN") "取消录音" else "Cancel recording",
+                tint = colors.critical,
+            )
+        }
+        Box(Modifier.size(8.dp).background(colors.critical, CircleShape))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            formatVoiceDuration(recording.elapsedMs),
+            color = colors.textPrimary,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.width(10.dp))
+        val samples = recording.waveform.ifEmpty { List(24) { 8 } }
+        Canvas(Modifier.weight(1f).height(28.dp)) {
+            val gap = 2.dp.toPx()
+            val barWidth = ((size.width - gap * (samples.size - 1)) / samples.size).coerceAtLeast(1.dp.toPx())
+            samples.forEachIndexed { index, sample ->
+                val barHeight = size.height * (sample.coerceAtLeast(8) / 100f)
+                drawRoundRect(
+                    color = colors.accent,
+                    topLeft = androidx.compose.ui.geometry.Offset(index * (barWidth + gap), (size.height - barHeight) / 2),
+                    size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2),
+                )
             }
+        }
+        IconButton(onClick = onSend, modifier = Modifier.size(48.dp).testTag("send_voice")) {
+            Icon(
+                Icons.AutoMirrored.Filled.Send,
+                contentDescription = if (language == "zh-CN") "发送语音消息" else "Send voice message",
+                tint = colors.accent,
+            )
         }
     }
 }

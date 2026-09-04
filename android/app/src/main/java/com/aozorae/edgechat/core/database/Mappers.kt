@@ -57,7 +57,10 @@ fun MessageDto.toEntity(kind: String, roomId: Long) = MessageEntity(
     attachmentKey = attachment?.key,
     attachmentName = attachment?.name,
     attachmentType = attachment?.type,
-    attachmentSize = attachment?.size,
-    attachmentUrl = attachment?.url,
-    mentionUserIds = encodeMentionUserIds(mentionUserIds),
+	attachmentSize = attachment?.size,
+	attachmentUrl = attachment?.url,
+	attachmentKind = attachment?.kind,
+	attachmentDurationMs = attachment?.durationMs,
+	attachmentWaveform = encodeVoiceWaveform(attachment?.waveform.orEmpty()),
+	mentionUserIds = encodeMentionUserIds(mentionUserIds),
 )

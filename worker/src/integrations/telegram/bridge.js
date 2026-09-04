@@ -50,9 +50,11 @@ export function splitTelegramFormattedMessage(displayName, content, limit) {
 	return chunks;
 }
 
-function telegramMediaKind(contentType) {
+function telegramMediaKind(contentType, attachmentKind) {
+	if (attachmentKind === "voice") return "voice";
 	if (contentType.startsWith("image/")) return "photo";
 	if (contentType.startsWith("video/")) return "video";
+	if (contentType.startsWith("audio/")) return "audio";
 	return "document";
 }
 
@@ -88,11 +90,12 @@ async function sendMessageToTelegram(env, botToken, mapping, message) {
 	const captions = splitTelegramFormattedMessage(displayName, message.content, 1024);
 	await sendTelegramMedia(botToken, {
 		chatId: mapping.telegramChatId,
-		kind: telegramMediaKind(file.type),
+		kind: telegramMediaKind(file.type, file.kind),
 		bytes: file.bytes,
 		filename: file.name,
 		contentType: file.type,
 		caption: captions[0],
+		durationMs: file.durationMs,
 	});
 	for (const chunk of captions.slice(1)) {
 		await sendTelegramText(botToken, { chatId: mapping.telegramChatId, text: chunk });

@@ -44,7 +44,9 @@ test("OpenAPI v1 keeps stable auth, idempotency, sync and error fields", () => {
 			"hasMore",
 			"mentionUserIds",
 			"mentionUnreadCount",
-		"required: [code, message]",
+			"durationMs",
+			"waveform",
+			"required: [code, message]",
 	]) {
 		const escaped = field.replaceAll("[", "\\[").replaceAll("]", "\\]");
 		assert.match(openapi, new RegExp(escaped));

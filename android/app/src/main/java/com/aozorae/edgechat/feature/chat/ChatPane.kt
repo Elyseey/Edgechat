@@ -1,6 +1,8 @@
 package com.aozorae.edgechat.feature.chat
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,11 +43,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.aozorae.edgechat.core.database.ConversationEntity
 import com.aozorae.edgechat.core.database.MessageEntity
 import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.network.dto.SessionDto
 import com.aozorae.edgechat.core.network.dto.MemberDto
+import com.aozorae.edgechat.core.media.VoicePlaybackState
+import com.aozorae.edgechat.core.media.VoiceRecordingState
 import com.aozorae.edgechat.core.repository.PendingAttachment
 import com.aozorae.edgechat.core.repository.RoomIdentity
 import com.aozorae.edgechat.ui.components.EdgeAvatar
@@ -61,9 +66,11 @@ fun ChatPane(
     room: RoomIdentity?,
     conversation: ConversationEntity?,
     messages: List<MessageEntity>,
-    outbox: List<OutboxEntity>,
-    attachment: PendingAttachment?,
-    members: List<MemberDto>,
+	outbox: List<OutboxEntity>,
+	attachment: PendingAttachment?,
+	voiceRecording: VoiceRecordingState,
+	voicePlayback: VoicePlaybackState,
+	members: List<MemberDto>,
     currentUser: SessionDto,
     serverBaseUrl: String,
     busy: Boolean,
@@ -73,7 +80,13 @@ fun ChatPane(
     onLoadOlder: () -> Unit,
     onSend: (String, List<Long>) -> Unit,
     onChooseAttachment: (android.net.Uri) -> Unit,
-    onClearAttachment: () -> Unit,
+	onClearAttachment: () -> Unit,
+	onStartVoiceRecording: () -> Unit,
+	onCancelVoiceRecording: () -> Unit,
+	onSendVoiceRecording: () -> Unit,
+	onToggleVoicePlayback: (String, String, Long) -> Unit,
+	onSeekVoicePlayback: (String, Float) -> Unit,
+	onCycleVoicePlaybackSpeed: (String) -> Unit,
     onRetry: (String) -> Unit,
     onCancel: (String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
@@ -114,9 +127,21 @@ fun ChatPane(
     BackHandler(enabled = onBack != null) { onBack?.invoke() }
     val scrollState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let(onChooseAttachment)
-    }
+	val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+		uri?.let(onChooseAttachment)
+	}
+	val microphonePermission = rememberLauncherForActivityResult(
+		ActivityResultContracts.RequestPermission(),
+	) { granted ->
+		if (granted) onStartVoiceRecording()
+	}
+	val requestVoiceRecording = {
+		if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+			onStartVoiceRecording()
+		} else {
+			microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+		}
+	}
 
     LaunchedEffect(room) { scrollState.scrollToItem(0) }
     val bottomInsets = WindowInsets.navigationBars.union(WindowInsets.ime)
@@ -199,7 +224,11 @@ fun ChatPane(
                 onRetry = onRetry,
                 onCancel = onCancel,
                 onDeleteMessage = onDeleteMessage,
-                onOpenAttachment = onOpenAttachment,
+				onOpenAttachment = onOpenAttachment,
+				voicePlayback = voicePlayback,
+				onToggleVoicePlayback = onToggleVoicePlayback,
+				onSeekVoicePlayback = onSeekVoicePlayback,
+				onCycleVoicePlaybackSpeed = onCycleVoicePlaybackSpeed,
                 modifier = Modifier.weight(1f),
             )
             MessageComposer(
@@ -208,9 +237,13 @@ fun ChatPane(
                 attachment = attachment,
                 language = language,
                 members = members,
-                currentUserId = currentUser.userId,
-                onChooseAttachment = { picker.launch("*/*") },
-                onClearAttachment = onClearAttachment,
+				currentUserId = currentUser.userId,
+				recording = voiceRecording,
+				onChooseAttachment = { picker.launch("*/*") },
+				onClearAttachment = onClearAttachment,
+				onStartVoiceRecording = requestVoiceRecording,
+				onCancelVoiceRecording = onCancelVoiceRecording,
+				onSendVoiceRecording = onSendVoiceRecording,
                 onSend = { content, mentionUserIds ->
                     onSend(content, mentionUserIds)
                     scope.launch { scrollState.animateScrollToItem(0) }

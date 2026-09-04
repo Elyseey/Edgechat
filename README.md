@@ -2,7 +2,7 @@
   <img src="Edgechat.png" alt="EdgeChat" width="640" />
 
   <h3>基于 Cloudflare 全家桶打造的现代团队聊天系统</h3>
-  <p>账号体系 · 公开/私有群组 · 私信 · 实时消息 · 文件上传 · 管理后台</p>
+	  <p>账号体系 · 公开/私有群组 · 私信 · 实时消息 · 语音消息 · 文件上传 · 管理后台</p>
 
   <p>
     <img src="https://img.shields.io/github/license/aozorae/Edgechat?style=flat-square&color=blue" alt="license" />
@@ -34,7 +34,7 @@
 
 <br />
 
-EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系、公开群组、私有群组、私信、实时消息、文件上传、管理员后台一应俱全。目标很直接——在 Cloudflare 生态里，用尽量低的运维成本，跑起一套能直接落地使用的站内 IM。
+EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系、公开群组、私有群组、私信、实时消息、语音消息、文件上传、管理员后台一应俱全。目标很直接——在 Cloudflare 生态里，用尽量低的运维成本，跑起一套能直接落地使用的站内 IM。
 
 ## 最近更新
 
@@ -116,7 +116,8 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
 **💬 消息与会话**
 - 支持公开群组、私有群组与私信会话
 - [Telegram 群组双向消息桥接](#特色功能telegram-消息双向桥接)，一个 Bot 打通两侧成员
-- 实时消息、历史消息分页、文件消息
+- 实时消息、历史消息分页、Telegram 风格语音消息与文件消息
+- 网页和 Android 均支持录音、波形进度、倍速播放；Telegram voice/audio 可双向同步
 - 文件上传与头像管理
 - 支持定时硬删除过期消息
 

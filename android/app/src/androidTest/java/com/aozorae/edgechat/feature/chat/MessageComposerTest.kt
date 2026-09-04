@@ -1,9 +1,10 @@
 package com.aozorae.edgechat.feature.chat
 
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -35,7 +36,8 @@ class MessageComposerTest {
             }
         }
 
-        compose.onNodeWithTag("send_message").assertIsNotEnabled()
+		compose.onAllNodesWithTag("send_message").assertCountEquals(0)
+		compose.onNodeWithTag("record_voice").fetchSemanticsNode()
         compose.onNodeWithTag("message_input").performTextInput("Hello")
         compose.onNodeWithTag("send_message").assertIsEnabled().performClick()
         val editableText = compose

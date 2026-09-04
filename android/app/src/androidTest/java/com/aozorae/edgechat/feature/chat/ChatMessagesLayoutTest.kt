@@ -66,7 +66,7 @@ class ChatMessagesLayoutTest {
     }
 
     @Test
-    fun imageAttachmentsUseInlinePreviewAndRemainOpenable() {
+	fun imageAttachmentsUseInlinePreviewAndRemainOpenable() {
         var opened: Triple<String, String, String>? = null
         compose.setContent {
             EdgeChatTheme {
@@ -101,7 +101,45 @@ class ChatMessagesLayoutTest {
                         onDeleteMessage = {},
                         onOpenAttachment = { url, name, type -> opened = Triple(url, name, type) },
                     )
-                }
+	}
+
+	@Test
+	fun voiceAttachmentsUseInlineWaveformPlayer() {
+		compose.setContent {
+			EdgeChatTheme {
+				Box(Modifier.width(360.dp).height(640.dp)) {
+					ChatMessages(
+						messages = listOf(
+							message(
+								id = 5,
+								senderId = "2",
+								content = "",
+								attachmentName = "voice.m4a",
+								attachmentType = "audio/mp4",
+								attachmentUrl = "/files/voice.m4a",
+								attachmentKind = "voice",
+								attachmentDurationMs = 8_200,
+								attachmentWaveform = "12,44,90",
+							),
+						),
+						outbox = emptyList(),
+						currentUser = currentUser(),
+						serverBaseUrl = "https://example.com",
+						language = "en-US",
+						scrollState = rememberLazyListState(),
+						onLoadOlder = {},
+						onRetry = {},
+						onCancel = {},
+						onDeleteMessage = {},
+						onOpenAttachment = { _, _, _ -> },
+					)
+				}
+			}
+		}
+
+		compose.onNodeWithTag("message_voice:5").fetchSemanticsNode()
+		compose.onNodeWithTag("voice_play:message:5").fetchSemanticsNode()
+	}
             }
         }
 
@@ -172,7 +210,10 @@ class ChatMessagesLayoutTest {
         content: String,
         attachmentName: String? = null,
         attachmentType: String? = null,
-        attachmentUrl: String? = null,
+		attachmentUrl: String? = null,
+		attachmentKind: String? = null,
+		attachmentDurationMs: Long? = null,
+		attachmentWaveform: String = "",
     ) = MessageEntity(
         id = id,
         roomKind = "public",
@@ -190,7 +231,10 @@ class ChatMessagesLayoutTest {
         attachmentName = attachmentName,
         attachmentType = attachmentType,
         attachmentSize = null,
-        attachmentUrl = attachmentUrl,
+		attachmentUrl = attachmentUrl,
+		attachmentKind = attachmentKind,
+		attachmentDurationMs = attachmentDurationMs,
+		attachmentWaveform = attachmentWaveform,
     )
 
     private fun pendingMessage(

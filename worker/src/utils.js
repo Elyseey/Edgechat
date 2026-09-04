@@ -1,3 +1,5 @@
+import { normalizeAudioAttachmentMetadata } from "./attachment-metadata.js";
+
 export function jsonResponse(data, init = {}) {
   return new Response(JSON.stringify(data), {
     ...init,
@@ -68,13 +70,15 @@ export function pickAttachment(payload, options = {}) {
     return null;
   }
 
-  return {
-    key,
-    name: String(payload.name),
-    type: String(payload.type),
-    size: Number(payload.size) || 0,
-    url: `/files/${encodeURIComponent(key)}`
-  };
+	const type = String(payload.type);
+	return {
+		key,
+		name: String(payload.name),
+		type,
+		size: Number(payload.size) || 0,
+		url: `/files/${encodeURIComponent(key)}`,
+		...normalizeAudioAttachmentMetadata(payload, type),
+	};
 }
 
 export function publicFileUrl(key) {

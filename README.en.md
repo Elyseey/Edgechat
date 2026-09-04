@@ -2,7 +2,7 @@
   <img src="Edgechat.png" alt="EdgeChat" width="640" />
 
   <h3>A modern team chat system built on the Cloudflare ecosystem</h3>
-  <p>Accounts · Public/Private Groups · Direct Messages · Real-time Messaging · File Uploads · Admin Dashboard</p>
+	  <p>Accounts · Public/Private Groups · Direct Messages · Real-time Messaging · Voice Messages · File Uploads · Admin Dashboard</p>
 
   <p>
     <img src="https://img.shields.io/github/license/aozorae/Edgechat?style=flat-square&color=blue" alt="license" />
@@ -34,7 +34,7 @@
 
 <br />
 
-EdgeChat is a team chat system deployed on Cloudflare: accounts, public groups, private groups, direct messages, real-time messaging, file uploads, and an admin dashboard — everything you need. The goal is straightforward: run a production-ready, in-site IM in the Cloudflare ecosystem with as little operational overhead as possible.
+EdgeChat is a team chat system deployed on Cloudflare: accounts, public groups, private groups, direct messages, real-time messaging, voice messages, file uploads, and an admin dashboard — everything you need. The goal is straightforward: run a production-ready, in-site IM in the Cloudflare ecosystem with as little operational overhead as possible.
 
 ## Latest Update
 
@@ -115,7 +115,8 @@ Admins can bind any group in EdgeChat to a Telegram group. Once bound, messages 
 **💬 Messaging & Conversations**
 - Public groups, private groups, and direct message conversations
 - [Two-way Telegram group bridge](#featured-feature-telegram-two-way-message-bridge) — one Bot connects members on both sides
-- Real-time messaging, paginated history, and file messages
+- Real-time messaging, paginated history, Telegram-style voice messages, and file messages
+- Web and Android recording, waveform seeking, playback speed controls, and two-way Telegram voice/audio sync
 - File uploads and avatar management
 - Scheduled hard deletion of expired messages
 

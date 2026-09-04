@@ -12,3 +12,15 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         database.execSQL("ALTER TABLE outbox ADD COLUMN mentionUserIds TEXT NOT NULL DEFAULT ''")
     }
 }
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 语音语义属于消息本身，持久化后历史同步、离线队列和重启恢复才能共享同一套气泡体验。
+        database.execSQL("ALTER TABLE messages ADD COLUMN attachmentKind TEXT")
+        database.execSQL("ALTER TABLE messages ADD COLUMN attachmentDurationMs INTEGER")
+        database.execSQL("ALTER TABLE messages ADD COLUMN attachmentWaveform TEXT NOT NULL DEFAULT ''")
+        database.execSQL("ALTER TABLE outbox ADD COLUMN attachmentKind TEXT")
+        database.execSQL("ALTER TABLE outbox ADD COLUMN attachmentDurationMs INTEGER")
+        database.execSQL("ALTER TABLE outbox ADD COLUMN attachmentWaveform TEXT NOT NULL DEFAULT ''")
+    }
+}

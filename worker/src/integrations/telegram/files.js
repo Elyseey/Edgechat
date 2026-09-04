@@ -56,7 +56,19 @@ export async function importTelegramAttachment(env, {
 		customMetadata: { filename: name, edgechatEncryption: "v1", source: "telegram" },
 	});
 	return {
-		attachment: { key, name, type, size: bytes.byteLength },
+		attachment: {
+			key,
+			name,
+			type,
+			size: bytes.byteLength,
+				...(attachment.kind === "voice" || attachment.kind === "audio"
+					? {
+						kind: attachment.kind,
+						durationMs: attachment.durationMs || 0,
+						...(attachment.kind === "voice" ? { waveform: [] } : {}),
+					}
+					: {}),
+		},
 		skipReason: null,
 	};
 }
@@ -86,9 +98,11 @@ export async function loadEdgeChatAttachment(env, attachment) {
 		file: {
 			bytes: decrypted.bytes,
 			name: sanitizeFilename(attachment.name),
-			type: normalizeContentType(attachment.type) || "application/octet-stream",
-			size: decrypted.bytes.byteLength,
-		},
+				type: normalizeContentType(attachment.type) || "application/octet-stream",
+				size: decrypted.bytes.byteLength,
+				kind: attachment.kind,
+				durationMs: Number(attachment.durationMs || 0),
+			},
 		skipReason: null,
 	};
 }

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.aozorae.edgechat.core.database.EdgeChatDatabase
 import com.aozorae.edgechat.core.database.MIGRATION_1_2
+import com.aozorae.edgechat.core.database.MIGRATION_2_3
 import com.aozorae.edgechat.core.network.AuthInterceptor
 import com.aozorae.edgechat.core.network.EdgeChatApi
 import com.aozorae.edgechat.core.network.ServerUrlInterceptor
@@ -45,7 +46,7 @@ object AppModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EdgeChatDatabase =
         Room.databaseBuilder(context, EdgeChatDatabase::class.java, "edgechat.db")
-            .addMigrations(MIGRATION_1_2)
+			.addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     @Provides

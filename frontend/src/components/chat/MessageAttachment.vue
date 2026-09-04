@@ -4,6 +4,8 @@ import api from '../../api.js';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
 import { t } from '../../i18n.js';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
+import { isAudioAttachment } from '../../voice-message.js';
+import VoiceMessage from './VoiceMessage.vue';
 
 const props = defineProps({
   attachment: {
@@ -16,6 +18,7 @@ const previewOpen = ref(false);
 const previewEl = ref(null);
 const imageFailed = ref(false);
 const isImage = computed(() => isPreviewableImageAttachment(props.attachment));
+const isAudio = computed(() => isAudioAttachment(props.attachment));
 const displayName = computed(() => props.attachment?.name || t('attachments.fallback'));
 const openOriginalLabel = computed(() => t('attachments.openOriginalNamed', { name: displayName.value }));
 const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || props.attachment?.url));
@@ -47,8 +50,9 @@ watch(
 </script>
 
 <template>
-  <div class="message-attachment" :class="{ 'message-attachment--image': isImage }">
-    <template v-if="isImage">
+	  <div class="message-attachment" :class="{ 'message-attachment--image': isImage, 'message-attachment--audio': isAudio }">
+	    <VoiceMessage v-if="isAudio" :attachment="attachment" />
+	    <template v-else-if="isImage">
       <button
         v-if="!imageFailed"
         type="button"

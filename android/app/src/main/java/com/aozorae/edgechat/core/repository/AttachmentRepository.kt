@@ -16,7 +16,15 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-data class PendingAttachment(val path: String, val name: String, val type: String, val size: Long)
+data class PendingAttachment(
+    val path: String,
+    val name: String,
+    val type: String,
+    val size: Long,
+    val kind: String? = null,
+    val durationMs: Long? = null,
+    val waveform: List<Int> = emptyList(),
+)
 
 @Singleton
 class AttachmentRepository @Inject constructor(

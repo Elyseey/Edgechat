@@ -31,6 +31,104 @@
   word-break: break-word;
 }
 
+.message-attachment--audio {
+  width: min(310px, 68vw);
+}
+
+.voice-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+}
+
+.voice-message__play {
+  display: inline-flex;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #008069;
+  color: #fff;
+  cursor: pointer;
+}
+
+.voice-message__body {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.voice-message__name {
+  overflow: hidden;
+  color: #111b21;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-waveform {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+}
+
+.voice-waveform__bar {
+  flex: 1 1 2px;
+  min-width: 2px;
+  border-radius: 2px;
+  background: #aebac1;
+}
+
+.voice-waveform__bar--played {
+  background: #008069;
+}
+
+.voice-waveform__seek {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.voice-message__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #667781;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-message__speed {
+  min-width: 30px;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.voice-message__speed:hover,
+.voice-message__speed:focus-visible {
+  background: rgba(0, 128, 105, 0.1);
+  color: #008069;
+}
+
 .pending-attachment {
   display: flex;
   align-items: center;
@@ -51,6 +149,16 @@
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.52);
   background: rgba(31, 37, 33, 0.08);
+}
+
+.pending-attachment__voice {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: #008069;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .pending-attachment__name {
@@ -128,9 +236,17 @@
 }
 
 @media (max-width: 720px) {
-  .message-attachment--image {
+	  .message-attachment--image {
     max-width: min(320px, 82vw);
-  }
+	  }
+
+	  .message-attachment--audio {
+	    width: min(300px, 78vw);
+	  }
+
+	  .voice-message {
+	    min-width: 220px;
+	  }
 
   .message-attachment__image {
     max-height: 260px;

@@ -10,7 +10,9 @@ import androidx.work.WorkManager
 import com.aozorae.edgechat.core.database.EdgeChatDatabase
 import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.database.decodeMentionUserIds
+import com.aozorae.edgechat.core.database.decodeVoiceWaveform
 import com.aozorae.edgechat.core.database.encodeMentionUserIds
+import com.aozorae.edgechat.core.database.encodeVoiceWaveform
 import com.aozorae.edgechat.core.database.toEntity
 import com.aozorae.edgechat.core.network.EdgeChatApi
 import com.aozorae.edgechat.core.network.bodyOrThrow
@@ -65,8 +67,11 @@ class OutboxRepository @Inject constructor(
                 content = content.trim(),
                 localAttachmentPath = attachment?.path,
                 attachmentName = attachment?.name,
-                attachmentType = attachment?.type,
-                attachmentSize = attachment?.size,
+				attachmentType = attachment?.type,
+				attachmentSize = attachment?.size,
+				attachmentKind = attachment?.kind,
+				attachmentDurationMs = attachment?.durationMs,
+				attachmentWaveform = encodeVoiceWaveform(attachment?.waveform.orEmpty()),
                 clientUploadId = attachment?.let { UUID.randomUUID().toString() },
                 uploadedKey = null,
                 uploadedUrl = null,
@@ -140,14 +145,17 @@ class OutboxRepository @Inject constructor(
 
     private suspend fun uploadIfNeeded(item: OutboxEntity): AttachmentDto? {
         val path = item.localAttachmentPath ?: return null
-        if (item.uploadedKey != null && item.uploadedUrl != null) {
-            return AttachmentDto(
-                item.uploadedKey,
-                item.attachmentName.orEmpty(),
-                item.attachmentType.orEmpty(),
-                item.attachmentSize ?: 0,
-                item.uploadedUrl,
-            )
+		if (item.uploadedKey != null && item.uploadedUrl != null) {
+			return AttachmentDto(
+				key = item.uploadedKey,
+				name = item.attachmentName.orEmpty(),
+				type = item.attachmentType.orEmpty(),
+				size = item.attachmentSize ?: 0,
+				url = item.uploadedUrl,
+				kind = item.attachmentKind,
+				durationMs = item.attachmentDurationMs,
+				waveform = decodeVoiceWaveform(item.attachmentWaveform),
+			)
         }
         database.outbox().updateState(item.clientMessageId, "UPLOADING")
         val file = File(path)
@@ -162,8 +170,12 @@ class OutboxRepository @Inject constructor(
             .bodyOrThrow(json)
             .file
         database.outbox().setUploaded(item.clientMessageId, uploaded.key, uploaded.url)
-        return uploaded
-    }
+		return uploaded.copy(
+			kind = item.attachmentKind,
+			durationMs = item.attachmentDurationMs,
+			waveform = decodeVoiceWaveform(item.attachmentWaveform),
+		)
+	}
 
     private fun schedule() {
         val request = OneTimeWorkRequestBuilder<OutboxWorker>()

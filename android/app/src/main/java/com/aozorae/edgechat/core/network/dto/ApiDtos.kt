@@ -123,11 +123,14 @@ data class SenderDto(
 
 @Serializable
 data class AttachmentDto(
-    val key: String,
-    val name: String,
-    val type: String,
-    val size: Long = 0,
-    val url: String,
+	val key: String,
+	val name: String,
+	val type: String,
+	val size: Long = 0,
+	val url: String,
+	val kind: String? = null,
+	val durationMs: Long? = null,
+	val waveform: List<Int> = emptyList(),
 )
 
 @Serializable

@@ -237,8 +237,11 @@ test("消息 projection 保持附件和发送者字段", () => {
 			sender_avatar_key: "avatar.png",
 			attachment_key: "files/a b.txt",
 			attachment_name: "a b.txt",
-			attachment_type: "text/plain",
-				attachment_size: "10",
+				attachment_type: "text/plain",
+					attachment_size: "10",
+					attachment_kind: null,
+					attachment_duration_ms: null,
+					attachment_waveform: null,
 				source_attachment_id: null,
 				source_attachment_unique_id: null,
 		}),
@@ -266,4 +269,34 @@ test("消息 projection 保持附件和发送者字段", () => {
 			},
 		},
 	);
+});
+
+test("语音消息 projection 保留时长与压缩波形", () => {
+	const message = mapMessage({
+		id: 6,
+		content: "",
+		mentions_json: "[]",
+		mention_user_ids: "[]",
+		created_at: "2026-09-02",
+		sender_id: 2,
+		sender_username: "alice",
+		sender_display_name: "Alice",
+		attachment_key: "files/voice.ogg",
+		attachment_name: "voice.ogg",
+		attachment_type: "audio/ogg",
+		attachment_size: 2048,
+		attachment_kind: "voice",
+		attachment_duration_ms: 8400,
+		attachment_waveform: "[12,45,90]",
+	});
+	assert.deepEqual(message.attachment, {
+		key: "files/voice.ogg",
+		name: "voice.ogg",
+		type: "audio/ogg",
+		size: 2048,
+		url: "/files/files%2Fvoice.ogg",
+		kind: "voice",
+		durationMs: 8400,
+		waveform: [12, 45, 90],
+	});
 });

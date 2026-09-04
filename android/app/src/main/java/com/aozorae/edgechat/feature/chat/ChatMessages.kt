@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import com.aozorae.edgechat.core.database.MessageEntity
 import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.database.decodeMentionUserIds
+import com.aozorae.edgechat.core.database.decodeVoiceWaveform
+import com.aozorae.edgechat.core.media.VoicePlaybackState
 import com.aozorae.edgechat.core.network.dto.MemberDto
 import com.aozorae.edgechat.core.network.dto.SessionDto
 import com.aozorae.edgechat.ui.components.EdgeAvatar
@@ -88,7 +92,11 @@ fun ChatMessages(
     onRetry: (String) -> Unit,
     onCancel: (String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
-    onOpenAttachment: (String, String, String) -> Unit,
+	onOpenAttachment: (String, String, String) -> Unit,
+	voicePlayback: VoicePlaybackState = VoicePlaybackState(),
+	onToggleVoicePlayback: (String, String, Long) -> Unit = { _, _, _ -> },
+	onSeekVoicePlayback: (String, Float) -> Unit = { _, _ -> },
+	onCycleVoicePlaybackSpeed: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -148,7 +156,11 @@ fun ChatMessages(
                         serverBaseUrl = serverBaseUrl,
                         language = language,
                         onDelete = onDeleteMessage,
-                        onOpenAttachment = onOpenAttachment,
+					onOpenAttachment = onOpenAttachment,
+					voicePlayback = voicePlayback,
+					onToggleVoicePlayback = onToggleVoicePlayback,
+					onSeekVoicePlayback = onSeekVoicePlayback,
+					onCycleVoicePlaybackSpeed = onCycleVoicePlaybackSpeed,
                     )
                 }
                 if (older == null || messageDate(older.createdAt) != messageDate(message.createdAt)) {
@@ -233,7 +245,11 @@ private fun MessageItem(
     serverBaseUrl: String,
     language: String,
     onDelete: (Long) -> Unit,
-    onOpenAttachment: (String, String, String) -> Unit,
+	onOpenAttachment: (String, String, String) -> Unit,
+	voicePlayback: VoicePlaybackState,
+	onToggleVoicePlayback: (String, String, Long) -> Unit,
+	onSeekVoicePlayback: (String, Float) -> Unit,
+	onCycleVoicePlaybackSpeed: (String) -> Unit,
 ) {
     val colors = LocalEdgeChatColors.current
     Row(
@@ -304,7 +320,11 @@ private fun MessageItem(
                     members = members,
                     serverBaseUrl = serverBaseUrl,
                     language = language,
-                    onOpenAttachment = onOpenAttachment,
+					onOpenAttachment = onOpenAttachment,
+					voicePlayback = voicePlayback,
+					onToggleVoicePlayback = onToggleVoicePlayback,
+					onSeekVoicePlayback = onSeekVoicePlayback,
+					onCycleVoicePlaybackSpeed = onCycleVoicePlaybackSpeed,
                     modifier = Modifier.testTag("message_bubble:${message.id}"),
                 )
             }
@@ -321,7 +341,11 @@ private fun MessageBubble(
     members: List<MemberDto>,
     serverBaseUrl: String,
     language: String,
-    onOpenAttachment: (String, String, String) -> Unit,
+	onOpenAttachment: (String, String, String) -> Unit,
+	voicePlayback: VoicePlaybackState,
+	onToggleVoicePlayback: (String, String, Long) -> Unit,
+	onSeekVoicePlayback: (String, Float) -> Unit,
+	onCycleVoicePlaybackSpeed: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalEdgeChatColors.current
@@ -367,7 +391,23 @@ private fun MessageBubble(
                     val openAttachment = {
                         onOpenAttachment(attachmentUrl, attachmentName, attachmentType)
                     }
-                    if (isImageAttachment(attachmentType)) {
+					if (attachmentType.startsWith("audio/")) {
+						VoiceMessageBubble(
+							playbackId = "message:${message.id}",
+							name = attachmentName,
+							url = resolveServerUrl(serverBaseUrl, attachmentUrl),
+							durationMs = message.attachmentDurationMs ?: 0,
+							waveform = decodeVoiceWaveform(message.attachmentWaveform),
+							voiceNote = message.attachmentKind == "voice",
+							playback = voicePlayback,
+							language = language,
+							onToggle = onToggleVoicePlayback,
+							onSeek = onSeekVoicePlayback,
+							onCycleSpeed = onCycleVoicePlaybackSpeed,
+							onFallback = openAttachment,
+							modifier = Modifier.testTag("message_voice:${message.id}"),
+						)
+					} else if (isImageAttachment(attachmentType)) {
                         MessageImageAttachment(
                             model = resolveServerUrl(serverBaseUrl, attachmentUrl),
                             name = attachmentName,
@@ -494,7 +534,9 @@ private fun PendingMessageItem(
                     item.attachmentName?.let { attachmentName ->
                         if (item.content.isNotBlank()) Spacer(Modifier.height(6.dp))
                         val localPath = item.localAttachmentPath
-                        if (localPath != null && isImageAttachment(item.attachmentType)) {
+						if (item.attachmentKind == "voice") {
+							PendingVoiceMessage(item)
+						} else if (localPath != null && isImageAttachment(item.attachmentType)) {
                             MessageImageAttachment(
                                 model = File(localPath),
                                 name = attachmentName,
@@ -520,6 +562,36 @@ private fun PendingMessageItem(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PendingVoiceMessage(item: OutboxEntity) {
+    val colors = LocalEdgeChatColors.current
+    val samples = decodeVoiceWaveform(item.attachmentWaveform).ifEmpty { List(32) { 24 } }
+    Row(Modifier.width(230.dp), verticalAlignment = Alignment.CenterVertically) {
+		Icon(Icons.Outlined.Mic, contentDescription = null, tint = colors.accent)
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Canvas(Modifier.fillMaxWidth().height(24.dp)) {
+                val gap = 2.dp.toPx()
+                val barWidth = ((size.width - gap * (samples.size - 1)) / samples.size).coerceAtLeast(1.dp.toPx())
+                samples.forEachIndexed { index, sample ->
+                    val height = size.height * sample.coerceAtLeast(8) / 100f
+                    drawRoundRect(
+                        color = colors.accent,
+                        topLeft = androidx.compose.ui.geometry.Offset(index * (barWidth + gap), (size.height - height) / 2),
+                        size = androidx.compose.ui.geometry.Size(barWidth, height),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2),
+                    )
+                }
+            }
+            Text(
+                com.aozorae.edgechat.core.media.formatVoiceDuration(item.attachmentDurationMs ?: 0),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textSecondary,
+            )
         }
     }
 }

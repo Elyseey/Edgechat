@@ -247,38 +247,67 @@ export function useChatRoom({
 		roomSession.disconnect();
 	}
 
-	async function sendMessage(mentionUserIds = []) {
-		const key = activeRoom.value
-			? `${activeRoom.value.kind}:${activeRoom.value.id}`
-			: "";
-		if (!roomSession.isOpenFor(key)) {
-			error.value = t('chat.realtimeNotReady');
-			return;
-		}
-		if (!composerText.value.trim() && !pendingAttachment.value) {
-			return;
+		async function sendMessage(mentionUserIds = []) {
+			const key = activeRoom.value
+				? `${activeRoom.value.kind}:${activeRoom.value.id}`
+				: "";
+			if (!roomSession.isOpenFor(key)) {
+				error.value = t('chat.realtimeNotReady');
+				return;
+			}
+			if (!composerText.value.trim() && !pendingAttachment.value) {
+				return;
+			}
+
+			sending.value = true;
+			error.value = "";
+			try {
+				roomSession.send(
+					JSON.stringify({
+						type: "send",
+						content: composerText.value,
+						attachment: pendingAttachment.value,
+						mentionUserIds,
+					}),
+					key,
+				);
+				composerText.value = "";
+				pendingAttachment.value = null;
+			} catch (currentError) {
+				error.value = currentError.message;
+			} finally {
+				sending.value = false;
+			}
 		}
 
-		sending.value = true;
-		error.value = "";
-		try {
-			roomSession.send(
-				JSON.stringify({
-					type: "send",
-					content: composerText.value,
-					attachment: pendingAttachment.value,
-					mentionUserIds,
-				}),
-				key,
-			);
-			composerText.value = "";
-			pendingAttachment.value = null;
-		} catch (currentError) {
-			error.value = currentError.message;
-		} finally {
-			sending.value = false;
+		async function sendVoiceMessage(recording) {
+			const key = roomKey();
+			if (!roomSession.isOpenFor(key)) {
+				error.value = t('chat.realtimeNotReady');
+				return;
+			}
+			sending.value = true;
+			error.value = "";
+			let attachment = null;
+			try {
+				const payload = await roomApi.uploadFile(recording.file);
+				attachment = {
+					...payload.file,
+					kind: "voice",
+					durationMs: recording.durationMs,
+					waveform: recording.waveform,
+				};
+				roomSession.send(
+					JSON.stringify({ type: "send", content: "", attachment, mentionUserIds: [] }),
+					key,
+				);
+			} catch (currentError) {
+				pendingAttachment.value = attachment;
+				error.value = currentError.message;
+			} finally {
+				sending.value = false;
+			}
 		}
-	}
 
 	function deleteMessage(messageId) {
 		const key = activeRoom.value
@@ -411,7 +440,8 @@ export function useChatRoom({
 		deactivateRoom,
 		connectSocket,
 		disconnectSocket,
-		sendMessage,
+			sendMessage,
+			sendVoiceMessage,
 		deleteMessage,
 		pinMessage,
 		unpinMessage,

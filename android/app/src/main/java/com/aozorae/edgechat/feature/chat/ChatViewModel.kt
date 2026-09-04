@@ -8,6 +8,10 @@ import com.aozorae.edgechat.core.database.MessageEntity
 import com.aozorae.edgechat.core.database.OutboxEntity
 import com.aozorae.edgechat.core.database.UserEntity
 import com.aozorae.edgechat.core.network.dto.MemberDto
+import com.aozorae.edgechat.core.media.VoicePlaybackController
+import com.aozorae.edgechat.core.media.VoicePlaybackState
+import com.aozorae.edgechat.core.media.VoiceRecorder
+import com.aozorae.edgechat.core.media.VoiceRecordingState
 import com.aozorae.edgechat.core.realtime.RealtimeCoordinator
 import com.aozorae.edgechat.core.repository.AttachmentRepository
 import com.aozorae.edgechat.core.repository.ChatRepository
@@ -35,7 +39,9 @@ data class ChatUiState(
     val messages: List<MessageEntity> = emptyList(),
     val outbox: List<OutboxEntity> = emptyList(),
     val attachment: PendingAttachment? = null,
-    val members: List<MemberDto> = emptyList(),
+	val members: List<MemberDto> = emptyList(),
+	val voiceRecording: VoiceRecordingState = VoiceRecordingState(),
+	val voicePlayback: VoicePlaybackState = VoicePlaybackState(),
     val busy: Boolean = false,
     val error: String? = null,
 )
@@ -45,8 +51,10 @@ data class ChatUiState(
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val outboxRepository: OutboxRepository,
-    private val attachmentRepository: AttachmentRepository,
-    private val realtime: RealtimeCoordinator,
+	private val attachmentRepository: AttachmentRepository,
+	private val realtime: RealtimeCoordinator,
+	private val voiceRecorder: VoiceRecorder,
+	private val voicePlayback: VoicePlaybackController,
 ) : ViewModel() {
     private val mutableOpenAttachment = MutableSharedFlow<Pair<Uri, String>>(extraBufferCapacity = 1)
     val openAttachment: SharedFlow<Pair<Uri, String>> = mutableOpenAttachment
@@ -70,8 +78,10 @@ class ChatViewModel @Inject constructor(
         roomMessages,
         roomOutbox,
         attachment,
-        members,
-        busy,
+		members,
+		voiceRecorder.state,
+		voicePlayback.state,
+		busy,
         error,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -83,14 +93,19 @@ class ChatViewModel @Inject constructor(
             outbox = values[4] as List<OutboxEntity>,
             attachment = values[5] as PendingAttachment?,
             members = values[6] as List<MemberDto>,
-            busy = values[7] as Boolean,
-            error = values[8] as String?,
+			voiceRecording = values[7] as VoiceRecordingState,
+			voicePlayback = values[8] as VoicePlaybackState,
+			busy = values[9] as Boolean,
+			error = values[10] as String?,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState())
 
     fun refresh() = action { chatRepository.bootstrap() }
 
-    fun select(room: RoomIdentity?) {
+	fun select(room: RoomIdentity?) {
+		if (voiceRecorder.state.value.active) {
+			voiceRecorder.cancel()
+		}
         val generation = ++memberLoadGeneration
         selectedRoom.value = room
         members.value = emptyList()
@@ -132,10 +147,42 @@ class ChatViewModel @Inject constructor(
         attachment.value = attachmentRepository.import(uri)
     }
 
-    fun clearAttachment() {
+	fun clearAttachment() {
         attachment.value?.path?.let { java.io.File(it).delete() }
         attachment.value = null
-    }
+	}
+
+	fun startVoiceRecording() {
+		error.value = null
+		runCatching(voiceRecorder::start)
+			.onFailure { error.value = it.message ?: "无法开始录音" }
+	}
+
+	fun cancelVoiceRecording() {
+		voiceRecorder.cancel()
+	}
+
+	fun sendVoiceRecording() {
+		val room = selectedRoom.value ?: return
+		val pending = voiceRecorder.finish()
+		if (pending == null) {
+			error.value = "录音时间太短，请重新录制"
+			return
+		}
+		action { outboxRepository.enqueue(room, "", pending) }
+	}
+
+	fun toggleVoicePlayback(playbackId: String, url: String, durationMs: Long) {
+		voicePlayback.toggle(playbackId, url, durationMs)
+	}
+
+	fun seekVoicePlayback(playbackId: String, fraction: Float) {
+		voicePlayback.seek(playbackId, fraction)
+	}
+
+	fun cycleVoicePlaybackSpeed(playbackId: String) {
+		voicePlayback.cycleSpeed(playbackId)
+	}
 
     fun retry(clientMessageId: String) = action { outboxRepository.retry(clientMessageId) }
 
@@ -180,6 +227,12 @@ class ChatViewModel @Inject constructor(
 
     fun clearError() {
         error.value = null
+    }
+
+    override fun onCleared() {
+        voiceRecorder.close()
+        voicePlayback.close()
+        super.onCleared()
     }
 
     private fun updateMembers(channelId: Long, request: suspend () -> List<MemberDto>) {

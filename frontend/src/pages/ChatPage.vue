@@ -111,7 +111,7 @@ function handleRoomAccessRevoked(room) {
 const {
   messages, pinnedMessage, highlightedMessageId, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, isOwnMessage,
-  loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, deleteMessage,
+  loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, sendVoiceMessage, deleteMessage,
   pinMessage, unpinMessage, revealPinnedMessage,
   uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
@@ -610,6 +610,7 @@ onBeforeUnmount(() => {
 			  :error="error"
 			  :mention-candidates="mentionCandidates"
 			  @send="sendComposerMessage"
+			  @voice-recorded="sendVoiceMessage"
 		  @upload="uploadAttachment"
 		  @clear-attachment="clearAttachment"
 		/>

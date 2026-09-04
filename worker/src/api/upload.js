@@ -31,10 +31,13 @@ function isInlineContentType(contentType) {
   if (contentType.startsWith('image/')) {
     return contentType !== 'image/svg+xml';
   }
-  if (contentType.startsWith('video/')) {
-    return true;
-  }
-  return false;
+	if (contentType.startsWith('video/')) {
+		return true;
+	}
+	if (contentType.startsWith('audio/')) {
+		return true;
+	}
+	return false;
 }
 
 function contentDispositionValue(kind, filename) {
