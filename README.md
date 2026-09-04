@@ -24,7 +24,7 @@
     <a href="README.md"><b>中文</b></a> ·
     <a href="README.en.md">English</a> ·
     <a href="README.ja.md">日本語</a> ·
-    <a href="https://edgechat-demo.wcjxxgaq.workers.dev">在线 Demo</a> ·
+    <a href="https://edgechat-demo.gdz66601.workers.dev">在线 Demo</a> ·
     <a href="https://echat.azora.top/">项目文档</a> ·
     <a href="https://t.me/EdgeChatlounge">Telegram 社区</a>
   </p>
@@ -82,7 +82,7 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
 
 ## 在线 Demo
 
-**[edgechat-demo.wcjxxgaq.workers.dev](https://edgechat-demo.wcjxxgaq.workers.dev)**
+**[edgechat-demo.gdz66601.workers.dev](https://edgechat-demo.gdz66601.workers.dev)**
 
 演示站复用正式项目的 Vue 页面、路由、状态管理和实时消息逻辑，但所有 API、WebSocket、文件上传与 Telegram 回流都在浏览器内存中模拟。刷新页面或点击右上角「重置演示数据」即可恢复初始状态，不会访问正式 Worker，也不会写入 D1、KV 或 R2。
 

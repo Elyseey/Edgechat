@@ -24,7 +24,7 @@
     <a href="README.md">中文</a> ·
     <a href="README.en.md">English</a> ·
     <a href="README.ja.md"><b>日本語</b></a> ·
-    <a href="https://edgechat-demo.wcjxxgaq.workers.dev">オンラインデモ</a> ·
+    <a href="https://edgechat-demo.gdz66601.workers.dev">オンラインデモ</a> ·
     <a href="https://echat.azora.top/">プロジェクトドキュメント</a> ·
     <a href="https://t.me/EdgeChatlounge">Telegram コミュニティ</a>
   </p>
@@ -81,7 +81,7 @@ EdgeChat は Cloudflare 上にデプロイするチーム向けチャットシ�
 
 ## オンラインデモ
 
-**[edgechat-demo.wcjxxgaq.workers.dev](https://edgechat-demo.wcjxxgaq.workers.dev)**
+**[edgechat-demo.gdz66601.workers.dev](https://edgechat-demo.gdz66601.workers.dev)**
 
 デモサイトは本番プロジェクトの Vue ページ、ルーティング、状態管理、リアルタイムメッセージのロジックをそのまま再利用していますが、すべての API・WebSocket・ファイルアップロード・Telegram のやり取りはブラウザのメモリ内でシミュレーションされます。ページをリロードするか、右上の「**デモデータをリセット**」をクリックすると初期状態に戻ります。本番 Worker には一切アクセスせず、D1・KV・R2 への書き込みも発生しません。
 

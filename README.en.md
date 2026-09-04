@@ -24,7 +24,7 @@
     <a href="README.md">中文</a> ·
     <a href="README.en.md"><b>English</b></a> ·
     <a href="README.ja.md">日本語</a> ·
-    <a href="https://edgechat-demo.wcjxxgaq.workers.dev">Online Demo</a> ·
+    <a href="https://edgechat-demo.gdz66601.workers.dev">Online Demo</a> ·
     <a href="https://echat.azora.top/">Project Documentation</a> ·
     <a href="https://t.me/EdgeChatlounge">Telegram Community</a>
   </p>
@@ -81,7 +81,7 @@ The login tool reuses the existing authentication flow and browser safety confir
 
 ## Online Demo
 
-**[edgechat-demo.wcjxxgaq.workers.dev](https://edgechat-demo.wcjxxgaq.workers.dev)**
+**[edgechat-demo.gdz66601.workers.dev](https://edgechat-demo.gdz66601.workers.dev)**
 
 The demo site reuses the production project's Vue pages, routing, state management, and real-time messaging logic, but all APIs, WebSocket, file uploads, and Telegram round trips are simulated in browser memory. Reload the page or click **“Reset demo data”** in the top-right corner to restore the initial state. It never contacts the production Worker, nor does it write to D1, KV, or R2.
 
