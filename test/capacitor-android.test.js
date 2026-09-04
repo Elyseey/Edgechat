@@ -27,6 +27,7 @@ test("Capacitor Android CI builds an independent tested APK", () => {
 	const gradleRunner = read("../capacitor/scripts/run-gradle.mjs");
 	const viteConfig = read("../frontend/vite.capacitor.config.js");
 	assert.match(workflow, /actions\/setup-node@v5/);
+	assert.match(workflow, /node-version: "24"/);
 	assert.match(workflow, /gradle\/actions\/wrapper-validation@v4/);
 	assert.match(workflow, /npm run build:capacitor/);
 	assert.match(workflow, /edgechat-capacitor-debug/);

@@ -33,12 +33,14 @@ test("Android release requires secret signing and publishes APK, AAB and SHA-256
 	assert.match(release, /gh release create/);
 });
 
-test("Worker ignores Android-only paths and maintained Actions use Node 24 compatible majors", () => {
+test("Worker ignores Android-only paths and JavaScript workflows use Node 24", () => {
 	assert.match(worker, /paths:/);
 	assert.doesNotMatch(worker, /android\/\*\*/);
 	for (const workflow of [worker, demo, ci, release]) {
 		assert.match(workflow, /actions\/checkout@v5/);
 	}
-	assert.match(worker, /actions\/setup-node@v5/);
-	assert.match(demo, /actions\/setup-node@v5/);
+	for (const workflow of [worker, demo]) {
+		assert.match(workflow, /actions\/setup-node@v5/);
+		assert.match(workflow, /node-version: "24"/);
+	}
 });
