@@ -100,7 +100,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   if (!store.ready) {
     await store.initialize();
   }
@@ -118,6 +118,18 @@ router.beforeEach(async (to) => {
 
   if (to.meta.admin && !store.session.isAdmin) {
     return '/';
+  }
+
+  if (
+    to.meta.admin &&
+    !from.meta.admin &&
+    from.matched.length > 0 &&
+    !isDemoMode &&
+    !isCapacitorAndroid
+  ) {
+    // Cloudflare Access 按文档请求判定路径；跨入后台必须离开 SPA，才能让 /admin 经过边缘访问策略。
+    window.location.assign(router.resolve(to.fullPath).href);
+    return false;
   }
 
   return true;

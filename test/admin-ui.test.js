@@ -44,6 +44,16 @@ test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
   assert.match(routerSource, /meta: \{ admin: true/);
 });
 
+test('生产 Web 跨入后台时发起真实文档请求，后台内部仍使用 SPA 导航', () => {
+  assert.match(routerSource, /router\.beforeEach\(async \(to, from\) =>/);
+  assert.match(routerSource, /to\.meta\.admin &&[\s\S]*!from\.meta\.admin/);
+  assert.match(routerSource, /from\.matched\.length > 0/);
+  assert.match(routerSource, /!isDemoMode &&[\s\S]*!isCapacitorAndroid/);
+  assert.match(routerSource, /window\.location\.assign\(router\.resolve\(to\.fullPath\)\.href\)/);
+  assert.match(sidebarSource, /void router\.push\(location\)/);
+  assert.match(dashboardSource, /void router\.push\(path\)/);
+});
+
 test('侧栏包含存储统计并移除消息查看入口', () => {
   assert.match(sidebarSource, /t\('admin\.sidebar\.brand'\)/);
   for (const id of ['dashboard', 'users', 'storage', 'invites', 'telegram', 'site']) {
