@@ -16,7 +16,7 @@ test("Android CI validates the wrapper and builds a tested debug APK", () => {
 	assert.match(ci, /docs\/api\/\*\*/);
 });
 
-test("Android release requires secret signing and publishes APK, AAB and SHA-256", () => {
+test("Android release signs and publishes the primary Capacitor client", () => {
 	for (const secret of [
 		"ANDROID_KEYSTORE_BASE64",
 		"ANDROID_KEYSTORE_PASSWORD",
@@ -25,8 +25,14 @@ test("Android release requires secret signing and publishes APK, AAB and SHA-256
 	]) {
 		assert.match(release, new RegExp(`secrets\\.${secret}`));
 	}
+	assert.match(release, /actions\/setup-node@v5/);
+	assert.match(release, /node-version: "24"/);
+	assert.match(release, /java-version: "21"/);
+	assert.match(release, /npm run capacitor:sync/);
 	assert.match(release, /assembleDebugAndroidTest/);
-	assert.match(release, /assembleRelease bundleRelease/);
+	assert.match(release, /:app:assembleRelease :app:bundleRelease/);
+	assert.match(release, /capacitor\/android\/app\/build\/outputs\/apk\/release/);
+	assert.doesNotMatch(release, /cp android\/app\/build\/outputs\/apk\/release/);
 	assert.match(release, /sha256sum \*\.apk \*\.aab > SHA256SUMS\.txt/);
 	assert.match(release, /jarsigner -verify -verbose -certs/);
 	assert.doesNotMatch(release, /jarsigner -verify -strict/);
@@ -39,7 +45,7 @@ test("Worker ignores Android-only paths and JavaScript workflows use Node 24", (
 	for (const workflow of [worker, demo, ci, release]) {
 		assert.match(workflow, /actions\/checkout@v5/);
 	}
-	for (const workflow of [worker, demo]) {
+	for (const workflow of [worker, demo, release]) {
 		assert.match(workflow, /actions\/setup-node@v5/);
 		assert.match(workflow, /node-version: "24"/);
 	}

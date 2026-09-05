@@ -165,20 +165,18 @@ EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系�
 
 ### Android 客户端
 
-仓库内的 `android/` 是独立的 Kotlin + Jetpack Compose 客户端（Android 8 / API 26 起），只依赖稳定的 `/api/v1` 协议，不复用网页组件或 CSS。未登录时可在同一页输入 HTTPS 服务器地址、用户名和密码；也可以通过 `edgechat://connect?server=https%3A%2F%2Fchat.example.com` 预填服务器。提交后客户端会先校验服务器能力，再完成登录。
+当前主要发行版是 `capacitor/` 客户端：APK 直接内置 Vue Web UI，以少量 Kotlin 对接系统文件选择、通知、麦克风权限、通知会话跳转和外部链接。它使用包名 `com.aozorae.edgechat.web`，首次登录时由用户填写自己的 EdgeChat HTTPS 服务地址，不绑定固定部署。
 
 - 安装包：从 GitHub Releases 下载 `edgechat-*.apk` 并核对 `SHA256SUMS.txt`
-- CI：`.github/workflows/android-ci.yml` 运行单元测试、Lint 和 Debug APK 构建
-- 发布：推送 `android-v*` 标签或手动运行 `Android Release`，需要配置 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`
-- 限制：首版不接入 FCM，应用进入后台后会关闭 WebSocket；恢复前台时通过增量同步补齐消息，不承诺后台即时通知
-
-仓库同时提供独立的 `capacitor/` 客户端，以 Vue Web UI 承担主要界面和业务，并用少量 Kotlin 实现系统文件选择、通知、通知会话跳转和外部链接打开。它使用包名 `com.aozorae.edgechat.web`，可与原生版同时安装。
-
 - 首次使用：登录页填写自己的 EdgeChat HTTPS 服务地址、账号和密码
 - 本地构建：准备 JDK 21 与 Android SDK 36 后运行 `npm run build:capacitor`
 - Debug APK：`capacitor/android/app/build/outputs/apk/debug/app-debug.apk`
 - CI：`.github/workflows/capacitor-android-ci.yml` 上传 `edgechat-capacitor-debug`
+- 发布：推送 `android-v*` 标签或手动运行 `Android Release`，使用四个 `ANDROID_KEYSTORE_*` Secrets 构建签名 APK/AAB
 - 服务切换：退出登录后可修改地址；切换实例时自动清理旧实例令牌
+- 限制：当前不包含 Room 离线数据库、WorkManager Outbox 或 FCM，应用停止接收消息时不承诺后台即时通知
+
+原生 `android/` Kotlin + Jetpack Compose 客户端暂时弃用，不再作为默认发行版。源码、API v1 契约和独立 CI 暂时保留，供历史验证与后续评估；新安装与日常更新请使用 Capacitor 版本。
 
 完整说明：<https://echat.azora.top/guide/android.html>
 

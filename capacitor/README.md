@@ -1,6 +1,6 @@
 # EdgeChat Capacitor Android
 
-This is the Web UI based Android client. It lives beside the Kotlin + Compose client in `android/` and uses the separate application ID `com.aozorae.edgechat.web`.
+This is the primary EdgeChat Android release. It bundles the Web UI, uses the application ID `com.aozorae.edgechat.web`, and remains installable beside the temporarily deprecated Kotlin + Compose client in `android/`.
 
 The Vue UI remains the source of product behavior. A small Kotlin plugin provides Android file selection, local notifications, notification room opening, and external URL handling. The APK contains no fixed EdgeChat deployment: users enter their HTTPS server URL on the first sign-in screen.
 
@@ -14,3 +14,7 @@ npm run build:capacitor
 ```
 
 The Debug APK is written to `capacitor/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+## Release
+
+Push an `android-v*` tag or run the GitHub `Android Release` workflow. It restores the signing keystore from the four `ANDROID_KEYSTORE_*` Repository Secrets, then publishes a signed APK, AAB, and `SHA256SUMS.txt`.

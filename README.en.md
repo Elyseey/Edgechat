@@ -164,20 +164,18 @@ GitHub Actions deployment is recommended first — it suits long-term maintenanc
 
 ### Android Clients
 
-The repository's `android/` directory is an independent Kotlin + Jetpack Compose client for Android 8 / API 26 and newer. It depends only on the stable `/api/v1` contract and never packages Vue components or CSS. When signed out, enter the HTTPS server origin, username, and password on one screen, or use `edgechat://connect?server=https%3A%2F%2Fchat.example.com` to prefill the server. The app validates server capabilities before completing sign-in.
+The primary Android release is now the `capacitor/` client. Its APK bundles the Vue Web UI, while a small Kotlin bridge handles system file selection, notifications, microphone permission, notification room opening, and external links. It uses the application ID `com.aozorae.edgechat.web`; users enter their own EdgeChat HTTPS origin on first sign-in, so the package is not tied to one deployment.
 
 - Installation: download `edgechat-*.apk` from GitHub Releases and verify `SHA256SUMS.txt`
-- CI: `.github/workflows/android-ci.yml` runs unit tests, Lint, and a Debug APK build
-- Release: push an `android-v*` tag or run `Android Release` manually after configuring `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`
-- Limitation: the first release has no FCM. WebSockets close in the background and incremental sync catches up after returning to the foreground, so background instant notifications are not promised
-
-The repository also ships an independent `capacitor/` client. Vue provides the primary UI and product behavior, while a small Kotlin plugin handles the system file picker, local notifications, notification room opening, and external links. Its application ID is `com.aozorae.edgechat.web`, so it can be installed beside the Compose client.
-
 - First use: enter the self-hosted EdgeChat HTTPS origin, username, and password on the sign-in screen
 - Local build: install JDK 21 and Android SDK 36, then run `npm run build:capacitor`
 - Debug APK: `capacitor/android/app/build/outputs/apk/debug/app-debug.apk`
 - CI: `.github/workflows/capacitor-android-ci.yml` uploads `edgechat-capacitor-debug`
+- Release: push an `android-v*` tag or run `Android Release`; the workflow uses the four `ANDROID_KEYSTORE_*` Secrets to build signed APK/AAB artifacts
 - Server switching: sign out and edit the URL; changing instances clears the previous instance token
+- Limitation: this client currently has no Room offline database, WorkManager outbox, or FCM, so instant background notifications are not guaranteed when the app stops receiving messages
+
+The native Kotlin + Jetpack Compose client in `android/` is temporarily deprecated and is no longer the default release. Its source, API v1 contract, and separate CI remain available for historical verification and future evaluation; use the Capacitor build for new installations and routine updates.
 
 Full guide: <https://echat.azora.top/en/guide/android.html>
 
