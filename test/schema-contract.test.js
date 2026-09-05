@@ -7,7 +7,7 @@ import { runSystemCheck } from "../worker/src/maintenance/system-check.ts";
 import { generateSchemaManifest } from "../.github/scripts/generate-schema-manifest.mjs";
 import { D1_MIGRATIONS } from "../.github/scripts/d1-migration-manifest.mjs";
 import { buildD1MigrationPlan, migrationChecksums } from "../.github/scripts/d1-migration-plan.mjs";
-import { assessSchema, collectSchemaArtifacts, inspectSchema, D1_MIGRATION_LEDGER } from "../worker/src/maintenance/schema-contract.ts";
+import { assessSchema, collectSchemaArtifacts, inspectSchema, schemaTables, D1_MIGRATION_LEDGER } from "../worker/src/maintenance/schema-contract.ts";
 import { demoMaintenanceReport } from "../frontend/src/demo/maintenance.ts";
 
 const SQL = await initSqlJs();
@@ -15,6 +15,18 @@ const rows = (db, sql) => {
   const result = db.exec(sql)[0];
   return result ? result.values.map((values) => Object.fromEntries(result.columns.map((name, i) => [name, values[i]]))) : [];
 };
+
+test("deployment and runtime inspect only application tables, never protected D1 internal tables", async () => {
+  const manifest = { version: '1', schemaHash: 'h', artifacts: ['table:users', 'column:users.id'], migrations: [] };
+  const query = async (sql) => {
+    if (sql.includes('sqlite_master')) return [{ type: 'table', name: 'users' }, { type: 'table', name: '_cf_METADATA' }];
+    assert.doesNotMatch(sql, /_cf_METADATA/);
+    return [{ name: 'id' }];
+  };
+  const artifacts = await collectSchemaArtifacts(query, schemaTables(manifest));
+  assert.ok(artifacts.has('column:users.id'));
+  assert.equal((await inspectSchema(query, manifest)).missingArtifacts.length, 0);
+});
 
 test("manifest is generated from executable SQLite schema and includes future tables/columns/indexes/triggers", async () => {
   const manifest = await generateSchemaManifest();

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { D1_MIGRATIONS } from "./d1-migration-manifest.mjs";
 import { buildD1MigrationPlan } from "./d1-migration-plan.mjs";
 import { D1_REPAIRS } from "./d1-repair-manifest.mjs";
-import { collectSchemaArtifacts, collectAppliedMigrations, inspectSchema } from "../../worker/src/maintenance/schema-contract.ts";
+import { collectSchemaArtifacts, collectAppliedMigrations, inspectSchema, schemaTables } from "../../worker/src/maintenance/schema-contract.ts";
 import { generateSchemaManifest } from "./generate-schema-manifest.mjs";
 
 const API_BASE_URL = "https://api.cloudflare.com/client/v4";
@@ -55,15 +55,17 @@ async function queryD1(sql) {
 }
 
 async function main() {
+  const manifest = await generateSchemaManifest();
   if (process.argv.includes("--verify")) {
-    const result = await inspectSchema(queryD1, await generateSchemaManifest());
+    const result = await inspectSchema(queryD1, manifest);
     if (result.status !== "ok") {
       throw new Error(`D1 schema verification failed: ${JSON.stringify(result)}`);
     }
     console.log(`D1 schema verified: ${result.expectedMigration}`);
     return;
   }
-  const artifacts = await collectSchemaArtifacts(queryD1);
+  // D1 的内部表可出现在 sqlite_master，但不允许读取列；只查询应用 manifest 中的表。
+  const artifacts = await collectSchemaArtifacts(queryD1, schemaTables(manifest));
   const appliedMigrations = await collectAppliedMigrations(queryD1, artifacts);
   const plan = await buildD1MigrationPlan({
     migrations: D1_MIGRATIONS,

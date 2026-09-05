@@ -11,6 +11,10 @@ export interface SchemaManifest {
   retiredMigrations?: { id: string; checksum: string; compatibleChecksums: string[] }[];
 }
 
+export function schemaTables(manifest: SchemaManifest) {
+  return manifest.artifacts.filter((artifact) => artifact.startsWith('table:')).map((artifact) => artifact.slice(6));
+}
+
 export async function collectSchemaArtifacts(query: SchemaQuery, tables?: string[]) {
   const objects = await query(
     "SELECT type, name FROM sqlite_master WHERE type IN ('table', 'trigger', 'index') AND name NOT LIKE 'sqlite_%'"
@@ -57,8 +61,7 @@ export function assessSchema(manifest: SchemaManifest, artifacts: Set<string>, a
 }
 
 export async function inspectSchema(query: SchemaQuery, manifest: SchemaManifest) {
-  const tables = manifest.artifacts.filter((artifact) => artifact.startsWith('table:')).map((artifact) => artifact.slice(6));
-  const artifacts = await collectSchemaArtifacts(query, tables);
+  const artifacts = await collectSchemaArtifacts(query, schemaTables(manifest));
   const applied = await collectAppliedMigrations(query, artifacts);
   return assessSchema(manifest, artifacts, applied);
 }
