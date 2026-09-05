@@ -11,6 +11,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.provider.Settings
 import androidx.activity.result.ActivityResult
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -20,12 +21,14 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.PermissionState
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 
 private const val NOTIFICATION_PERMISSION_ALIAS = "notifications"
+private const val MICROPHONE_PERMISSION_ALIAS = "microphone"
 private const val NOTIFICATION_CHANNEL_ID = "edgechat_messages"
 private const val NOTIFICATION_ACTION = "com.aozorae.edgechat.web.OPEN_NOTIFICATION"
 private const val EXTRA_ROOM_KIND = "roomKind"
@@ -38,6 +41,10 @@ private const val MAX_FILE_BYTES = 20 * 1024 * 1024
         Permission(
             alias = NOTIFICATION_PERMISSION_ALIAS,
             strings = [Manifest.permission.POST_NOTIFICATIONS],
+        ),
+        Permission(
+            alias = MICROPHONE_PERMISSION_ALIAS,
+            strings = [Manifest.permission.RECORD_AUDIO],
         ),
     ],
 )
@@ -76,6 +83,30 @@ class EdgeChatNativePlugin : Plugin() {
                 .put("type", context.contentResolver.getType(uri) ?: "application/octet-stream")
                 .put("uri", uri.toString()),
         )
+    }
+
+    @PluginMethod
+    fun requestMicrophonePermission(call: PluginCall) {
+        // 先走应用权限，再让 WebView 获取音频流，网页才能明确区分拒绝授权与设备故障。
+        if (getPermissionState(MICROPHONE_PERMISSION_ALIAS) == PermissionState.GRANTED) {
+            microphonePermissionResult(call)
+        } else {
+            requestPermissionForAlias(MICROPHONE_PERMISSION_ALIAS, call, "microphonePermissionResult")
+        }
+    }
+
+    @PermissionCallback
+    private fun microphonePermissionResult(call: PluginCall) {
+        call.resolve(JSObject().put("state", getPermissionState(MICROPHONE_PERMISSION_ALIAS).toString()))
+    }
+
+    @PluginMethod
+    fun openAppSettings(call: PluginCall) {
+        // 用户选择“不再询问”后系统不再弹窗，提供直达本应用权限页的恢复入口。
+        activity.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")),
+        )
+        call.resolve()
     }
 
     @PluginMethod

@@ -23,6 +23,10 @@ type NativeNotification = {
 };
 
 interface EdgeChatNativePlugin {
+	requestMicrophonePermission(): Promise<{
+		state: "granted" | "denied" | "prompt" | "prompt-with-rationale";
+	}>;
+	openAppSettings(): Promise<void>;
 	pickFile(options: { accept: string }): Promise<NativeFileResult>;
 	checkNotificationPermission(): Promise<{
 		state: NotificationPermissionState;
@@ -48,6 +52,16 @@ export const isCapacitorAndroid =
 	Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 export const NATIVE_ROOM_OPEN_EVENT = "edgechat:native-room-open";
 let pendingNativeRoomTarget: NativeRoomTarget | null = null;
+
+export async function requestNativeMicrophonePermission() {
+	if (!isCapacitorAndroid) return;
+	const { state } = await EdgeChatNative.requestMicrophonePermission();
+	if (state !== "granted") throw new Error("native_microphone_permission_denied");
+}
+
+export async function openNativeAppSettings() {
+	if (isCapacitorAndroid) await EdgeChatNative.openAppSettings();
+}
 
 export function queueNativeRoomTarget(target: NativeRoomTarget) {
 	pendingNativeRoomTarget = target;

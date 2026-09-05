@@ -1,4 +1,5 @@
-import { onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import { requestNativeMicrophonePermission } from "../capacitor-platform.ts";
 import { normalizeVoiceWaveform } from "../voice-message.js";
 
 export interface VoiceRecording {
@@ -18,6 +19,7 @@ function recorderFormat() {
 
 export function useVoiceRecorder() {
 	const recording = ref(false);
+	const starting = ref(false);
 	const elapsedMs = ref(0);
 	const liveWaveform = ref<number[]>([]);
 	let recorder: MediaRecorder | null = null;
@@ -29,6 +31,7 @@ export function useVoiceRecorder() {
 	let samples: number[] = [];
 	let startedAt = 0;
 	let extension = "webm";
+	let generation = 0;
 
 	function sampleAmplitude() {
 		if (!analyser) return;
@@ -44,17 +47,31 @@ export function useVoiceRecorder() {
 	}
 
 	async function start() {
-		if (recording.value) return;
+		if (recording.value || starting.value) return;
 		if (!globalThis.navigator?.mediaDevices?.getUserMedia || !globalThis.MediaRecorder) {
 			throw new Error("voice_recording_unsupported");
 		}
 		const format = recorderFormat();
 		if (!format) throw new Error("voice_recording_unsupported");
-		stream = await navigator.mediaDevices.getUserMedia({
-			audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-		});
+		const attempt = ++generation;
+		starting.value = true;
 		try {
+			await requestNativeMicrophonePermission();
+			if (attempt !== generation) return;
+			const acquiredStream = await navigator.mediaDevices.getUserMedia({
+				audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+			});
+			// 权限弹窗期间可以离开会话；迟到的授权结果不能在已关闭的页面继续占用麦克风。
+			if (attempt !== generation) {
+				acquiredStream.getTracks().forEach((track) => {
+					track.stop();
+				});
+				return;
+			}
+			stream = acquiredStream;
 			audioContext = new AudioContext();
+			await audioContext.resume();
+			if (attempt !== generation) return;
 			analyser = audioContext.createAnalyser();
 			analyser.fftSize = 256;
 			audioContext.createMediaStreamSource(stream).connect(analyser);
@@ -71,17 +88,20 @@ export function useVoiceRecorder() {
 				if (event.data.size) chunks.push(event.data);
 			});
 			recorder.start(250);
+			startedAt = performance.now();
+			recording.value = true;
+			timer = window.setInterval(() => {
+				elapsedMs.value = Math.round(performance.now() - startedAt);
+				sampleAmplitude();
+			}, 100);
 		} catch (error) {
+			if (attempt !== generation) return;
 			recorder = null;
 			closeDevices();
 			throw error;
+		} finally {
+			if (attempt === generation) starting.value = false;
 		}
-		startedAt = performance.now();
-		recording.value = true;
-		timer = window.setInterval(() => {
-			elapsedMs.value = Math.round(performance.now() - startedAt);
-			sampleAmplitude();
-		}, 100);
 	}
 
 	function closeDevices() {
@@ -122,6 +142,8 @@ export function useVoiceRecorder() {
 	}
 
 	async function cancel() {
+		generation++;
+		starting.value = false;
 		if (recorder?.state !== "inactive") await stopRecorder();
 		chunks = [];
 		samples = [];
@@ -130,9 +152,16 @@ export function useVoiceRecorder() {
 		closeDevices();
 	}
 
+	function handleVisibilityChange() {
+		// 切到后台后不保留不可见的录音；授权弹窗期间尚未录音，不在这里取消系统授权。
+		if (document.hidden && recording.value) void cancel();
+	}
+
+	onMounted(() => document.addEventListener("visibilitychange", handleVisibilityChange));
 	onBeforeUnmount(() => {
+		document.removeEventListener("visibilitychange", handleVisibilityChange);
 		void cancel();
 	});
 
-	return { recording, elapsedMs, liveWaveform, start, finish, cancel };
+	return { recording, starting, elapsedMs, liveWaveform, start, finish, cancel };
 }

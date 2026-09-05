@@ -1,7 +1,7 @@
 <script setup>
-import { ArrowRight, Mic, Paperclip, Send, Trash2, X } from "@lucide/vue";
-import { computed, nextTick, ref } from "vue";
-import { isCapacitorAndroid, pickNativeFile } from "../../capacitor-platform.ts";
+import { LoaderCircle, Mic, Paperclip, Send, Trash2, X } from "@lucide/vue";
+import { computed, nextTick, ref, watch } from "vue";
+import { isCapacitorAndroid, openNativeAppSettings, pickNativeFile } from "../../capacitor-platform.ts";
 import { t } from "../../i18n.js";
 import { useVoiceRecorder } from "../../composables/useVoiceRecorder.ts";
 import { formatVoiceDuration } from "../../voice-message.js";
@@ -56,7 +56,10 @@ const mentionQuery = ref("");
 const activeMentionIndex = ref(0);
 const recordingError = ref("");
 const pickerError = ref("");
-const { recording, elapsedMs, liveWaveform, start, finish, cancel } = useVoiceRecorder();
+const showPermissionSettings = ref(false);
+const finishingRecording = ref(false);
+const composing = ref(false);
+const { recording, starting, elapsedMs, liveWaveform, start, finish, cancel } = useVoiceRecorder();
 const filteredMentions = computed(() => {
 	const query = mentionQuery.value.toLocaleLowerCase();
 	return props.mentionCandidates
@@ -75,13 +78,17 @@ const sendDisabled = computed(
 	() =>
 		props.disabled ||
 		props.sending ||
+		starting.value ||
 		(!props.modelValue.trim() && !props.pendingAttachment),
 );
-const showVoiceButton = computed(
-	() => !props.modelValue.trim() && !props.pendingAttachment && !props.sending,
-);
+// 房间切换或连接失效时不允许继续采集上一段语音。
+watch(() => props.disabled, (disabled) => {
+	if (disabled) void cancel();
+});
 
 function handleKeydown(event) {
+	// 输入法的 Enter 用来确认候选，不应触发发送或选择 @成员。
+	if (composing.value || event.isComposing || event.keyCode === 229) return;
 	if (mentionMenuOpen.value) {
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault();
@@ -102,17 +109,17 @@ function handleKeydown(event) {
 			return;
 		}
 	}
-		if (event.key === "Enter" && !event.shiftKey) {
+	if (event.key === "Enter" && !event.shiftKey) {
 		event.preventDefault();
 		if (sendDisabled.value) {
 			return;
 		}
-			emit("send");
-		}
-		if (event.key === "Escape" && props.replyingTo) {
-			event.preventDefault();
-			emit("cancel-reply");
-		}
+		emit("send");
+	}
+	if (event.key === "Escape" && props.replyingTo) {
+		event.preventDefault();
+		emit("cancel-reply");
+	}
 }
 
 function syncMentionQuery(event) {
@@ -175,14 +182,33 @@ function handleFileSelected(event) {
 
 async function startVoiceRecording() {
 	recordingError.value = "";
+	showPermissionSettings.value = false;
 	closeMentionMenu();
 	try {
 		await start();
 	} catch (error) {
-		recordingError.value =
+		const permissionDenied =
+			error?.message === "native_microphone_permission_denied" ||
+			error?.name === "NotAllowedError" ||
+			error?.name === "SecurityError";
+		showPermissionSettings.value = isCapacitorAndroid && permissionDenied;
+		recordingError.value = t(
 			error?.message === "voice_recording_unsupported"
-				? t("voice.unsupported")
-				: t("voice.permissionDenied");
+				? "voice.unsupported"
+				: permissionDenied
+					? isCapacitorAndroid ? "voice.nativePermissionDenied" : "voice.permissionDenied"
+					: error?.name === "NotFoundError"
+						? "voice.noMicrophone"
+						: "voice.startFailed",
+		);
+	}
+}
+
+async function openMicrophoneSettings() {
+	try {
+		await openNativeAppSettings();
+	} catch {
+		recordingError.value = t("voice.settingsFailed");
 	}
 }
 
@@ -191,13 +217,22 @@ async function cancelVoiceRecording() {
 }
 
 async function sendVoiceRecording() {
-	const result = await finish();
-	if (!result) return;
-	if (result.durationMs < 500) {
-		recordingError.value = t("voice.tooShort");
-		return;
+	if (finishingRecording.value || props.disabled || props.sending) return;
+	finishingRecording.value = true;
+	try {
+		const result = await finish();
+		if (!result) return;
+		if (result.durationMs < 500) {
+			recordingError.value = t("voice.tooShort");
+			return;
+		}
+		emit("voice-recorded", result);
+	} catch {
+		await cancel();
+		recordingError.value = t("voice.startFailed");
+	} finally {
+		finishingRecording.value = false;
 	}
-	emit("voice-recorded", result);
 }
 
 defineExpose({
@@ -208,7 +243,7 @@ defineExpose({
 </script>
 
 <template>
-	<footer class="chat-composer">
+	<footer class="message-composer">
 		<div v-if="replyingTo" class="composer-reply">
 			<MessageReplyPreview :reply="replyingTo" />
 			<button
@@ -227,7 +262,16 @@ defineExpose({
 				@clear="emit('clear-attachment')"
 			/>
 		</div>
-				<div v-if="error || recordingError || pickerError" class="composer-error">{{ error || recordingError || pickerError }}</div>
+			<div v-if="error || recordingError || pickerError" class="composer-error" role="alert">
+				<span>{{ error || recordingError || pickerError }}</span>
+				<button v-if="showPermissionSettings" type="button" class="composer-settings" @click="openMicrophoneSettings">{{ t('voice.openSettings') }}</button>
+			</div>
+			<div v-if="starting" class="composer-permission" role="status">
+				<span>{{ t('voice.requestingPermission') }}</span>
+				<button type="button" class="composer-btn" :aria-label="t('voice.cancel')" @click="cancelVoiceRecording">
+					<X :size="20" aria-hidden="true" />
+				</button>
+			</div>
 		<div v-if="mentionMenuOpen" class="mention-menu" role="listbox">
 			<button
 				v-for="(member, index) in filteredMentions"
@@ -251,17 +295,21 @@ defineExpose({
 				</span>
 			</button>
 		</div>
-			<div v-if="recording" class="composer-recording" role="status" :aria-label="t('voice.recording')">
-				<button type="button" class="composer-btn composer-recording__cancel" :title="t('voice.cancel')" :aria-label="t('voice.cancel')" @click="cancelVoiceRecording">
+				<div v-if="recording" class="composer-recording" :aria-label="t('voice.recording')">
+					<button type="button" class="composer-btn composer-recording__cancel" :disabled="finishingRecording" :title="t('voice.cancel')" :aria-label="t('voice.cancel')" @click="cancelVoiceRecording">
 					<Trash2 :size="20" aria-hidden="true" />
 				</button>
-				<span class="composer-recording__dot" aria-hidden="true"></span>
-				<span class="composer-recording__time">{{ formatVoiceDuration(elapsedMs) }}</span>
+					<div class="composer-recording__status">
+						<span class="composer-recording__dot" aria-hidden="true"></span>
+						<span>{{ t('voice.recordingShort') }}</span>
+						<span class="composer-recording__time">{{ formatVoiceDuration(elapsedMs) }}</span>
+					</div>
 				<div class="composer-recording__wave" aria-hidden="true">
 					<span v-for="(sample, index) in liveWaveform" :key="index" :style="{ height: `${Math.max(18, sample)}%` }"></span>
 				</div>
-				<button type="button" class="composer-send composer-recording__send" :title="t('voice.send')" :aria-label="t('voice.send')" @click="sendVoiceRecording">
-					<Send :size="20" aria-hidden="true" />
+					<button type="button" class="composer-send composer-recording__send" :disabled="disabled || sending || finishingRecording" :title="t('voice.send')" :aria-label="t('voice.send')" @click="sendVoiceRecording">
+						<Send :size="20" aria-hidden="true" />
+						<span>{{ t('chat.send') }}</span>
 				</button>
 			</div>
 			<div v-else class="composer-row">
@@ -274,7 +322,7 @@ defineExpose({
 				<button
 					type="button"
 				class="composer-btn"
-				:disabled="disabled"
+				:disabled="disabled || starting"
 				:title="t('chat.addAttachment')"
 				:aria-label="t('chat.addAttachment')"
 				@click="openPicker"
@@ -288,25 +336,28 @@ defineExpose({
 				auto-grow
 				:max-height="120"
 				rows="1"
-				:disabled="disabled"
+				:disabled="disabled || starting"
 				:placeholder="t('chat.messagePlaceholder')"
+				:aria-label="t('chat.messagePlaceholder')"
 				@update:model-value="emit('update:modelValue', $event)"
 				@input="syncMentionQuery"
 				@keydown="handleKeydown"
+				@compositionstart="composing = true"
+				@compositionend="composing = false"
 				/>
 				<button
-					v-if="showVoiceButton"
 					type="button"
-					class="composer-send composer-voice"
-					:disabled="disabled"
+					class="composer-btn composer-voice"
+					:disabled="disabled || sending || starting"
+					:aria-busy="starting"
 					:title="t('voice.record')"
 					:aria-label="t('voice.record')"
 					@click="startVoiceRecording"
 				>
-					<Mic :size="21" aria-hidden="true" />
+					<LoaderCircle v-if="starting" :size="21" class="composer-spinner" aria-hidden="true" />
+					<Mic v-else :size="21" aria-hidden="true" />
 				</button>
 				<button
-					v-else
 					type="button"
 				class="composer-send"
 				:disabled="sendDisabled"
@@ -314,16 +365,20 @@ defineExpose({
 				:aria-label="t('chat.sendMessage')"
 				@click="emit('send')"
 			>
-				<ArrowRight :size="22" aria-hidden="true" />
+				<LoaderCircle v-if="sending" :size="20" class="composer-spinner" aria-hidden="true" />
+				<Send v-else :size="20" aria-hidden="true" />
+				<span>{{ t('chat.send') }}</span>
 			</button>
 		</div>
 	</footer>
 </template>
 
 <style scoped>
-.chat-composer {
+.message-composer {
 	position: relative;
 	z-index: 2;
+	flex-shrink: 0;
+	min-width: 0;
 	margin: auto 0 0;
 	padding: 10px 16px;
 	border-top: 1px solid #e9edef;
@@ -368,6 +423,29 @@ defineExpose({
 	color: #dc2626;
 	font-size: 12px;
 	text-align: center;
+}
+
+.composer-settings {
+	display: block;
+	min-height: 44px;
+	margin: 4px auto 0;
+	padding: 8px 12px;
+	border: 1px solid currentColor;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.composer-permission {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 8px;
+	color: #54656f;
+	font-size: 14px;
 }
 
 .mention-menu {
@@ -429,21 +507,36 @@ defineExpose({
 
 .composer-row {
 	display: flex;
-	align-items: center;
-	gap: 12px;
+	align-items: flex-end;
+	gap: 8px;
 	min-width: 0;
 }
 
 .composer-recording {
 	display: grid;
-	grid-template-columns: 40px auto auto minmax(80px, 1fr) 40px;
+	grid-template-columns: 44px minmax(0, 1fr) auto;
 	align-items: center;
-	gap: 10px;
-	min-height: 40px;
+	gap: 4px 8px;
+	min-height: 56px;
 }
 
 .composer-recording__cancel {
+	grid-row: 1 / 3;
 	color: #d93025;
+}
+
+.composer-recording__status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	color: #54656f;
+	font-size: 12px;
+}
+
+.composer-recording__send {
+	grid-column: 3;
+	grid-row: 1 / 3;
 }
 
 .composer-recording__dot {
@@ -462,10 +555,12 @@ defineExpose({
 }
 
 .composer-recording__wave {
+	grid-column: 2;
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	height: 28px;
+	min-width: 0;
+	height: 22px;
 	overflow: hidden;
 }
 
@@ -477,13 +572,20 @@ defineExpose({
 	background: #25a36f;
 }
 
-.composer-voice,
-.composer-recording__send {
+.composer-voice {
 	color: #008069;
 }
 
 @keyframes recording-pulse {
 	50% { opacity: 0.35; }
+}
+
+.composer-spinner {
+	animation: composer-spin 1s linear infinite;
+}
+
+@keyframes composer-spin {
+	to { transform: rotate(360deg); }
 }
 
 .composer-file-input {
@@ -496,8 +598,9 @@ defineExpose({
 	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 40px;
+	width: 44px;
+	height: 44px;
+	padding: 0;
 	border: none;
 	border-radius: 50%;
 	background: transparent;
@@ -516,17 +619,37 @@ defineExpose({
 }
 
 .composer-send {
-	color: #3b82f6;
+	width: auto;
+	min-width: 72px;
+	gap: 6px;
+	padding: 0 12px;
+	border-radius: 12px;
+	background: #008069;
+	color: #ffffff;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
 	transition: background 150ms;
 }
 
 .composer-send:hover:not(:disabled) {
-	background: rgba(0, 0, 0, 0.05);
+	background: #006b58;
 }
 
-.composer-btn:active:not(:disabled),
-.composer-send:active:not(:disabled) {
+.composer-btn:active:not(:disabled) {
 	background: rgba(0, 0, 0, 0.08);
+}
+
+.composer-send:active:not(:disabled) {
+	background: #005846;
+}
+
+.composer-btn:focus-visible,
+.composer-send:focus-visible,
+.composer-settings:focus-visible {
+	outline: 2px solid #008069;
+	outline-offset: 2px;
 }
 
 .composer-btn:disabled {
@@ -536,7 +659,8 @@ defineExpose({
 
 .composer-send:disabled {
 	cursor: not-allowed;
-	opacity: 0.3;
+	background: #d9e2de;
+	color: #60716a;
 }
 
 .composer-input {
@@ -571,7 +695,7 @@ defineExpose({
 }
 
 @media (max-width: 960px) {
-	.chat-composer {
+	.message-composer {
 		padding: 8px max(8px, env(safe-area-inset-right))
 			max(8px, env(safe-area-inset-bottom))
 			max(8px, env(safe-area-inset-left));
@@ -587,12 +711,10 @@ defineExpose({
 		}
 
 		.composer-recording {
-			grid-template-columns: 44px auto auto minmax(48px, 1fr) 44px;
-			gap: 6px;
+			gap: 4px 8px;
 		}
 
-	.composer-btn,
-	.composer-send {
+	.composer-btn {
 		width: 44px;
 		height: 44px;
 	}
@@ -607,7 +729,8 @@ defineExpose({
 
 @media (prefers-reduced-motion: reduce) {
 	.composer-btn,
-	.composer-send,
+		.composer-send,
+		.composer-spinner,
 	.composer-recording__dot {
 		transition: none;
 		animation: none;

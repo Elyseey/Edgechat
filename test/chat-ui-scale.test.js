@@ -72,11 +72,13 @@ test("移动端聊天页只显示会话列表或当前聊天中的一个视图",
 	assert.match(chatPage, /@click="returnToMobileConversationList"/);
 });
 
-test("移动端主要图标按钮保留四十四像素触控区域", () => {
+test("移动端主要操作保留四十四像素触控区域且文字发送按钮可自然扩展", () => {
 	assert.match(chatPage, /\.mobile-menu-action\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
 	assert.match(chatPage, /\.chat-header__back\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
 	assert.match(chatPage, /\.chat-header__button\s*{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
-	assert.match(messageComposer, /\.composer-btn,\s*\.composer-send\s*{\s*width:\s*44px;\s*height:\s*44px;/s);
+	assert.match(messageComposer, /\.composer-btn,\s*\.composer-send\s*{[^}]*height:\s*44px;/s);
+	assert.match(messageComposer, /\.composer-send\s*{[^}]*width:\s*auto;[^}]*min-width:\s*(?:44|[5-9]\d)px;/s);
+	assert.match(messageComposer, /\.composer-send\s*{[^}]*white-space:\s*nowrap;/s);
 	assert.match(messageComposer, /font-size:\s*16px;/);
 });
 
@@ -127,4 +129,25 @@ test("聊天页面通过专用组件编排会话列表和消息输入区", () =>
 	assert.match(chatPage, /<MessageComposer/);
 	assert.match(chatPage, /v-model="composerText"/);
 	assert.match(chatPage, /@upload="uploadAttachment"/);
+});
+
+test("消息输入区常驻独立的文字发送和语音按钮", () => {
+	assert.match(messageComposer, /class="[^"]*composer-voice[^"]*"[\s\S]*class="composer-send"/);
+	assert.match(messageComposer, /class="composer-send"[\s\S]*\{\{ t\('chat\.send'\) \}\}/);
+	assert.doesNotMatch(
+		messageComposer,
+		/v-(?:if|else-if)="[^"]*modelValue[^"]*"[^>]*class="composer-(?:voice|send)"/,
+	);
+});
+
+test("输入法 Enter 不发送，原生权限拒绝可打开设置且设置失败有专用错误", () => {
+	assert.match(
+		messageComposer,
+		/if \(composing\.value \|\| event\.isComposing \|\| event\.keyCode === 229\) return;/,
+	);
+	assert.match(messageComposer, /@compositionstart="composing = true"/);
+	assert.match(messageComposer, /@compositionend="composing = false"/);
+	assert.match(messageComposer, /error\?\.message === "native_microphone_permission_denied"/);
+	assert.match(messageComposer, /showPermissionSettings\.value = isCapacitorAndroid && permissionDenied;/);
+	assert.match(messageComposer, /recordingError\.value = t\("voice\.settingsFailed"\);/);
 });

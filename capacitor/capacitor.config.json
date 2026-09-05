@@ -4,7 +4,6 @@
   "webDir": "../frontend/dist",
   "android": {
     "allowMixedContent": false,
-    "backgroundColor": "#ffffff",
-    "captureInput": true
+    "backgroundColor": "#ffffff"
   }
 }
