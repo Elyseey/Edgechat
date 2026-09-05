@@ -1,4 +1,7 @@
+import { maintenanceZh } from './maintenance.ts';
+
 export default {
+  ...maintenanceZh,
   'app.description': 'Edgechat 团队沟通与协作空间',
   'language.switchToEnglish': '切换为英语',
   'language.switchToChinese': '切换为中文',

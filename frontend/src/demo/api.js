@@ -11,6 +11,8 @@ import {
   storeDemoFile
 } from './state.js';
 
+import { demoMaintenanceReport } from './maintenance.ts';
+
 const DEMO_DELAY_MS = 90;
 
 function fail(message, status = 400) {
@@ -382,6 +384,9 @@ export async function requestDemo(path, options = {}) {
 
   if (method === 'GET' && pathname === '/admin/overview') {
     return cloneDemo(adminOverviewPayload());
+  }
+  if (method === 'GET' && pathname === '/admin/maintenance') {
+    return demoMaintenanceReport();
   }
   if (method === 'GET' && pathname === '/admin/storage/scan') {
     return cloneDemo(adminStoragePayload());

@@ -16,6 +16,7 @@ const pages = [
   { labelKey: 'demo.invites', value: '/admin/invites' },
   { labelKey: 'demo.telegram', value: '/admin/telegram' },
   { labelKey: 'demo.site', value: '/admin/site' },
+  { labelKey: 'admin.nav.maintenance', value: '/admin/maintenance' },
   { labelKey: 'demo.login', value: '/login' },
   { labelKey: 'demo.register', value: '/register/demo-invite' }
 ];

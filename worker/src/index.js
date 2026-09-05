@@ -22,6 +22,7 @@ import { ApiError } from './errors.js';
 import { resolveAvatarKeyUpdate } from './avatar-policy.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
+import { registerMaintenanceRoutes } from './api/maintenance.ts';
 import { registerChannelRoutes } from './api/channels.js';
 import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
@@ -313,6 +314,7 @@ registerDmRoutes(app);
 registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);
+registerMaintenanceRoutes(app);
 registerTelegramAdminRoutes(app);
 
 app.get('/api/ws/:kind/:id', async (c) => {

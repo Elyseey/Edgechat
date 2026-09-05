@@ -116,7 +116,8 @@ watch(
             v-if="!item.children"
             type="button"
             class="admin-nav-item"
-            :class="{ 'admin-nav-item--active': isPrimaryActive(item) }"
+            :class="{ 'admin-nav-item--active': isPrimaryActive(item), 'admin-nav-item--bottom': item.bottom }"
+            :aria-current="isPrimaryActive(item) ? 'page' : undefined"
             @click="navigate(item.to)"
           >
             <component :is="item.icon" :size="19" aria-hidden="true" />

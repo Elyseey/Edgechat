@@ -1,4 +1,5 @@
 import { isVerifiedInternalRequest, parseVerifiedUserId } from '../verified-identity.js';
+import { durableObjectHealth } from '../maintenance/do-health.ts';
 
 export class UserInbox {
   constructor(state) {
@@ -21,6 +22,8 @@ export class UserInbox {
   }
 
   async fetch(request) {
+    const health = durableObjectHealth(request, 'UserInbox');
+    if (health) return health;
     const url = new URL(request.url);
 
     if (url.pathname === '/connect') {

@@ -4,6 +4,11 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"schema:generate": "node .github/scripts/generate-schema-manifest.mjs",
+		"pretest": "npm run schema:generate",
+		"prebuild": "npm run schema:generate",
+		"prebuild:demo": "npm run schema:generate",
+		"predev:demo": "npm run schema:generate",
 		"test": "node --test",
 		"dev:frontend": "vite --config frontend/vite.config.js",
 		"dev:demo": "vite --config frontend/vite.demo.config.js",

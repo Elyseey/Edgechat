@@ -100,7 +100,7 @@ export const D1_MIGRATIONS = [
       "table:device_sessions",
       "table:realtime_tickets",
       "table:message_events",
-      "index:idx_messages_client_message",
+      // 此索引已被下一次迁移替换；不能再要求最终 schema 保留，否则全新安装无法登记基线。
       "index:idx_uploaded_files_client_upload",
       "index:idx_device_sessions_refresh_token",
       "index:idx_device_sessions_user_installation_active",
@@ -148,3 +148,11 @@ export const D1_MIGRATIONS = [
 		],
 	},
 ];
+
+// b3f6855 曾发布、0c13e8f 已撤回的迁移：仅识别历史 ledger，不要求新安装创建废弃表，也不删除旧数据。
+// 保留当时 LF/CRLF 的精确校验值，不能把所有早于当前版本的未知迁移一律当成正常。
+export const D1_RETIRED_MIGRATIONS = [{
+  id: "2026-08-10-server-encryption",
+  checksum: "c9af2652aa817120a1b2b06230f4c8bd487b96da94579dbc22914e7457209393",
+  compatibleChecksums: ["e2139b1aeded7c3214b39fa6d9b92db4c93c700f34fba3d696f3ca489111b6bb"]
+}];

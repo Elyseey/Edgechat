@@ -144,6 +144,17 @@
   color: var(--admin-ink);
 }
 
+/* 维护入口属于实例运维，不混入日常业务导航；留在导航底部并用分隔线独立成组。 */
+.admin-nav-item--bottom {
+  margin-block-start: auto;
+  border-block-start: 1px solid var(--admin-border);
+  border-radius: 0;
+  min-height: 52px;
+}
+
+.admin-nav-item--bottom > svg { flex-shrink: 0; }
+.admin-nav-item--bottom > span { white-space: normal; line-height: 1.45; }
+
 .admin-nav-item--active::before {
   content: '';
   position: absolute;

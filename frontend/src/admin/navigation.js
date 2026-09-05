@@ -1,4 +1,4 @@
-import { Database, Gauge, Send, Settings, UserCog, UserPlus } from '@lucide/vue';
+import { Database, Gauge, Send, Settings, UserCog, UserPlus, Wrench } from '@lucide/vue';
 
 export const adminNavigation = [
   {
@@ -50,6 +50,14 @@ export const adminNavigation = [
       { id: 'site-appearance', labelKey: 'admin.nav.siteAppearance', hash: '#site-appearance' },
       { id: 'version-update', labelKey: 'admin.nav.versionUpdate', hash: '#version-update' }
     ]
+  },
+  {
+    id: 'maintenance',
+    labelKey: 'admin.nav.maintenance',
+    descriptionKey: 'admin.nav.maintenanceDescription',
+    to: '/admin/maintenance',
+    icon: Wrench,
+    bottom: true
   }
 ];
 
@@ -59,5 +67,6 @@ export const adminRouteIcons = {
   storage: Database,
   invites: UserPlus,
   telegram: Send,
-  site: Settings
+  site: Settings,
+  maintenance: Wrench
 };

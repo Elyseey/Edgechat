@@ -18,6 +18,7 @@ frontend/dist/
 frontend/demo-dist/
 .playwright-cli/
 .tmp/
+worker/src/generated/
 
 # Android local/build outputs
 android/.gradle/

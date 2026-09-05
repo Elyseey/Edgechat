@@ -218,6 +218,9 @@ export default {
   adminOverview() {
     return request('/admin/overview');
   },
+  adminMaintenance() {
+    return request('/admin/maintenance');
+  },
   adminStorageScan(cursor = '') {
     const query = new URLSearchParams();
     if (cursor) {

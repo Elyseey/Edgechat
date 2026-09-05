@@ -15,6 +15,7 @@ import { authorizeRoom } from '../room-access.js';
 import { validateSession } from '../session.js';
 import { projectUnreadMessage } from '../unread-projection.js';
 import { isVerifiedInternalRequest, parseVerifiedPrincipal } from '../verified-identity.js';
+import { durableObjectHealth } from '../maintenance/do-health.ts';
 
 const MESSAGE_SIZE_LIMIT = 10 * 1024;
 
@@ -258,6 +259,8 @@ export class ChannelRoom {
   }
 
   async fetch(request) {
+    const health = durableObjectHealth(request, 'ChannelRoom');
+    if (health) return health;
     const url = new URL(request.url);
 
     if (url.pathname === '/external-message' && request.method === 'POST') {

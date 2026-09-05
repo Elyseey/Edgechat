@@ -1,4 +1,7 @@
+import { maintenanceEn } from './maintenance.ts';
+
 export default {
+  ...maintenanceEn,
   'app.description': 'Edgechat team communication and collaboration space',
   'language.switchToEnglish': 'Switch to English',
   'language.switchToChinese': 'Switch to Chinese',
