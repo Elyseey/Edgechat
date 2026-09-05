@@ -155,7 +155,7 @@ export default {
   'group.changeAvatar': '更换头像',
   'group.delete': '删除群组',
   'group.removeMemberConfirm': '确认将 {name} 移出群组吗？',
-  'group.deleteConfirm': '确认删除群组 {name} 吗？',
+  'group.deleteConfirm': '确认永久删除群组 {name} 及其全部消息吗？此操作无法撤销。',
   'group.enterName': '请输入群组名称。',
   'publicGroups.notJoined': '未加入群组',
   'publicGroups.fallback': '群',

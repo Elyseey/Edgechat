@@ -51,10 +51,12 @@ export function useRoomManagement({
 	}
 
 	function openCreateGroup() {
+		error.value = "";
 		showCreateGroup.value = true;
 	}
 
 	function closeCreateGroup() {
+		error.value = "";
 		showCreateGroup.value = false;
 		createGroupForm.name = "";
 		createGroupForm.kind = "private";
@@ -71,7 +73,7 @@ export function useRoomManagement({
 	}
 
 	async function createGroup() {
-		if (!createGroupForm.name.trim()) {
+		if (!createGroupForm.name.trim() || creatingGroup.value) {
 			return;
 		}
 

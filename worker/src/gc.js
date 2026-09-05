@@ -1,3 +1,5 @@
+import { hardDeleteChannel } from './data/channel-deletion.ts';
+
 const DEFAULT_MESSAGE_RETENTION_DAYS = 7;
 const DEFAULT_SOFT_DELETE_RETENTION_DAYS = 60;
 const DEFAULT_BATCH_SIZE = 500;
@@ -7,7 +9,6 @@ const MAX_ERROR_LENGTH = 500;
 const DELETE_ALLOWED_IDENTIFIERS = {
   messages: new Set(['id', 'channel_id', 'sender_id']),
   registration_invites: new Set(['id']),
-  channels: new Set(['id']),
   channel_members: new Set(['channel_id', 'user_id']),
   users: new Set(['id'])
 };
@@ -228,6 +229,14 @@ async function removePendingR2Delete(db, key) {
     .run();
 }
 
+async function completeR2Delete(db, key) {
+  // 对象已删除后同步移除上传登记，避免失效附件仍被当成可复用的上传结果。
+  await db.batch([
+    db.prepare('DELETE FROM uploaded_files WHERE object_key = ?').bind(key),
+    db.prepare('DELETE FROM pending_r2_delete WHERE object_key = ?').bind(key)
+  ]);
+}
+
 function retryDelayMinutes(nextRetryCount, retryExponentCap) {
   const exponent = Math.min(Math.max(nextRetryCount, 1), retryExponentCap);
   const delay = 2 ** exponent;
@@ -299,6 +308,7 @@ async function processR2CandidateKeys(env, db, keys, summary) {
 
     try {
       await env.FILES.delete(key);
+      await completeR2Delete(db, key);
       summary.r2Deleted += 1;
     } catch (error) {
       summary.r2DeleteFailed += 1;
@@ -345,7 +355,7 @@ async function runRetryQueueStep(env, config, summary) {
 
       try {
         await env.FILES.delete(key);
-        await removePendingR2Delete(env.DB, key);
+        await completeR2Delete(env.DB, key);
         summary.retryQueueDeleted += 1;
         summary.r2Deleted += 1;
       } catch (error) {
@@ -455,10 +465,12 @@ async function runHardDeleteChannelsStep(env, config, summary) {
 
   while (batches < config.maxBatchesPerRun) {
     const { results } = await env.DB.prepare(
-      `SELECT id, avatar_key
+      `SELECT id
        FROM channels
        WHERE deleted_at IS NOT NULL
          AND deleted_at < datetime('now', ?)
+         AND kind IN ('public', 'private')
+         AND name != 'general'
        ORDER BY id ASC
        LIMIT ?`
     )
@@ -470,39 +482,12 @@ async function runHardDeleteChannelsStep(env, config, summary) {
     }
 
     batches += 1;
-    const channelIds = results.map((row) => Number(row.id));
-    const avatarKeys = results.map((row) => row.avatar_key);
-    const attachmentKeys = await collectMessageAttachmentsByColumn(
-      env.DB,
-      'channel_id',
-      channelIds
-    );
-
-    summary.channelMessagesDeleted += await deleteRowsByIds(
-      env.DB,
-      'messages',
-      'channel_id',
-      channelIds
-    );
-    summary.channelMembersDeleted += await deleteRowsByIds(
-      env.DB,
-      'channel_members',
-      'channel_id',
-      channelIds
-    );
-    summary.channelsDeleted += await deleteRowsByIds(
-      env.DB,
-      'channels',
-      'id',
-      channelIds
-    );
-
-    await processR2CandidateKeys(
-      env,
-      env.DB,
-      [...attachmentKeys, ...avatarKeys],
-      summary
-    );
+    for (const row of results) {
+      const deleted = await hardDeleteChannel(env.DB, Number(row.id));
+      summary.channelMessagesDeleted += deleted.channelMessagesDeleted;
+      summary.channelMembersDeleted += deleted.channelMembersDeleted;
+      summary.channelsDeleted += deleted.channelsDeleted;
+    }
 
     if (results.length < config.batchSize) {
       break;
@@ -603,11 +588,11 @@ export async function runScheduledGc(env) {
   await ensureGcSchema(env.DB);
 
   await runMobileProtocolCleanupStep(env, config, summary);
-  await runRetryQueueStep(env, config, summary);
   await runExpiredMessagesStep(env, config, summary);
   await runHardDeleteInvitesStep(env, config, summary);
   await runHardDeleteChannelsStep(env, config, summary);
   await runHardDeleteUsersStep(env, config, summary);
+  await runRetryQueueStep(env, config, summary);
 
   console.log(JSON.stringify({
     type: 'scheduled_gc_summary',

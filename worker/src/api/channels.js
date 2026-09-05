@@ -18,6 +18,7 @@ import { ApiError } from '../errors.js';
 import { resolveAvatarKeyUpdate } from '../avatar-policy.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
 import { activeUserSql } from '../user-status.js';
+import { hardDeleteChannel } from '../data/channel-deletion.ts';
 
 function normalizeMemberIds(payload) {
   const source = Array.isArray(payload.memberUserIds)
@@ -339,15 +340,7 @@ export function registerChannelRoutes(app) {
       return errorResponse('general 系统群组不能删除');
     }
 
-    await c.env.DB.prepare(
-      `UPDATE channels
-       SET deleted_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND kind IN ('public', 'private')
-         AND deleted_at IS NULL`
-    )
-      .bind(channelId)
-      .run();
+    await hardDeleteChannel(c.env.DB, channelId);
 
     return c.json({ ok: true });
   });
@@ -367,15 +360,7 @@ export function registerChannelRoutes(app) {
       return errorResponse('general 系统群组不能删除');
     }
 
-    await c.env.DB.prepare(
-      `UPDATE channels
-       SET deleted_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND kind IN ('public', 'private')
-         AND deleted_at IS NULL`
-    )
-      .bind(channelId)
-      .run();
+    await hardDeleteChannel(c.env.DB, channelId);
 
     return c.json({ ok: true });
   });

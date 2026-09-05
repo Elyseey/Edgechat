@@ -108,6 +108,42 @@ test("公开群组创建会保留类型并允许不预先邀请成员", async ()
 	]);
 });
 
+test("创建失败保留表单与错误提示，关闭或重新打开时清除旧错误", async () => {
+	const { management, error } = createHarness({
+		roomApi: { async createGroup() { throw new Error("群组名称已存在"); } },
+	});
+	error.value = "旧错误";
+	management.creation.open();
+	assert.equal(error.value, "");
+	management.creation.form.name = "Team";
+	await management.creation.submit();
+	assert.equal(management.creation.show.value, true);
+	assert.equal(management.creation.form.name, "Team");
+	assert.equal(management.creation.submitting.value, false);
+	assert.equal(error.value, "群组名称已存在");
+	management.creation.close();
+	assert.equal(error.value, "");
+});
+
+test("创建请求进行中不会重复提交", async () => {
+	let resolveCreate;
+	let callCount = 0;
+	const { management } = createHarness({
+		roomApi: {
+			createGroup() {
+				callCount += 1;
+				return new Promise((resolve) => { resolveCreate = resolve; });
+			},
+		},
+	});
+	management.creation.form.name = "Team";
+	const pending = management.creation.submit();
+	await management.creation.submit();
+	assert.equal(callCount, 1);
+	resolveCreate({ channel: { id: 9, kind: "private" } });
+	await pending;
+});
+
 test("成员加载、邀请和移除通过同一 module 接口更新状态", async () => {
 	const { management, activeRoom, calls } = createHarness();
 	await management.members.toggle();

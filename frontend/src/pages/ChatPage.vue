@@ -726,6 +726,7 @@ onBeforeUnmount(() => {
       :users="users"
       :form="createGroupForm"
       :submitting="creatingGroup"
+      :error="error"
       @close="closeCreateGroup"
       @toggle-member="toggleCreateGroupMember"
       @submit="createGroup"

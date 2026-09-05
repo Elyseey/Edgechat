@@ -9,7 +9,8 @@ const props = defineProps({
   show: { type: Boolean, default: false },
   users: { type: Array, default: () => [] },
   form: { type: Object, required: true },
-  submitting: { type: Boolean, default: false }
+  submitting: { type: Boolean, default: false },
+  error: { type: String, default: '' }
 });
 
 const emit = defineEmits(['close', 'toggle-member', 'submit']);
@@ -71,6 +72,8 @@ useOverlayLifecycle({
           </div>
         </div>
 
+        <p v-if="error" class="room-dialog__error" role="alert">{{ error }}</p>
+
         <div class="room-dialog__actions">
           <button type="button" class="room-dialog__secondary" @click="emit('close')">{{ t('common.cancel') }}</button>
           <button
@@ -128,6 +131,7 @@ useOverlayLifecycle({
 .room-dialog__member { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #e8ecf0; border-radius: 20px; background: #fff; cursor: pointer; touch-action: manipulation; }
 .room-dialog__member--selected { border-color: #008069; background: #e8f0fe; }
 .room-dialog__actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.room-dialog__error { margin: 16px 0 0; color: #b42318; font-size: 13px; overflow-wrap: anywhere; }
 .room-dialog__secondary, .room-dialog__primary { min-height: 44px; padding: 10px 20px; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
 .room-dialog__secondary { border: 1px solid #e8ecf0; background: #fff; }
 .room-dialog__primary { border: 0; background: #008069; color: #fff; }

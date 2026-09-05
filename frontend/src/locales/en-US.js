@@ -155,7 +155,7 @@ export default {
   'group.changeAvatar': 'Change avatar',
   'group.delete': 'Delete group',
   'group.removeMemberConfirm': 'Remove {name} from this group?',
-  'group.deleteConfirm': 'Delete group {name}?',
+  'group.deleteConfirm': 'Permanently delete group {name} and all its messages? This cannot be undone.',
   'group.enterName': 'Please enter a group name.',
   'publicGroups.notJoined': 'Groups you have not joined',
   'publicGroups.fallback': 'G',
