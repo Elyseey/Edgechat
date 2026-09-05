@@ -24,7 +24,7 @@
     <a href="README.md"><b>中文</b></a> ·
     <a href="README.en.md">English</a> ·
     <a href="README.ja.md">日本語</a> ·
-    <a href="https://edgechat-demo.gdz66601.workers.dev">在线 Demo</a> ·
+    <a href="https://edgechat-demo.wcjxxgaq.workers.dev">在线 Demo</a> ·
     <a href="https://echat.azora.top/">项目文档</a> ·
     <a href="https://t.me/EdgeChatlounge">Telegram 社区</a>
   </p>
