@@ -6,6 +6,7 @@ import { useCursor } from '../composables/useCursor.js';
 import { useI18n } from '../i18n.js';
 import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
 import { getStoredNativeServerOrigin, isCapacitorAndroid } from '../capacitor-platform.ts';
+import { readLoginSubmission } from '../login-submission.ts';
 
 const route = useRoute();
 const router = useRouter();
@@ -32,14 +33,17 @@ useCursor([
   [passwordInput, passwordCursor]
 ]);
 
-async function submit() {
+async function submit(event) {
   loading.value = true;
   error.value = '';
   try {
+    // Android WebView 的自动填充不一定触发 input 事件，提交时以输入框当前值为准。
+    const submitted = new FormData(event.currentTarget);
+    const { serverOrigin, credentials } = readLoginSubmission(submitted);
     if (isCapacitorAndroid) {
-      await store.configureNativeServer(form.serverOrigin);
+      await store.configureNativeServer(serverOrigin);
     }
-    await store.login({ username: form.username, password: form.password });
+    await store.login(credentials);
     router.push('/');
   } catch (currentError) {
     error.value = currentError.message === 'native_server_https_required'
@@ -74,6 +78,7 @@ async function submit() {
             :placeholder="t('auth.serverOrigin')"
             autocomplete="url"
             inputmode="url"
+            name="serverOrigin"
             required
             type="url"
           />
@@ -86,6 +91,8 @@ async function submit() {
             class="login-input"
             :placeholder="t('auth.account')"
             autocomplete="username"
+            name="username"
+            required
             type="text"
           />
         </div>
@@ -97,6 +104,8 @@ async function submit() {
             class="login-input"
             :placeholder="t('auth.password')"
             autocomplete="current-password"
+            name="password"
+            required
             type="password"
           />
         </div>

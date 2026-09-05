@@ -6,6 +6,7 @@ import {
 	resolveConfiguredServerOrigin,
 	resolveServerUrl,
 } from "../frontend/src/capacitor-platform.ts";
+import { readLoginSubmission } from "../frontend/src/login-submission.ts";
 
 const read = (path) =>
 	readFileSync(new URL(path, import.meta.url), "utf8").replaceAll("\r\n", "\n");
@@ -19,6 +20,21 @@ test("Capacitor server origin is normalized and web URLs stay relative", () => {
 	assert.throws(
 		() => resolveConfiguredServerOrigin("http://chat.example.com"),
 		/native_server_https_required/,
+	);
+});
+
+test("login submission reads the values currently displayed by Android WebView", () => {
+	const values = new Map([
+		["serverOrigin", " https://chat.example.com/path "],
+		["username", " admin "],
+		["password", "top-secret"],
+	]);
+	assert.deepEqual(
+		readLoginSubmission({ get: (name) => values.get(name) ?? null }),
+		{
+			serverOrigin: "https://chat.example.com/path",
+			credentials: { username: "admin", password: "top-secret" },
+		},
 	);
 });
 
@@ -68,7 +84,12 @@ test("Capacitor asks for a server at sign-in and registers the Kotlin bridge", (
 		"../capacitor/android/app/src/main/java/com/aozorae/edgechat/web/nativebridge/EdgeChatNativePlugin.kt",
 	);
 	assert.match(loginPage, /v-if="isCapacitorAndroid"/);
-	assert.match(loginPage, /store\.configureNativeServer\(form\.serverOrigin\)/);
+	assert.match(loginPage, /new FormData\(event\.currentTarget\)/);
+	assert.match(loginPage, /store\.configureNativeServer\(serverOrigin\)/);
+	assert.match(loginPage, /store\.login\(credentials\)/);
+	for (const name of ["serverOrigin", "username", "password"]) {
+		assert.match(loginPage, new RegExp(`name="${name}"`));
+	}
 	assert.match(settingsPage, /pickNativeFile\('image\/\*'\)/);
 	assert.match(groupSettings, /pickNativeFile\('image\/\*'\)/);
 	assert.match(mainActivity, /registerPlugin\(EdgeChatNativePlugin::class\.java\)/);
