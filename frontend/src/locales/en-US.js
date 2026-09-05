@@ -252,6 +252,8 @@ export default {
   'admin.sidebar.brand': 'Edgechat Admin',
   'admin.sidebar.collapseNavigation': 'Collapse admin navigation',
   'admin.sidebar.expandNavigation': 'Expand admin navigation',
+  'admin.sidebar.expandGroup': 'Expand {name} submenu',
+  'admin.sidebar.collapseGroup': 'Collapse {name} submenu',
   'admin.sidebar.searchNavigation': 'Search admin navigation',
   'admin.sidebar.search': 'Search',
   'admin.sidebar.navigation': 'Admin navigation',

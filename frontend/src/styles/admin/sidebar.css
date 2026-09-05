@@ -144,16 +144,16 @@
   color: var(--admin-ink);
 }
 
-/* 维护入口属于实例运维，不混入日常业务导航；留在导航底部并用分隔线独立成组。 */
-.admin-nav-item--bottom {
-  margin-block-start: auto;
+/* 维护入口排在业务栏目之后并单独分隔；按正常文档流排列，不吸附到侧栏底部。 */
+.admin-nav-item--separated {
+  margin-block-start: var(--admin-space-xs);
   border-block-start: 1px solid var(--admin-border);
   border-radius: 0;
   min-height: 52px;
 }
 
-.admin-nav-item--bottom > svg { flex-shrink: 0; }
-.admin-nav-item--bottom > span { white-space: normal; line-height: 1.45; }
+.admin-nav-item--separated > svg { flex-shrink: 0; }
+.admin-nav-item--separated > span { white-space: normal; line-height: 1.45; }
 
 .admin-nav-item--active::before {
   content: '';
@@ -165,8 +165,38 @@
   background: var(--admin-ink);
 }
 
-.admin-nav-item--group > svg:last-child {
-  margin-inline-start: auto;
+.admin-nav-group__header {
+  display: flex;
+  align-items: stretch;
+}
+
+.admin-nav-item--group {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-nav-group__toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--admin-radius-control);
+  background: transparent;
+  color: var(--admin-muted);
+}
+
+.admin-nav-group__toggle:hover {
+  background: var(--admin-active);
+}
+
+.admin-nav-group__toggle:focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: -2px;
+}
+
+.admin-nav-group__toggle > svg {
   transition: transform var(--admin-duration);
 }
 
@@ -298,7 +328,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-nav-item--group > svg:last-child {
+  .admin-nav-group__toggle > svg {
     transition: none;
   }
 }

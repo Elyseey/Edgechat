@@ -252,6 +252,8 @@ export default {
   'admin.sidebar.brand': 'Edgechat 管理后台',
   'admin.sidebar.collapseNavigation': '收起后台导航',
   'admin.sidebar.expandNavigation': '展开后台导航',
+  'admin.sidebar.expandGroup': '展开{name}子菜单',
+  'admin.sidebar.collapseGroup': '收起{name}子菜单',
   'admin.sidebar.searchNavigation': '搜索后台导航',
   'admin.sidebar.search': '搜索',
   'admin.sidebar.navigation': '后台导航',

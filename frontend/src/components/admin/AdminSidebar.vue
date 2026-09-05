@@ -1,6 +1,6 @@
 <script setup>
 import { ChevronDown, CircleUserRound, Home, Menu, Search, Settings, X } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { adminNavigation } from '../../admin/navigation.js';
 import { useI18n } from '../../i18n.js';
@@ -11,7 +11,8 @@ const router = useRouter();
 const { locale, t } = useI18n();
 const query = ref('');
 const mobileOpen = ref(false);
-const openGroups = ref(new Set(['invites', 'site']));
+// 页面导航与菜单展开分开操作；进入栏目也保持收起，避免挤占其它导航入口。
+const openGroups = ref(new Set());
 
 const localizedNavigation = computed(() =>
   adminNavigation.map((item) => ({
@@ -72,16 +73,6 @@ function navigate(location) {
   void router.push(location);
 }
 
-watch(
-  () => route.path,
-  (path) => {
-    const activeGroup = adminNavigation.find((item) => item.children && path.startsWith(item.to));
-    if (activeGroup && !openGroups.value.has(activeGroup.id)) {
-      openGroups.value = new Set([...openGroups.value, activeGroup.id]);
-    }
-  },
-  { immediate: true }
-);
 </script>
 
 <template>
@@ -116,7 +107,7 @@ watch(
             v-if="!item.children"
             type="button"
             class="admin-nav-item"
-            :class="{ 'admin-nav-item--active': isPrimaryActive(item), 'admin-nav-item--bottom': item.bottom }"
+            :class="{ 'admin-nav-item--active': isPrimaryActive(item), 'admin-nav-item--separated': item.separated }"
             :aria-current="isPrimaryActive(item) ? 'page' : undefined"
             @click="navigate(item.to)"
           >
@@ -125,23 +116,34 @@ watch(
           </button>
 
           <section v-else class="admin-nav-group">
-            <button
-              type="button"
-              class="admin-nav-item admin-nav-item--group"
-              :class="{ 'admin-nav-item--active': isPrimaryActive(item) }"
-              :aria-expanded="isGroupOpen(item)"
-              @click="toggleGroup(item.id)"
-            >
-              <component :is="item.icon" :size="19" aria-hidden="true" />
-              <span>{{ item.label }}</span>
-              <ChevronDown
-                :size="16"
-                aria-hidden="true"
-                :class="{ 'admin-nav-group__chevron--open': isGroupOpen(item) }"
-              />
-            </button>
+            <div class="admin-nav-group__header">
+              <button
+                type="button"
+                class="admin-nav-item admin-nav-item--group"
+                :class="{ 'admin-nav-item--active': isPrimaryActive(item) }"
+                :aria-current="isPrimaryActive(item) ? 'page' : undefined"
+                @click="navigate(item.to)"
+              >
+                <component :is="item.icon" :size="19" aria-hidden="true" />
+                <span>{{ item.label }}</span>
+              </button>
+              <button
+                type="button"
+                class="admin-nav-group__toggle"
+                :aria-expanded="isGroupOpen(item)"
+                :aria-controls="`admin-nav-children-${item.id}`"
+                :aria-label="t(isGroupOpen(item) ? 'admin.sidebar.collapseGroup' : 'admin.sidebar.expandGroup', { name: item.label })"
+                @click="toggleGroup(item.id)"
+              >
+                <ChevronDown
+                  :size="16"
+                  aria-hidden="true"
+                  :class="{ 'admin-nav-group__chevron--open': isGroupOpen(item) }"
+                />
+              </button>
+            </div>
 
-            <div v-show="isGroupOpen(item)" class="admin-nav-group__items">
+            <div v-show="isGroupOpen(item)" :id="`admin-nav-children-${item.id}`" class="admin-nav-group__items">
               <button
                 v-for="child in item.children"
                 :key="child.id"

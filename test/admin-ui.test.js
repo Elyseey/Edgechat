@@ -69,6 +69,26 @@ test('侧栏包含存储统计并移除消息查看入口', () => {
   assert.match(sidebarSource, /v-show="isGroupOpen\(item\)"/);
 });
 
+test('侧栏维护入口按导航顺序排列且不吸附到底部', () => {
+  const navigationOrder = ['storage', 'invites', 'telegram', 'site', 'maintenance'].map(
+    (id) => navigationSource.indexOf(`id: '${id}'`)
+  );
+  assert.ok(navigationOrder.every((index) => index >= 0));
+  assert.deepEqual(navigationOrder, [...navigationOrder].sort((a, b) => a - b));
+  assert.match(navigationSource, /id: 'maintenance'[\s\S]*separated: true/);
+  assert.match(sidebarSource, /admin-nav-item--separated/);
+  assert.match(adminSidebarStyles, /\.admin-nav-item--separated\s*\{[\s\S]*margin-block-start:/);
+  assert.doesNotMatch(adminSidebarStyles, /\.admin-nav-item--separated\s*\{[\s\S]*margin-block-start:\s*auto/);
+});
+
+test('侧栏分组默认收起，主按钮导航且仅箭头负责展开', () => {
+  assert.match(sidebarSource, /openGroups\s*=\s*ref\(new Set\(\)\)/);
+  assert.doesNotMatch(sidebarSource, /watch\s*\(/);
+  assert.match(sidebarSource, /class="admin-nav-item admin-nav-item--group"[\s\S]*@click="navigate\(item\.to\)"/);
+  assert.match(sidebarSource, /class="admin-nav-group__toggle"[\s\S]*@click="toggleGroup\(item\.id\)"/);
+  assert.match(adminSidebarStyles, /\.admin-nav-group__toggle\s*\{[\s\S]*flex:\s*0 0 44px;/);
+});
+
 test('存储统计由按钮手动刷新且四个统计列均可排序', () => {
   assert.match(routerSource, /import AdminStoragePage/);
   assert.match(routerSource, /path: 'storage'/);

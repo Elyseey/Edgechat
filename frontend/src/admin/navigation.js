@@ -57,7 +57,7 @@ export const adminNavigation = [
     descriptionKey: 'admin.nav.maintenanceDescription',
     to: '/admin/maintenance',
     icon: Wrench,
-    bottom: true
+    separated: true
   }
 ];
 
