@@ -78,18 +78,24 @@ test("首次部署自动创建密钥，普通部署保留密钥，手动轮换�
 	assert.match(deployStep, /wrangler deploy --config wrangler\.ci\.toml/);
 });
 
-test("资源确认脚本优先复用生产 SESSIONS KV 且保留显式标题覆盖", () => {
+test("资源确认脚本仅复用配置的 KV 标题，避免隐式共享会话存储", () => {
 	const script = readFileSync(
 		new URL("../.github/scripts/ensure-cloudflare-resources.mjs", import.meta.url),
 		"utf8",
 	).replaceAll("\r\n", "\n");
 
-	assert.match(script, /const PRODUCTION_KV_NAMESPACE_TITLE = "SESSIONS";/);
+	assert.doesNotMatch(script, /PRODUCTION_KV_NAMESPACE_TITLE/);
 	assert.match(
 		script,
-		/kvNamespaceTitleExplicit\s*\? \[kvNamespaceTitle\]\s*:\s*\[PRODUCTION_KV_NAMESPACE_TITLE, LEGACY_KV_NAMESPACE_TITLE\]/s,
+		/namespace\.title === kvNamespaceTitle && namespace\.id/,
 	);
 	assert.match(script, /setOutput\("kv_namespace_title", kv\.title\);/);
+
+	const resourceStep = getStep("Ensure Cloudflare resources");
+	assert.match(
+		resourceStep,
+		/EDGECHAT_KV_NAMESPACE_TITLE: \$\{\{ vars\.EDGECHAT_KV_NAMESPACE_TITLE \|\| 'cfchat-sessions' \}\}/,
+	);
 });
 
 test("R2 未开通时工作流移除 FILES binding，已开通时保留目标 bucket", () => {

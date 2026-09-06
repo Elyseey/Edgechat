@@ -53,6 +53,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EDGECHAT_KV_NAMESPACE_TITLE: ${{ vars.EDGECHAT_KV_NAMESPACE_TITLE || 'cfchat-sessions' }}
         run: node .github/scripts/ensure-cloudflare-resources.mjs
       - name: Generate wrangler config for CI
         shell: bash

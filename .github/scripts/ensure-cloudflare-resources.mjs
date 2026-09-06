@@ -8,7 +8,6 @@ const API_BASE_URL = "https://api.cloudflare.com/client/v4";
 
 const LEGACY_D1_DATABASE_NAME = "cfchat-db";
 const LEGACY_KV_NAMESPACE_TITLE = "cfchat-sessions";
-const PRODUCTION_KV_NAMESPACE_TITLE = "SESSIONS";
 const LEGACY_R2_BUCKET_NAME = "cfchat-files";
 const R2_NOT_ENABLED_ERROR_CODE = 10042;
 
@@ -32,17 +31,13 @@ function readEnv(env, ...names) {
 }
 
 function resourceNames(env) {
-  const explicitKvNamespaceTitle = readEnv(
-    env,
-    "EDGECHAT_KV_NAMESPACE_TITLE",
-    "CFCHAT_KV_NAMESPACE_TITLE",
-  );
   return {
     d1DatabaseName:
       readEnv(env, "EDGECHAT_D1_DATABASE_NAME", "CFCHAT_D1_DATABASE_NAME") ??
       LEGACY_D1_DATABASE_NAME,
-    kvNamespaceTitle: explicitKvNamespaceTitle ?? LEGACY_KV_NAMESPACE_TITLE,
-    kvNamespaceTitleExplicit: Boolean(explicitKvNamespaceTitle),
+    kvNamespaceTitle:
+      readEnv(env, "EDGECHAT_KV_NAMESPACE_TITLE", "CFCHAT_KV_NAMESPACE_TITLE") ??
+      LEGACY_KV_NAMESPACE_TITLE,
     r2BucketName:
       readEnv(env, "EDGECHAT_R2_BUCKET_NAME", "CFCHAT_R2_BUCKET_NAME") ??
       LEGACY_R2_BUCKET_NAME,
@@ -264,17 +259,14 @@ async function ensureD1Database(context, d1DatabaseName) {
   return { id, created: true };
 }
 
-async function ensureKvNamespace(
+export async function ensureKvNamespace(
   context,
-  { kvNamespaceTitle, kvNamespaceTitleExplicit },
+  kvNamespaceTitle = LEGACY_KV_NAMESPACE_TITLE,
 ) {
   const namespaces = await listKvNamespaces(context);
-  const candidateTitles = kvNamespaceTitleExplicit
-    ? [kvNamespaceTitle]
-    : [PRODUCTION_KV_NAMESPACE_TITLE, LEGACY_KV_NAMESPACE_TITLE];
-  const existing = candidateTitles
-    .map((title) => namespaces.find((namespace) => namespace.title === title && namespace.id))
-    .find(Boolean);
+  const existing = namespaces.find(
+    (namespace) => namespace.title === kvNamespaceTitle && namespace.id,
+  );
   if (existing) {
     console.log(`KV namespace already exists: ${existing.title} (${existing.id})`);
     return { id: existing.id, title: existing.title, created: false };
@@ -330,7 +322,7 @@ export async function ensureCloudflareResources({
   );
 
   const d1 = await ensureD1Database(context, names.d1DatabaseName);
-  const kv = await ensureKvNamespace(context, names);
+  const kv = await ensureKvNamespace(context, names.kvNamespaceTitle);
   const r2 = await ensureR2Bucket(context, names.r2BucketName);
 
   setOutput("d1_database_name", names.d1DatabaseName);
