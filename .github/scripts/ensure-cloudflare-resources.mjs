@@ -17,7 +17,6 @@ const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 
 const LEGACY_D1_DATABASE_NAME = "cfchat-db";
 const LEGACY_KV_NAMESPACE_TITLE = "cfchat-sessions";
-const PRODUCTION_KV_NAMESPACE_TITLE = "SESSIONS";
 const LEGACY_R2_BUCKET_NAME = "cfchat-files";
 
 function readEnv(...names) {
@@ -36,9 +35,6 @@ const d1DatabaseName =
 const kvNamespaceTitle =
   readEnv("EDGECHAT_KV_NAMESPACE_TITLE", "CFCHAT_KV_NAMESPACE_TITLE") ??
   LEGACY_KV_NAMESPACE_TITLE;
-const kvNamespaceTitleExplicit = Boolean(
-  readEnv("EDGECHAT_KV_NAMESPACE_TITLE", "CFCHAT_KV_NAMESPACE_TITLE"),
-);
 const r2BucketName =
   readEnv("EDGECHAT_R2_BUCKET_NAME", "CFCHAT_R2_BUCKET_NAME") ?? LEGACY_R2_BUCKET_NAME;
 
@@ -193,12 +189,9 @@ async function ensureD1Database() {
 
 async function ensureKvNamespace() {
   const namespaces = await listKvNamespaces();
-  const candidateTitles = kvNamespaceTitleExplicit
-    ? [kvNamespaceTitle]
-    : [PRODUCTION_KV_NAMESPACE_TITLE, LEGACY_KV_NAMESPACE_TITLE];
-  const existing = candidateTitles
-    .map((title) => namespaces.find((namespace) => namespace.title === title && namespace.id))
-    .find(Boolean);
+  const existing = namespaces.find(
+    (namespace) => namespace.title === kvNamespaceTitle && namespace.id,
+  );
   if (existing) {
     console.log(`KV namespace already exists: ${existing.title} (${existing.id})`);
     return { id: existing.id, title: existing.title, created: false };
