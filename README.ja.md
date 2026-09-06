@@ -82,7 +82,7 @@ EdgeChat は Cloudflare 上にデプロイするチーム向けチャットシ�
 
 ## オンラインデモ
 
-**[edgechat-demo.gdz66601.workers.dev](https://edgechat-demo.gdz66601.workers.dev)**
+**[edgechat-demo.gdz66601.workers.dev](https://edgechat-demo.wcjxxgaq.workers.dev)**
 
 デモサイトは本番プロジェクトの Vue ページ、ルーティング、状態管理、リアルタイムメッセージのロジックをそのまま再利用していますが、すべての API・WebSocket・ファイルアップロード・Telegram のやり取りはブラウザのメモリ内でシミュレーションされます。ページをリロードするか、右上の「**デモデータをリセット**」をクリックすると初期状態に戻ります。本番 Worker には一切アクセスせず、D1・KV・R2 への書き込みも発生しません。
 
