@@ -65,6 +65,7 @@ The login tool reuses the existing authentication flow and browser safety confir
 - [Contributing](#contributing)
 - [Star History](#star-history)
 - [License](#license)
+- [Disclaimer](#disclaimer)
 
 ## Interface Preview
 
@@ -341,3 +342,11 @@ You may use, modify, and distribute this project. If you distribute a modified v
 ## Acknowledgements
 
 Thanks to <a href="https://linux.do" target="_blank">linux do</a> for helping promote this project.
+
+## Disclaimer
+
+EdgeChat is a self-hosted open-source project. The project maintainers provide the software only and do not operate, control, or manage any instances users deploy themselves.
+
+Deployers and users of each instance are solely responsible for how it is deployed and used, and for all content and data produced within it.
+
+Project maintainers assume no responsibility for the use or misuse of any independently deployed EdgeChat instance.
