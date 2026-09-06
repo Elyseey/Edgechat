@@ -1,4 +1,9 @@
 <script setup>
+import { defineAsyncComponent } from 'vue';
+
+const DemoNavigator = globalThis.__EDGECHAT_DEMO__
+  ? defineAsyncComponent(() => import('./components/demo/DemoNavigator.vue'))
+  : null;
 </script>
 
 <template>
@@ -7,6 +12,7 @@
       <component :is="Component" :key="route.path" />
     </Transition>
   </router-view>
+  <component :is="DemoNavigator" v-if="DemoNavigator" />
 </template>
 
 <style>

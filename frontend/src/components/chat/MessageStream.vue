@@ -5,6 +5,7 @@ import SenderSourceBadge from './SenderSourceBadge.vue';
 import UiAvatar from '../ui/Avatar.vue';
 import UiButton from '../ui/Button.vue';
 import UiSurface from '../ui/Surface.vue';
+import { formatDateTime, t } from '../../i18n.js';
 
 const props = defineProps({
   messages: {
@@ -21,7 +22,7 @@ const props = defineProps({
   },
   emptyText: {
     type: String,
-    default: '这里还没有消息。'
+    default: ''
   },
   sessionUserId: {
     type: Number,
@@ -63,7 +64,7 @@ function bubbleClass(message, index) {
 }
 
 function formatTime(value) {
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 }
 
 function scrollToBottom() {
@@ -81,11 +82,11 @@ defineExpose({
   <section ref="scrollContainer" class="chat-message-scroll">
     <div class="chat-message-inner">
       <UiButton v-if="showOlder && messages.length" variant="secondary" size="sm" @click="emit('load-older')">
-        加载更早消息
+        {{ t('messages.loadEarlier') }}
       </UiButton>
 
       <UiSurface v-if="loading" tone="soft" class="empty-state">
-        正在加载消息...
+        {{ t('messages.loading') }}
       </UiSurface>
 
       <UiSurface v-else-if="error" tone="soft" class="empty-state">
@@ -93,7 +94,7 @@ defineExpose({
       </UiSurface>
 
       <UiSurface v-else-if="!messages.length" tone="soft" class="empty-state">
-        {{ emptyText }}
+        {{ emptyText || t('messages.empty') }}
       </UiSurface>
 
       <article
@@ -111,7 +112,7 @@ defineExpose({
         <div class="chat-bubble" :class="bubbleClass(message, index)">
           <div class="chat-bubble__meta">
             <strong>
-              {{ isOwnMessage(message) ? '我' : message.sender.displayName }}
+              {{ isOwnMessage(message) ? t('messages.you') : message.sender.displayName }}
               <SenderSourceBadge :source="message.sender.source" />
             </strong>
             <span>{{ formatTime(message.createdAt) }}</span>

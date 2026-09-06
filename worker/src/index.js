@@ -19,31 +19,41 @@ import {
 import { getSiteSettings } from './data/site-settings.js';
 import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
+import { resolveAvatarKeyUpdate } from './avatar-policy.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
+import { registerMaintenanceRoutes } from './api/maintenance.ts';
 import { registerChannelRoutes } from './api/channels.js';
 import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
+import { registerV1Routes } from './api/v1.js';
 import {
   registerTelegramAdminRoutes,
-  registerTelegramWebhookRoute
+  registerTelegramPublicRoutes
 } from './api/telegram.js';
 import { ChannelRoom } from './do/ChannelRoom.js';
 import { Scheduler } from './do/Scheduler.js';
 import { UserInbox } from './do/UserInbox.js';
 import { forwardInboxConnection, forwardRoomConnection } from './do-bridge.js';
 import { runScheduledGc } from './gc.js';
+import { isUserDisabled } from './user-status.js';
+import { updateCurrentDeviceSessionVersion } from './mobile-session.js';
 import {
+  errorCodeForStatus,
   errorResponse,
   parseJsonRequest,
-  requestBodyTooLarge
+  requestBodyTooLarge,
+  v1ErrorResponse
 } from './utils.js';
 
 const app = new Hono();
 
 app.use('/api/*', async (c, next) => {
-  if (requestBodyTooLarge(c.req.raw)) {
+  const path = new URL(c.req.url).pathname;
+  const uploadLimit = Number(c.env.MAX_FILE_SIZE || 20971520) + 1024 * 1024;
+  const maxBytes = ['/api/upload', '/api/v1/uploads'].includes(path) ? uploadLimit : undefined;
+  if (requestBodyTooLarge(c.req.raw, maxBytes)) {
     // 提前拒绝超大请求体，避免 Worker 在 JSON 解析前消耗过多内存。
     return errorResponse('请求体过大', 413);
   }
@@ -64,7 +74,7 @@ app.get('/api/site', async (c) => {
   return c.json({ site });
 });
 
-registerTelegramWebhookRoute(app);
+registerTelegramPublicRoutes(app);
 
 app.get('/api/register-links/:token', async (c) => {
   const token = String(c.req.param('token') || '').trim();
@@ -133,7 +143,7 @@ app.post('/api/auth/login', async (c) => {
   }
 
   const user = await getUserByUsername(c.env.DB, username);
-  if (!user || Number(user.is_disabled)) {
+  if (!user || isUserDisabled(user)) {
     return errorResponse('账号或密码错误', 401);
   }
 
@@ -149,12 +159,14 @@ app.post('/api/auth/login', async (c) => {
   });
 });
 
+registerV1Routes(app);
+
 app.use('/api/*', authMiddleware);
 
 app.get('/api/auth/session', async (c) => {
   const session = c.get('session');
   const user = await c.env.DB.prepare(
-    `SELECT display_name, avatar_key, is_disabled
+    `SELECT display_name, avatar_key, is_disabled, disabled_until
      FROM users
      WHERE id = ?
        AND deleted_at IS NULL
@@ -163,7 +175,7 @@ app.get('/api/auth/session', async (c) => {
     .bind(session.userId)
     .all();
 
-  if (!user.results[0] || Number(user.results[0].is_disabled)) {
+  if (!user.results[0] || isUserDisabled(user.results[0])) {
     await deleteSession(c.env, session.token);
     return errorResponse('账号已不可用', 401);
   }
@@ -233,6 +245,7 @@ app.post('/api/auth/change-password', async (c) => {
     ...session,
     sessionVersion: Number(session.sessionVersion || 0) + 1
   };
+  await updateCurrentDeviceSessionVersion(c.env, session, nextSession.sessionVersion);
   await putSession(c.env, nextSession);
 
   return c.json({ ok: true });
@@ -242,26 +255,34 @@ app.patch('/api/me/profile', async (c) => {
   const session = c.get('session');
   const payload = await parseJsonRequest(c.req.raw);
   const displayName = String(payload.displayName || session.displayName).trim();
-  const avatarKey = payload.avatarKey ? String(payload.avatarKey) : null;
+  const avatarUpdate = await resolveAvatarKeyUpdate(c.env.DB, session.userId, payload);
   if (!displayName) {
     return errorResponse('显示名称不能为空');
   }
 
+  const updates = ['display_name = ?', 'updated_at = CURRENT_TIMESTAMP'];
+  const binds = [displayName];
+  if (avatarUpdate.provided) {
+    updates.splice(1, 0, 'avatar_key = ?');
+    binds.push(avatarUpdate.key);
+  }
   await c.env.DB.prepare(
     `UPDATE users
-     SET display_name = ?,
-         avatar_key = COALESCE(?, avatar_key),
-         updated_at = CURRENT_TIMESTAMP
+     SET ${updates.join(', ')}
      WHERE id = ?`
   )
-    .bind(displayName, avatarKey, session.userId)
+    .bind(...binds, session.userId)
     .run();
 
   const nextSession = await getSession(c.env, session.token);
   const merged = {
     ...nextSession,
     displayName,
-    avatarUrl: avatarKey ? `/files/${encodeURIComponent(avatarKey)}` : nextSession.avatarUrl
+    avatarUrl: avatarUpdate.provided
+      ? avatarUpdate.key
+        ? `/files/${encodeURIComponent(avatarUpdate.key)}`
+        : ''
+      : nextSession.avatarUrl
   };
   await putSession(c.env, merged);
 
@@ -293,6 +314,7 @@ registerDmRoutes(app);
 registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);
+registerMaintenanceRoutes(app);
 registerTelegramAdminRoutes(app);
 
 app.get('/api/ws/:kind/:id', async (c) => {
@@ -328,10 +350,17 @@ app.notFound(async (c) => {
   return new Response('Not Found', { status: 404 });
 });
 
-app.onError((error) => {
+app.onError((error, c) => {
   console.error(error);
+  const isV1 = new URL(c.req.url).pathname.startsWith('/api/v1/');
   if (error instanceof ApiError) {
+    if (isV1) {
+      return v1ErrorResponse(error.code, error.message, error.status);
+    }
     return errorResponse(error.message, error.status);
+  }
+  if (isV1) {
+    return v1ErrorResponse(errorCodeForStatus(500), '服务器开小差了', 500);
   }
   return errorResponse('服务器开小差了', 500);
 });

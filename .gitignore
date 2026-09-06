@@ -6,6 +6,7 @@ wrangler.toml
 项目文档.md
 本地部署说明.md
 TECHNICAL.md
+导览.md
 
 # Dependencies
 node_modules/
@@ -14,5 +15,23 @@ node_modules/
 AGENTS.md
 Agent.md
 frontend/dist/
+frontend/demo-dist/
 .playwright-cli/
 .tmp/
+worker/src/generated/
+
+# Android local/build outputs
+android/.gradle/
+android/.kotlin/
+android/**/build/
+android/local.properties
+android/signing.properties
+android/*.jks
+android/*.keystore
+capacitor/android/.gradle/
+capacitor/android/.kotlin/
+capacitor/android/**/build/
+capacitor/android/local.properties
+capacitor/android/signing.properties
+capacitor/android/*.jks
+capacitor/android/*.keystore

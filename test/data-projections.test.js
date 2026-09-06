@@ -33,7 +33,7 @@ function createQueryDb(results) {
 	};
 }
 
-test("可见频道查询保持七个数值身份绑定与既有 projection", async () => {
+test("可见频道查询保持十二个数值身份绑定与直接关注 projection", async () => {
 	const { db, capture } = createQueryDb([
 			{
 				id: "9",
@@ -48,13 +48,14 @@ test("可见频道查询保持七个数值身份绑定与既有 projection", asy
 			can_manage: 0,
 			member_count: "3",
 			last_message_at: null,
-			unread_count: "2",
+				unread_count: "2",
+					attention_unread_count: "1",
 		},
 	]);
 
 	const channels = await listVisibleChannels(db, "7");
 
-	assert.deepEqual(capture.binds, [7, 7, 7, 7, 7, 7, 7]);
+	assert.deepEqual(capture.binds, [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7]);
 	assert.deepEqual(channels[0], {
 		id: 9,
 			name: "General",
@@ -70,6 +71,7 @@ test("可见频道查询保持七个数值身份绑定与既有 projection", asy
 		memberCount: 3,
 		lastMessageAt: null,
 		unreadCount: 2,
+		mentionUnreadCount: 1,
 	});
 	assert.match(capture.sql, /CASE WHEN c\.name = 'general' THEN 0 ELSE 1 END/);
 });
@@ -98,10 +100,10 @@ test("可见频道查询保持七个数值身份绑定与既有 projection", asy
 	assert.match(capture.sql, /CASE WHEN c\.name = 'general' THEN 0 ELSE 1 END/);
 });
 
-test("DM 查询保持四个数值身份绑定", async () => {
+test("DM 查询保持回复关注计数所需的七个数值身份绑定", async () => {
 	const { db, capture } = createQueryDb([]);
 	await listUserDms(db, "12");
-	assert.deepEqual(capture.binds, [12, 12, 12, 12]);
+	assert.deepEqual(capture.binds, [12, 12, 12, 12, 12, 12, 12]);
 });
 
 test("后台 DM projection 保持参与者、计数与时间字段", async () => {
@@ -133,6 +135,7 @@ test("后台用户与频道成员 projection 保持稳定字段", async () => {
 			display_name: "Alice",
 			avatar_key: "a.png",
 			is_disabled: "1",
+			disabled_until: null,
 			created_at: "2026-07-23",
 		},
 	]);
@@ -142,6 +145,8 @@ test("后台用户与频道成员 projection 保持稳定字段", async () => {
 		displayName: "Alice",
 		avatarUrl: "/files/a.png",
 		isDisabled: true,
+		isPermanentlyDisabled: true,
+		disabledUntil: null,
 		createdAt: "2026-07-23",
 	});
 
@@ -221,9 +226,10 @@ test("站点设置 projection 使用稳定默认值", async () => {
 
 test("消息 projection 保持附件和发送者字段", () => {
 	assert.deepEqual(
-		mapMessage({
-			id: "5",
-			content: "hello",
+			mapMessage({
+				id: "5",
+				content: "hello",
+				mentions_json: "[]",
 			created_at: "2026-07-23",
 			sender_id: "2",
 			sender_username: "alice",
@@ -231,14 +237,19 @@ test("消息 projection 保持附件和发送者字段", () => {
 			sender_avatar_key: "avatar.png",
 			attachment_key: "files/a b.txt",
 			attachment_name: "a b.txt",
-			attachment_type: "text/plain",
-				attachment_size: "10",
+				attachment_type: "text/plain",
+					attachment_size: "10",
+					attachment_kind: null,
+					attachment_duration_ms: null,
+					attachment_waveform: null,
 				source_attachment_id: null,
 				source_attachment_unique_id: null,
 		}),
-			{
-				id: 5,
-				content: "hello",
+				{
+					id: 5,
+					content: "hello",
+					mentionUserIds: [],
+					mentions: [],
 				createdAt: "2026-07-23",
 				source: "edgechat",
 				sender: {
@@ -258,4 +269,34 @@ test("消息 projection 保持附件和发送者字段", () => {
 			},
 		},
 	);
+});
+
+test("语音消息 projection 保留时长与压缩波形", () => {
+	const message = mapMessage({
+		id: 6,
+		content: "",
+		mentions_json: "[]",
+		mention_user_ids: "[]",
+		created_at: "2026-09-02",
+		sender_id: 2,
+		sender_username: "alice",
+		sender_display_name: "Alice",
+		attachment_key: "files/voice.ogg",
+		attachment_name: "voice.ogg",
+		attachment_type: "audio/ogg",
+		attachment_size: 2048,
+		attachment_kind: "voice",
+		attachment_duration_ms: 8400,
+		attachment_waveform: "[12,45,90]",
+	});
+	assert.deepEqual(message.attachment, {
+		key: "files/voice.ogg",
+		name: "voice.ogg",
+		type: "audio/ogg",
+		size: 2048,
+		url: "/files/files%2Fvoice.ogg",
+		kind: "voice",
+		durationMs: 8400,
+		waveform: [12, 45, 90],
+	});
 });

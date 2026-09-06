@@ -1,11 +1,12 @@
 <script setup>
 import UiBadge from '../ui/Badge.vue';
 import UiDot from '../ui/Dot.vue';
+import { t } from '../../i18n.js';
 
 defineProps({
   title: {
     type: String,
-    default: '未选择会话'
+    default: ''
   },
   subtitle: {
     type: String,
@@ -22,14 +23,14 @@ defineProps({
   <header class="window-topbar window-topbar--sticky">
     <div class="chat-main__meta">
       <div class="window-heading">
-        <h1>{{ title }}</h1>
+        <h1>{{ title || t('chat.noConversationSelected') }}</h1>
         <p>{{ subtitle }}</p>
       </div>
     </div>
 
     <UiBadge :variant="wsStatus === 'open' ? 'success' : 'secondary'">
       <UiDot :tone="wsStatus === 'open' ? 'cool' : 'neutral'" size="sm" />
-      {{ wsStatus === 'open' ? '实时已连接' : '连接中' }}
+      {{ wsStatus === 'open' ? t('roomHeader.connected') : t('roomHeader.connecting') }}
     </UiBadge>
   </header>
 </template>

@@ -1,4 +1,5 @@
 import { isVerifiedInternalRequest, parseVerifiedUserId } from '../verified-identity.js';
+import { durableObjectHealth } from '../maintenance/do-health.ts';
 
 export class UserInbox {
   constructor(state) {
@@ -21,6 +22,8 @@ export class UserInbox {
   }
 
   async fetch(request) {
+    const health = durableObjectHealth(request, 'UserInbox');
+    if (health) return health;
     const url = new URL(request.url);
 
     if (url.pathname === '/connect') {
@@ -38,7 +41,7 @@ export class UserInbox {
       this.state.acceptWebSocket(server);
       server.serializeAttachment({ userId });
       this.connections.add(server);
-      server.send(JSON.stringify({ type: 'ready' }));
+      server.send(JSON.stringify({ protocolVersion: 1, type: 'ready' }));
       return new Response(null, { status: 101, webSocket: client });
     }
 

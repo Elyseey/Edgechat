@@ -4,7 +4,10 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { D1_MIGRATIONS } from "./d1-migration-manifest.mjs";
-import { buildD1MigrationPlan, D1_MIGRATION_LEDGER } from "./d1-migration-plan.mjs";
+import { buildD1MigrationPlan } from "./d1-migration-plan.mjs";
+import { D1_REPAIRS } from "./d1-repair-manifest.mjs";
+import { collectSchemaArtifacts, collectAppliedMigrations, inspectSchema, schemaTables } from "../../worker/src/maintenance/schema-contract.ts";
+import { generateSchemaManifest } from "./generate-schema-manifest.mjs";
 
 const API_BASE_URL = "https://api.cloudflare.com/client/v4";
 const OUTPUT_PATH = ".tmp/edgechat-d1-migrations.sql";
@@ -51,49 +54,22 @@ async function queryD1(sql) {
   return payload.result?.[0]?.results ?? [];
 }
 
-async function collectArtifacts() {
-  const artifacts = new Set();
-  const objects = await queryD1(
-    "SELECT type, name FROM sqlite_master WHERE type IN ('table', 'trigger', 'index')",
-  );
-
-  for (const object of objects) {
-    artifacts.add(`${object.type}:${object.name}`);
-  }
-
-  const inspectedTables = new Set(
-    D1_MIGRATIONS.flatMap((migration) => migration.artifacts)
-      .filter((artifact) => artifact.startsWith("column:"))
-      .map((artifact) => artifact.slice("column:".length).split(".")[0]),
-  );
-
-  for (const table of inspectedTables) {
-    // D1 REST API 禁止直接执行 PRAGMA，使用等价表值函数才能在 CI 中安全读取列结构。
-    const escapedTable = table.replaceAll("'", "''");
-    const columns = await queryD1(`SELECT name FROM pragma_table_info('${escapedTable}')`);
-    for (const column of columns) {
-      artifacts.add(`column:${table}.${column.name}`);
-    }
-  }
-
-  return artifacts;
-}
-
-async function collectAppliedMigrations(artifacts) {
-  if (!artifacts.has(`table:${D1_MIGRATION_LEDGER}`)) {
-    return new Map();
-  }
-  const rows = await queryD1(
-    `SELECT migration_id, checksum FROM ${D1_MIGRATION_LEDGER} ORDER BY migration_id`,
-  );
-  return new Map(rows.map((row) => [String(row.migration_id), String(row.checksum)]));
-}
-
 async function main() {
-  const artifacts = await collectArtifacts();
-  const appliedMigrations = await collectAppliedMigrations(artifacts);
+  const manifest = await generateSchemaManifest();
+  if (process.argv.includes("--verify")) {
+    const result = await inspectSchema(queryD1, manifest);
+    if (result.status !== "ok") {
+      throw new Error(`D1 schema verification failed: ${JSON.stringify(result)}`);
+    }
+    console.log(`D1 schema verified: ${result.expectedMigration}`);
+    return;
+  }
+  // D1 的内部表可出现在 sqlite_master，但不允许读取列；只查询应用 manifest 中的表。
+  const artifacts = await collectSchemaArtifacts(queryD1, schemaTables(manifest));
+  const appliedMigrations = await collectAppliedMigrations(queryD1, artifacts);
   const plan = await buildD1MigrationPlan({
     migrations: D1_MIGRATIONS,
+    repairs: D1_REPAIRS,
     appliedMigrations,
     artifacts,
     readSql(file) {

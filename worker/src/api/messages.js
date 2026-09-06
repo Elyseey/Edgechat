@@ -1,4 +1,5 @@
 import { listMessages } from '../data/messages.js';
+import { getPinnedMessage } from '../data/pins.js';
 import { markRoomRead } from '../data/unread.js';
 import { authorizeRoom, isRoomKind } from '../room-access.js';
 import { errorResponse, parseJsonRequest, sanitizeLimit } from '../utils.js';
@@ -21,7 +22,10 @@ export function registerMessageRoutes(app) {
       return errorResponse('无权访问该会话', 403);
     }
 
-    const messages = await listMessages(c.env, roomId, before, limit);
+    const [messages, pinnedMessage] = await Promise.all([
+      listMessages(c.env, roomId, before, limit),
+      getPinnedMessage(c.env, roomId)
+    ]);
     await markRoomRead(c.env.DB, {
       channelId: roomId,
       userId: session.userId
@@ -34,7 +38,8 @@ export function registerMessageRoutes(app) {
         name: access.room.name,
         description: access.room.description
       },
-      messages
+      messages,
+      pinnedMessage
     });
   });
 

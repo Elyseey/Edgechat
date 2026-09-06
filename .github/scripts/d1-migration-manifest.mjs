@@ -68,6 +68,8 @@ export const D1_MIGRATIONS = [
     artifacts: [
       "column:messages.sender_kind",
       "column:messages.external_sender_id",
+      "column:messages.external_sender_name",
+      "column:messages.external_sender_avatar_url",
       "column:messages.source",
       "column:messages.source_message_id",
       "table:telegram_bridge_config",
@@ -84,4 +86,73 @@ export const D1_MIGRATIONS = [
       "column:messages.source_attachment_unique_id",
     ],
   },
+  {
+    id: "2026-08-20-user-ban-expiry",
+    file: "worker/migrations/2026-08-20-user-ban-expiry.sql",
+    artifacts: ["column:users.disabled_until"],
+  },
+  {
+    id: "2026-08-30-mobile-client-v1",
+    file: "worker/migrations/2026-08-30-mobile-client-v1.sql",
+    artifacts: [
+      "column:messages.client_message_id",
+      "column:uploaded_files.client_upload_id",
+      "table:device_sessions",
+      "table:realtime_tickets",
+      "table:message_events",
+      // 此索引已被下一次迁移替换；不能再要求最终 schema 保留，否则全新安装无法登记基线。
+      "index:idx_uploaded_files_client_upload",
+      "index:idx_device_sessions_refresh_token",
+      "index:idx_device_sessions_user_installation_active",
+      "index:idx_device_sessions_user_active",
+      "index:idx_realtime_tickets_expiry",
+      "index:idx_message_events_channel_sequence",
+      "trigger:record_message_created_event",
+      "trigger:record_message_deleted_event",
+    ],
+  },
+  {
+    id: "2026-08-30-native-client-hardening",
+    file: "worker/migrations/2026-08-30-native-client-hardening.sql",
+    artifacts: [
+      "index:idx_messages_channel_client_message",
+      "table:message_event_compaction",
+    ],
+  },
+  {
+    id: "2026-08-30-pinned-messages",
+    file: "worker/migrations/2026-08-30-pinned-messages.sql",
+    artifacts: ["table:channel_pins", "trigger:clear_pin_after_message_soft_delete"],
+  },
+		{
+			id: "2026-09-01-message-mentions",
+			file: "worker/migrations/2026-09-01-message-mentions.sql",
+			artifacts: ["column:messages.mention_user_ids"],
+		},
+		{
+			id: "2026-09-02-voice-messages",
+		file: "worker/migrations/2026-09-02-voice-messages.sql",
+		artifacts: [
+			"column:messages.attachment_kind",
+			"column:messages.attachment_duration_ms",
+			"column:messages.attachment_waveform",
+			],
+		},
+	{
+		id: "2026-09-04-message-replies",
+		file: "worker/migrations/2026-09-04-message-replies.sql",
+		artifacts: [
+			"column:messages.reply_to_message_id",
+			"column:messages.reply_to_sender_id",
+			"index:idx_messages_reply_attention",
+		],
+	},
 ];
+
+// b3f6855 曾发布、0c13e8f 已撤回的迁移：仅识别历史 ledger，不要求新安装创建废弃表，也不删除旧数据。
+// 保留当时 LF/CRLF 的精确校验值，不能把所有早于当前版本的未知迁移一律当成正常。
+export const D1_RETIRED_MIGRATIONS = [{
+  id: "2026-08-10-server-encryption",
+  checksum: "c9af2652aa817120a1b2b06230f4c8bd487b96da94579dbc22914e7457209393",
+  compatibleChecksums: ["e2139b1aeded7c3214b39fa6d9b92db4c93c700f34fba3d696f3ca489111b6bb"]
+}];

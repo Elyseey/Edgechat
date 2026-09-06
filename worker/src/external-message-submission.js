@@ -10,9 +10,12 @@ export async function submitExternalMessage(env, { room, payload }) {
 		sourceMessageId: payload.sourceMessageId,
 		sourceAttachmentId: payload.sourceAttachmentId,
 		sourceAttachmentUniqueId: payload.sourceAttachmentUniqueId,
+		replyToMessageId: payload.replyToMessageId,
+		replyToSenderId: payload.replyToSenderId,
 	});
 	return {
 		...result,
+		replyToSenderId: payload.replyToSenderId || null,
 		packet: JSON.stringify({ type: "message", message: result.message }),
 	};
 }

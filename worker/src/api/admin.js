@@ -9,11 +9,41 @@ import {
   revokeRegistrationInvite
 } from '../data/registration-invites.js';
 import { getSiteSettings, updateSiteSettings } from '../data/site-settings.js';
-import { listAdminUsers } from '../data/users.js';
+import { listAdminUsers, listStorageOwners } from '../data/users.js';
 import { ApiError } from '../errors.js';
+import { summarizeR2Objects } from '../storage-statistics.js';
 import { errorResponse, parseJsonRequest, randomToken } from '../utils.js';
+import { banExpiryFromMinutes } from '../user-status.js';
+
+const STORAGE_SCAN_PAGE_SIZE = 1000;
 
 export function registerAdminRoutes(app) {
+  app.get('/api/admin/storage/scan', async (c) => {
+    if (!c.env.FILES) {
+      return errorResponse('当前部署没有绑定 R2，无法统计存储空间', 503);
+    }
+
+    const cursor = new URL(c.req.url).searchParams.get('cursor') || undefined;
+    const listed = await c.env.FILES.list({
+      limit: STORAGE_SCAN_PAGE_SIZE,
+      ...(cursor ? { cursor } : {}),
+      include: []
+    });
+    const response = {
+      items: summarizeR2Objects(listed.objects),
+      scannedObjects: listed.objects.length,
+      truncated: listed.truncated,
+      cursor: listed.truncated ? listed.cursor : null
+    };
+
+    if (!cursor) {
+      response.users = await listStorageOwners(c.env.DB);
+    }
+
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(response);
+  });
+
   app.get('/api/admin/overview', async (c) => {
     const [users, channels, dms, site] = await Promise.all([
       listAdminUsers(c.env.DB),
@@ -129,7 +159,9 @@ export function registerAdminRoutes(app) {
         id: result.meta.last_row_id,
         username,
         displayName,
-        isDisabled: false
+        isDisabled: false,
+        isPermanentlyDisabled: false,
+        disabledUntil: null
       }
     });
   });
@@ -137,19 +169,44 @@ export function registerAdminRoutes(app) {
   app.patch('/api/admin/users/:userId', async (c) => {
     const userId = Number(c.req.param('userId'));
     const payload = await parseJsonRequest(c.req.raw);
-    const isDisabled = payload.isDisabled ? 1 : 0;
-    const bumpVersion = isDisabled ? 1 : 0;
-    await c.env.DB.prepare(
-      `UPDATE users
-       SET is_disabled = ?,
-           display_name = COALESCE(?, display_name),
-           session_version = session_version + ?,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND deleted_at IS NULL`
-    )
-      .bind(isDisabled, payload.displayName || null, bumpVersion, userId)
-      .run();
+    const updatesBanState = typeof payload.isDisabled === 'boolean';
+
+    if (updatesBanState) {
+      const durationMinutes = payload.banDurationMinutes == null
+        ? null
+        : Number(payload.banDurationMinutes);
+      if (payload.isDisabled && durationMinutes !== null
+        && (!Number.isInteger(durationMinutes) || durationMinutes < 1)) {
+        return errorResponse('封禁时长必须是正整数分钟');
+      }
+
+      const isPermanentlyDisabled = payload.isDisabled && durationMinutes === null;
+      const disabledUntil = payload.isDisabled && durationMinutes !== null
+        ? banExpiryFromMinutes(durationMinutes)
+        : null;
+      await c.env.DB.prepare(
+        `UPDATE users
+         SET is_disabled = ?,
+             disabled_until = ?,
+             display_name = COALESCE(?, display_name),
+             session_version = session_version + 1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+           AND deleted_at IS NULL`
+      )
+        .bind(isPermanentlyDisabled ? 1 : 0, disabledUntil, payload.displayName || null, userId)
+        .run();
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE users
+         SET display_name = COALESCE(?, display_name),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+           AND deleted_at IS NULL`
+      )
+        .bind(payload.displayName || null, userId)
+        .run();
+    }
 
     return c.json({ ok: true });
   });
@@ -184,6 +241,7 @@ export function registerAdminRoutes(app) {
       `UPDATE users
        SET deleted_at = CURRENT_TIMESTAMP,
             is_disabled = 1,
+            disabled_until = NULL,
             session_version = session_version + 1,
             updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`

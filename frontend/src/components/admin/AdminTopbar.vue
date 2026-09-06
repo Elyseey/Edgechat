@@ -3,12 +3,14 @@ import { Gauge, Settings } from '@lucide/vue';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { adminRouteIcons } from '../../admin/navigation.js';
+import { t } from '../../i18n.js';
+import LanguageSwitch from '../ui/LanguageSwitch.vue';
 
 const route = useRoute();
 const router = useRouter();
 
 const currentIcon = computed(() => adminRouteIcons[route.meta.adminIcon] || Gauge);
-const currentTitle = computed(() => route.meta.adminTitle || '管理后台');
+const currentTitle = computed(() => t(route.meta.adminTitleKey || 'admin.topbar.defaultTitle'));
 </script>
 
 <template>
@@ -17,10 +19,13 @@ const currentTitle = computed(() => route.meta.adminTitle || '管理后台');
       <component :is="currentIcon" :size="23" aria-hidden="true" />
       <h1>{{ currentTitle }}</h1>
     </div>
-    <button type="button" class="admin-topbar__settings" @click="router.push('/admin/site')">
-      <Settings :size="19" aria-hidden="true" />
-      <span>设置</span>
-    </button>
+    <div class="admin-topbar__actions">
+      <LanguageSwitch />
+      <button type="button" class="admin-topbar__settings" @click="router.push('/admin/site')">
+        <Settings :size="19" aria-hidden="true" />
+        <span>{{ t('admin.topbar.settings') }}</span>
+      </button>
+    </div>
   </header>
 </template>
 

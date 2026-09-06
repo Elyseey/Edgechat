@@ -4,6 +4,7 @@ import { onMounted, reactive, ref } from 'vue';
 import api from '../api.js';
 import UiButton from '../components/ui/Button.vue';
 import UiSurface from '../components/ui/Surface.vue';
+import { t } from '../i18n.js';
 
 const loading = ref(false);
 const savingConfig = ref(false);
@@ -37,7 +38,7 @@ async function saveConfig() {
   try {
     applyState(await api.saveAdminTelegramConfig(configForm));
     configForm.botToken = '';
-    success.value = 'Bot 已连接，Webhook 已更新。';
+    success.value = t('telegram.botConnected');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -52,7 +53,7 @@ async function createMapping() {
   try {
     applyState(await api.createAdminTelegramMapping(mappingForm));
     mappingForm.telegramChatId = '';
-    success.value = '群组映射已保存。';
+    success.value = t('telegram.mappingSaved');
   } catch (currentError) {
     error.value = currentError.message;
   } finally {
@@ -70,7 +71,7 @@ async function toggleMapping(mapping) {
 }
 
 async function removeMapping(mapping) {
-  if (!window.confirm(`确认删除 ${mapping.channelName} 的 Telegram 映射吗？`)) return;
+  if (!window.confirm(t('telegram.confirmDeleteMapping', { name: mapping.channelName }))) return;
   error.value = '';
   try {
     applyState(await api.deleteAdminTelegramMapping(mapping.id));
@@ -86,12 +87,12 @@ onMounted(loadState);
   <div class="admin-section admin-telegram-page">
     <header class="admin-section__header">
       <div class="admin-section__heading">
-        <h2>Telegram 互通</h2>
-        <p>连接一个 Telegram Bot，并将公开群组绑定到 Telegram 群聊。</p>
+        <h2>{{ t('telegram.title') }}</h2>
+        <p>{{ t('telegram.description') }}</p>
       </div>
       <UiButton variant="secondary" :disabled="loading" @click="loadState">
-        <RefreshCw :size="16" :class="{ 'admin-spin': loading }" />
-        刷新
+        <RefreshCw :size="16" aria-hidden="true" :class="{ 'admin-spin': loading }" />
+        {{ t('common.refresh') }}
       </UiButton>
     </header>
 
@@ -102,24 +103,24 @@ onMounted(loadState);
       <UiSurface class="panel telegram-config-panel">
         <div class="telegram-panel-heading">
           <div>
-            <h3 class="panel-title">Bot 连接</h3>
+            <h3 class="panel-title">{{ t('telegram.botConnection') }}</h3>
             <p class="muted">
-              {{ state.config.configured ? `已连接 @${state.config.botUsername}` : '尚未连接 Bot' }}
+              {{ state.config.configured ? t('telegram.connectedAs', { username: state.config.botUsername }) : t('telegram.notConnected') }}
             </p>
           </div>
           <span class="telegram-status" :class="{ 'telegram-status--online': state.config.configured }">
-            {{ state.config.configured ? '已配置' : '未配置' }}
+            {{ state.config.configured ? t('telegram.configured') : t('telegram.notConfigured') }}
           </span>
         </div>
         <form class="telegram-config-form" @submit.prevent="saveConfig">
           <label class="field telegram-token-field">
-            <span>Bot Token</span>
+            <span>{{ t('telegram.botToken') }}</span>
             <input v-model.trim="configForm.botToken" type="password" autocomplete="off" placeholder="123456789:AA..." />
           </label>
           <UiButton type="submit" :disabled="savingConfig || !configForm.botToken">
             <KeyRound v-if="!state.config.configured" :size="16" />
             <Save v-else :size="16" />
-            {{ savingConfig ? '连接中...' : state.config.configured ? '更新 Token' : '连接 Bot' }}
+            {{ savingConfig ? t('telegram.connecting') : state.config.configured ? t('telegram.updateToken') : t('telegram.connectBot') }}
           </UiButton>
         </form>
         <div v-if="state.config.webhookUrl" class="telegram-webhook-row">
@@ -131,54 +132,54 @@ onMounted(loadState);
       <UiSurface class="panel panel--table">
         <div class="telegram-panel-heading">
           <div>
-            <h3 class="panel-title">群组映射</h3>
-            <p class="muted">{{ state.mappings.length }} 个 Telegram 群已绑定</p>
+            <h3 class="panel-title">{{ t('telegram.groupMappings') }}</h3>
+            <p class="muted">{{ t('telegram.mappingCount', { count: state.mappings.length }) }}</p>
           </div>
         </div>
         <form class="telegram-mapping-form" @submit.prevent="createMapping">
           <label class="field">
-            <span>EdgeChat 公开群组</span>
+            <span>{{ t('telegram.edgechatPublicGroup') }}</span>
             <select v-model="mappingForm.channelId" required>
-              <option disabled value="">选择群组</option>
+              <option disabled value="">{{ t('telegram.selectGroup') }}</option>
               <option v-for="channel in state.channels" :key="channel.id" :value="channel.id">
                 {{ channel.name }}
               </option>
             </select>
           </label>
           <label class="field">
-            <span>Telegram 群 ID</span>
+            <span>{{ t('telegram.chatId') }}</span>
             <input v-model.trim="mappingForm.telegramChatId" required placeholder="-1001234567890" />
           </label>
           <UiButton type="submit" :disabled="savingMapping || !state.config.configured">
             <Save :size="16" />
-            {{ savingMapping ? '保存中...' : '保存映射' }}
+            {{ savingMapping ? t('common.saving') : t('telegram.saveMapping') }}
           </UiButton>
         </form>
 
         <div class="admin-table-wrap">
           <table class="list-table telegram-mapping-table">
             <thead>
-              <tr><th>EdgeChat</th><th>Telegram</th><th>同步</th><th>操作</th></tr>
+              <tr><th>EdgeChat</th><th>Telegram</th><th>{{ t('telegram.sync') }}</th><th>{{ t('telegram.actions') }}</th></tr>
             </thead>
             <tbody>
-              <tr v-if="loading && !state.mappings.length"><td colspan="4" class="muted">映射加载中...</td></tr>
-              <tr v-else-if="!state.mappings.length"><td colspan="4" class="muted">暂无映射</td></tr>
+              <tr v-if="loading && !state.mappings.length"><td colspan="4" class="muted">{{ t('telegram.loadingMappings') }}</td></tr>
+              <tr v-else-if="!state.mappings.length"><td colspan="4" class="muted">{{ t('telegram.emptyMappings') }}</td></tr>
               <tr v-for="mapping in state.mappings" :key="mapping.id">
                 <td><strong>{{ mapping.channelName }}</strong></td>
                 <td>
-                  <strong>{{ mapping.telegramChatTitle || '未命名群聊' }}</strong>
+                  <strong>{{ mapping.telegramChatTitle || t('telegram.unnamedChat') }}</strong>
                   <div class="muted telegram-chat-id">{{ mapping.telegramChatId }}</div>
                 </td>
                 <td>
                   <label class="telegram-switch">
                     <input type="checkbox" :checked="mapping.enabled" @change="toggleMapping(mapping)" />
                     <span aria-hidden="true"></span>
-                    <span class="telegram-switch__label">{{ mapping.enabled ? '开启' : '暂停' }}</span>
+                    <span class="telegram-switch__label">{{ mapping.enabled ? t('common.enabled') : t('common.paused') }}</span>
                   </label>
                 </td>
                 <td>
-                  <button type="button" class="admin-icon-button" title="删除映射" @click="removeMapping(mapping)">
-                    <Trash2 :size="16" />
+                  <button type="button" class="admin-icon-button" :title="t('telegram.deleteMapping')" :aria-label="t('telegram.deleteMapping')" @click="removeMapping(mapping)">
+                    <Trash2 :size="16" aria-hidden="true" />
                   </button>
                 </td>
               </tr>

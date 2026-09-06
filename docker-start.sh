@@ -1,58 +1,54 @@
 #!/bin/bash
 
-echo "🚀 启动 Edgechat Docker 容器..."
-echo ""
+set -euo pipefail
 
-# 启动容器
-docker compose up -d --build
+ADMIN_USERNAME="${EDGECHAT_ADMIN_USERNAME:-admin}"
+ADMIN_DISPLAY_NAME="${EDGECHAT_ADMIN_DISPLAY_NAME:-Administrator}"
+ADMIN_PASSWORD="${EDGECHAT_ADMIN_PASSWORD:-}"
 
-echo ""
-echo "⏳ 等待容器启动..."
-sleep 10
-
-# 检查容器状态
-if ! docker compose ps | grep -q "Up"; then
-    echo "❌ 容器启动失败"
-    docker compose logs --tail=20
+if [ -z "$ADMIN_PASSWORD" ]; then
+    echo "请先设置 EDGECHAT_ADMIN_PASSWORD，再运行 ./docker-start.sh"
     exit 1
 fi
 
-echo "✅ 容器已启动"
-echo ""
+echo "启动 Edgechat Docker 容器..."
+docker compose up -d --build
 
-# 初始化数据库
-echo "📊 初始化数据库..."
-# Keep the legacy local D1 name to match existing Wrangler state.
-docker compose exec -T edgechat wrangler d1 execute cfchat-db --local --file=./worker/schema.sql > /dev/null 2>&1
+echo "等待 Worker 健康检查..."
+READY=false
+for _attempt in $(seq 1 30); do
+    if curl -fsS http://localhost:8788/api/health > /dev/null; then
+        READY=true
+        break
+    fi
+    sleep 2
+done
 
-if [ $? -eq 0 ]; then
-    echo "✅ 数据库表创建成功"
-else
-    echo "⚠️  数据库可能已存在"
+if [ "$READY" != "true" ]; then
+    echo "容器未能在 60 秒内通过健康检查"
+    docker compose logs --tail=50
+    exit 1
 fi
 
-# 创建管理员账户（使用 API）
-echo "👤 创建管理员账户..."
-sleep 2
+echo "初始化本地 D1 数据库..."
+# 本地继续复用历史 D1 名称，避免 Wrangler 创建第二套开发状态。
+docker compose exec -T edgechat \
+    wrangler d1 execute cfchat-db --local --file=./worker/schema.sql
 
-# 使用 curl 调用创建用户 API
-RESPONSE=$(curl -s -X POST http://localhost:8788/api/admin/users \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123","displayName":"Administrator","isAdmin":true}' 2>&1)
+echo "初始化管理员账户..."
+# 复用生产 Actions 的密码生成器，保证 Docker 与 Worker 使用同一 PBKDF2 格式。
+docker compose exec -T \
+    -e EDGECHAT_ADMIN_USERNAME="$ADMIN_USERNAME" \
+    -e EDGECHAT_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    -e EDGECHAT_ADMIN_DISPLAY_NAME="$ADMIN_DISPLAY_NAME" \
+    edgechat node .github/scripts/generate-admin-bootstrap-sql.mjs
+docker compose exec -T edgechat \
+    wrangler d1 execute cfchat-db --local --file=.tmp/edgechat-admin-upsert.sql
 
-if echo "$RESPONSE" | grep -q "id\|success"; then
-    echo "✅ 管理员账户创建成功"
-    echo ""
-    echo "🔐 管理员登录信息："
-    echo "   用户名: admin"
-    echo "   密码: admin123"
-else
-    echo "⚠️  管理员账户创建失败或已存在"
-    echo "   请访问应用后通过界面创建用户"
-fi
+echo "管理员账户已就绪：$ADMIN_USERNAME"
 
 echo ""
-echo "🎉 Edgechat 启动完成！"
+echo "Edgechat 启动完成！"
 echo ""
 echo "📱 访问地址："
 echo "   http://localhost:8788"

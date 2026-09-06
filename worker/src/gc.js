@@ -1,3 +1,5 @@
+import { hardDeleteChannel } from './data/channel-deletion.ts';
+
 const DEFAULT_MESSAGE_RETENTION_DAYS = 7;
 const DEFAULT_SOFT_DELETE_RETENTION_DAYS = 60;
 const DEFAULT_BATCH_SIZE = 500;
@@ -7,7 +9,6 @@ const MAX_ERROR_LENGTH = 500;
 const DELETE_ALLOWED_IDENTIFIERS = {
   messages: new Set(['id', 'channel_id', 'sender_id']),
   registration_invites: new Set(['id']),
-  channels: new Set(['id']),
   channel_members: new Set(['channel_id', 'user_id']),
   users: new Set(['id'])
 };
@@ -81,11 +82,77 @@ function createSummary() {
     usersDeleted: 0,
     userMessagesDeleted: 0,
     userMembershipsDeleted: 0,
+    expiredRealtimeTicketsDeleted: 0,
+    expiredMessageEventsDeleted: 0,
+    expiredDeviceSessionsDeleted: 0,
     r2Deleted: 0,
     r2DeleteFailed: 0,
     r2DeleteQueued: 0,
     r2SkippedReferenced: 0
   };
+}
+
+async function runMobileProtocolCleanupStep(env, config, summary) {
+  const ticketResult = await env.DB.prepare(
+    `DELETE FROM realtime_tickets
+     WHERE token_hash IN (
+       SELECT token_hash FROM realtime_tickets
+       WHERE expires_at <= CURRENT_TIMESTAMP OR consumed_at IS NOT NULL
+       ORDER BY expires_at ASC
+       LIMIT ?
+     )`
+  )
+    .bind(config.batchSize)
+    .run();
+  summary.expiredRealtimeTicketsDeleted = Number(ticketResult.meta?.changes || 0);
+
+  const eventCutoff = `-${config.messageRetentionDays} day`;
+  const [, eventResult] = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO message_event_compaction (channel_id, compacted_through, updated_at)
+       SELECT channel_id, MAX(sequence), CURRENT_TIMESTAMP
+       FROM (
+         SELECT sequence, channel_id
+         FROM message_events
+         WHERE created_at < datetime('now', ?)
+         ORDER BY sequence ASC
+         LIMIT ?
+       ) AS expired_events
+       WHERE true
+       GROUP BY channel_id
+       ON CONFLICT(channel_id) DO UPDATE SET
+         compacted_through = MAX(message_event_compaction.compacted_through, excluded.compacted_through),
+         updated_at = CURRENT_TIMESTAMP`
+    ).bind(eventCutoff, config.batchSize),
+    env.DB.prepare(
+      `DELETE FROM message_events
+       WHERE sequence IN (
+         SELECT sequence FROM message_events
+         WHERE created_at < datetime('now', ?)
+         ORDER BY sequence ASC
+         LIMIT ?
+       )`
+    ).bind(eventCutoff, config.batchSize)
+  ]);
+  summary.expiredMessageEventsDeleted = Number(eventResult.meta?.changes || 0);
+
+  const deviceResult = await env.DB.prepare(
+    `DELETE FROM device_sessions
+     WHERE id IN (
+       SELECT id FROM device_sessions
+       WHERE expires_at < datetime('now', ?)
+          OR (revoked_at IS NOT NULL AND revoked_at < datetime('now', ?))
+       ORDER BY expires_at ASC
+       LIMIT ?
+     )`
+  )
+    .bind(
+      `-${config.softDeleteRetentionDays} day`,
+      `-${config.softDeleteRetentionDays} day`,
+      config.batchSize
+    )
+    .run();
+  summary.expiredDeviceSessionsDeleted = Number(deviceResult.meta?.changes || 0);
 }
 
 async function ensureGcSchema(db) {
@@ -162,6 +229,14 @@ async function removePendingR2Delete(db, key) {
     .run();
 }
 
+async function completeR2Delete(db, key) {
+  // 对象已删除后同步移除上传登记，避免失效附件仍被当成可复用的上传结果。
+  await db.batch([
+    db.prepare('DELETE FROM uploaded_files WHERE object_key = ?').bind(key),
+    db.prepare('DELETE FROM pending_r2_delete WHERE object_key = ?').bind(key)
+  ]);
+}
+
 function retryDelayMinutes(nextRetryCount, retryExponentCap) {
   const exponent = Math.min(Math.max(nextRetryCount, 1), retryExponentCap);
   const delay = 2 ** exponent;
@@ -233,6 +308,7 @@ async function processR2CandidateKeys(env, db, keys, summary) {
 
     try {
       await env.FILES.delete(key);
+      await completeR2Delete(db, key);
       summary.r2Deleted += 1;
     } catch (error) {
       summary.r2DeleteFailed += 1;
@@ -279,7 +355,7 @@ async function runRetryQueueStep(env, config, summary) {
 
       try {
         await env.FILES.delete(key);
-        await removePendingR2Delete(env.DB, key);
+        await completeR2Delete(env.DB, key);
         summary.retryQueueDeleted += 1;
         summary.r2Deleted += 1;
       } catch (error) {
@@ -389,10 +465,12 @@ async function runHardDeleteChannelsStep(env, config, summary) {
 
   while (batches < config.maxBatchesPerRun) {
     const { results } = await env.DB.prepare(
-      `SELECT id, avatar_key
+      `SELECT id
        FROM channels
        WHERE deleted_at IS NOT NULL
          AND deleted_at < datetime('now', ?)
+         AND kind IN ('public', 'private')
+         AND name != 'general'
        ORDER BY id ASC
        LIMIT ?`
     )
@@ -404,39 +482,12 @@ async function runHardDeleteChannelsStep(env, config, summary) {
     }
 
     batches += 1;
-    const channelIds = results.map((row) => Number(row.id));
-    const avatarKeys = results.map((row) => row.avatar_key);
-    const attachmentKeys = await collectMessageAttachmentsByColumn(
-      env.DB,
-      'channel_id',
-      channelIds
-    );
-
-    summary.channelMessagesDeleted += await deleteRowsByIds(
-      env.DB,
-      'messages',
-      'channel_id',
-      channelIds
-    );
-    summary.channelMembersDeleted += await deleteRowsByIds(
-      env.DB,
-      'channel_members',
-      'channel_id',
-      channelIds
-    );
-    summary.channelsDeleted += await deleteRowsByIds(
-      env.DB,
-      'channels',
-      'id',
-      channelIds
-    );
-
-    await processR2CandidateKeys(
-      env,
-      env.DB,
-      [...attachmentKeys, ...avatarKeys],
-      summary
-    );
+    for (const row of results) {
+      const deleted = await hardDeleteChannel(env.DB, Number(row.id));
+      summary.channelMessagesDeleted += deleted.channelMessagesDeleted;
+      summary.channelMembersDeleted += deleted.channelMembersDeleted;
+      summary.channelsDeleted += deleted.channelsDeleted;
+    }
 
     if (results.length < config.batchSize) {
       break;
@@ -536,11 +587,12 @@ export async function runScheduledGc(env) {
   const summary = createSummary();
   await ensureGcSchema(env.DB);
 
-  await runRetryQueueStep(env, config, summary);
+  await runMobileProtocolCleanupStep(env, config, summary);
   await runExpiredMessagesStep(env, config, summary);
   await runHardDeleteInvitesStep(env, config, summary);
   await runHardDeleteChannelsStep(env, config, summary);
   await runHardDeleteUsersStep(env, config, summary);
+  await runRetryQueueStep(env, config, summary);
 
   console.log(JSON.stringify({
     type: 'scheduled_gc_summary',

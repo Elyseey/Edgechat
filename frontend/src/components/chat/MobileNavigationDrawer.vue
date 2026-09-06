@@ -1,16 +1,21 @@
 <script setup>
-import { LayoutDashboard, LogOut, Settings, X } from '@lucide/vue';
+import { Bell, BellOff, LayoutDashboard, LogOut, Settings, X } from '@lucide/vue';
 import { ref, toRef } from 'vue';
 import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import UiAvatar from '../ui/Avatar.vue';
+import LanguageSwitch from '../ui/LanguageSwitch.vue';
 
 const props = defineProps({
   show: { type: Boolean, default: false },
   session: { type: Object, default: null },
-  showAdmin: { type: Boolean, default: false }
+  showAdmin: { type: Boolean, default: false },
+  notificationsEnabled: { type: Boolean, default: false },
+  notificationLabel: { type: String, default: '' },
+  notificationDisabled: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['close', 'settings', 'admin', 'logout']);
+const emit = defineEmits(['close', 'settings', 'admin', 'notification', 'logout']);
 const drawerEl = ref(null);
 
 useOverlayLifecycle({
@@ -29,36 +34,47 @@ useOverlayLifecycle({
           class="mobile-navigation-drawer"
           role="dialog"
           aria-modal="true"
-          aria-label="导航菜单"
+          :aria-label="t('mobile.navigationMenu')"
           tabindex="-1"
         >
           <header class="mobile-navigation-drawer__header">
             <UiAvatar :src="session?.avatarUrl" :fallback="session?.displayName?.[0] || 'U'" />
             <div class="mobile-navigation-drawer__identity">
-              <strong>{{ session?.displayName || 'EdgeChat 用户' }}</strong>
+              <strong>{{ session?.displayName || t('mobile.edgechatUser') }}</strong>
               <span v-if="session?.username">@{{ session.username }}</span>
             </div>
-            <button type="button" class="mobile-navigation-drawer__close" aria-label="关闭导航" @click="emit('close')">
+            <LanguageSwitch />
+            <button type="button" class="mobile-navigation-drawer__close" :aria-label="t('mobile.closeNavigation')" @click="emit('close')">
               <X :size="22" aria-hidden="true" />
             </button>
           </header>
 
-          <nav class="mobile-navigation-drawer__actions" aria-label="应用导航">
+          <nav class="mobile-navigation-drawer__actions" :aria-label="t('mobile.appNavigation')">
             <button type="button" @click="emit('settings')">
               <Settings :size="21" aria-hidden="true" />
-              <span>个人设置</span>
+              <span>{{ t('nav.personalSettings') }}</span>
+            </button>
+            <button
+              type="button"
+              :disabled="notificationDisabled"
+              :aria-pressed="notificationsEnabled"
+              @click="emit('notification')"
+            >
+              <Bell v-if="notificationsEnabled" :size="21" aria-hidden="true" />
+              <BellOff v-else :size="21" aria-hidden="true" />
+              <span>{{ notificationLabel }}</span>
             </button>
             <button v-if="showAdmin" type="button" @click="emit('admin')">
               <LayoutDashboard :size="21" aria-hidden="true" />
-              <span>管理后台</span>
+              <span>{{ t('nav.admin') }}</span>
             </button>
             <a href="https://github.com/aozorae/Edgechat" target="_blank" rel="noopener noreferrer">
               <img src="/github.svg" width="21" height="21" alt="" />
-              <span>GitHub 仓库</span>
+              <span>{{ t('nav.githubRepository') }}</span>
             </a>
             <button type="button" class="mobile-navigation-drawer__danger" @click="emit('logout')">
               <LogOut :size="21" aria-hidden="true" />
-              <span>退出登录</span>
+              <span>{{ t('auth.signOut') }}</span>
             </button>
           </nav>
         </aside>
@@ -78,15 +94,18 @@ useOverlayLifecycle({
 .mobile-navigation-drawer {
   width: min(84vw, 320px);
   height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: max(18px, env(safe-area-inset-top)) 12px max(18px, env(safe-area-inset-bottom));
   background: #ffffff;
   box-shadow: 12px 0 32px rgba(11, 20, 26, 0.2);
   outline: none;
+  touch-action: pan-y;
 }
 
 .mobile-navigation-drawer__header {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 44px;
+  grid-template-columns: 48px minmax(0, 1fr) 44px 44px;
   align-items: center;
   gap: 12px;
   padding: 4px 4px 18px;
@@ -156,6 +175,12 @@ useOverlayLifecycle({
 .mobile-navigation-drawer__actions a:active,
 .mobile-navigation-drawer__close:active {
   background: #f0f2f5;
+}
+
+.mobile-navigation-drawer__actions button:disabled {
+  color: #8696a0;
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .mobile-navigation-drawer__actions .mobile-navigation-drawer__danger {

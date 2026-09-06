@@ -3,6 +3,7 @@ import UiButton from '../ui/Button.vue';
 import UiInput from '../ui/Input.vue';
 import UiSurface from '../ui/Surface.vue';
 import UiTextarea from '../ui/Textarea.vue';
+import { t } from '../../i18n.js';
 
 defineProps({
   show: {
@@ -38,29 +39,29 @@ const emit = defineEmits(['toggle-mode', 'create-group', 'open-dm']);
   <UiSurface v-if="show" tone="soft" class="quick-panel">
     <div class="quick-panel__switch">
       <UiButton :variant="mode === 'group' ? 'default' : 'secondary'" size="sm" @click="emit('toggle-mode', 'group')">
-        创建群组
+        {{ t('quickActions.createGroup') }}
       </UiButton>
       <UiButton :variant="mode === 'dm' ? 'default' : 'secondary'" size="sm" @click="emit('toggle-mode', 'dm')">
-        发起私信
+        {{ t('quickActions.startDm') }}
       </UiButton>
     </div>
 
     <div v-if="mode === 'group'" class="quick-panel__body">
       <label class="field">
-        <span class="field-label">群组名称</span>
-        <UiInput v-model="form.name" placeholder="例如：设计评审室" />
+        <span class="field-label">{{ t('group.nameGeneric') }}</span>
+        <UiInput v-model="form.name" :placeholder="t('quickActions.groupNameExample')" />
       </label>
 
       <label class="field">
-        <span class="field-label">描述</span>
-        <UiTextarea v-model="form.description" :rows="3" placeholder="选填，说明讨论主题" />
+        <span class="field-label">{{ t('quickActions.description') }}</span>
+        <UiTextarea v-model="form.description" :rows="3" :placeholder="t('quickActions.descriptionHint')" />
       </label>
 
       <label class="field">
-        <span class="field-label">可见性</span>
+        <span class="field-label">{{ t('quickActions.visibility') }}</span>
         <select v-model="form.kind" class="ui-input">
-          <option value="public">公开群组</option>
-          <option value="private">私有群组</option>
+          <option value="public">{{ t('chat.publicGroup') }}</option>
+          <option value="private">{{ t('chat.privateGroup') }}</option>
         </select>
       </label>
 
@@ -73,13 +74,13 @@ const emit = defineEmits(['toggle-mode', 'create-group', 'open-dm']);
       </div>
 
       <UiButton :disabled="submitting" block @click="emit('create-group')">
-        {{ submitting ? '创建中...' : '确认创建' }}
+        {{ submitting ? t('common.creating') : t('quickActions.confirmCreate') }}
       </UiButton>
     </div>
 
     <div v-else-if="mode === 'dm'" class="quick-panel__body">
       <UiSurface v-if="!usersWithoutDm.length" tone="soft" class="empty-state">
-        所有站内用户都已经有私信会话了。
+        {{ t('conversation.allUsersHaveDm') }}
       </UiSurface>
 
       <div v-else class="compact-list">

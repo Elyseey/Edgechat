@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_key TEXT,
   registration_invite_id INTEGER UNIQUE,
   is_disabled INTEGER NOT NULL DEFAULT 0,
+  disabled_until TEXT,
   is_admin INTEGER NOT NULL DEFAULT 0,
   session_version INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -102,6 +103,9 @@ CREATE TABLE IF NOT EXISTS messages (
   attachment_name TEXT,
   attachment_type TEXT,
   attachment_size INTEGER,
+  attachment_kind TEXT CHECK (attachment_kind IS NULL OR attachment_kind IN ('voice', 'audio')),
+  attachment_duration_ms INTEGER,
+  attachment_waveform TEXT,
   sender_kind TEXT NOT NULL DEFAULT 'local' CHECK (sender_kind IN ('local', 'external')),
   external_sender_id TEXT,
   external_sender_name TEXT,
@@ -110,6 +114,10 @@ CREATE TABLE IF NOT EXISTS messages (
   source_message_id TEXT,
   source_attachment_id TEXT,
   source_attachment_unique_id TEXT,
+  client_message_id TEXT,
+  mention_user_ids TEXT NOT NULL DEFAULT '[]',
+  reply_to_message_id INTEGER,
+  reply_to_sender_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT,
   CHECK (
@@ -118,6 +126,16 @@ CREATE TABLE IF NOT EXISTS messages (
   ),
   FOREIGN KEY (channel_id) REFERENCES channels(id),
   FOREIGN KEY (sender_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS channel_pins (
+  channel_id INTEGER PRIMARY KEY,
+  message_id INTEGER NOT NULL UNIQUE,
+  pinned_by INTEGER,
+  pinned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY (pinned_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS message_reads (
@@ -196,9 +214,79 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   filename TEXT NOT NULL DEFAULT '',
   content_type TEXT NOT NULL DEFAULT '',
   size INTEGER NOT NULL DEFAULT 0,
+  client_upload_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (owner_user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS device_sessions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  installation_id TEXT NOT NULL,
+  device_name TEXT NOT NULL,
+  app_version TEXT NOT NULL DEFAULT '',
+  refresh_token_hash TEXT NOT NULL,
+  session_version INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS realtime_tickets (
+  token_hash TEXT PRIMARY KEY,
+  access_token_ciphertext TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  device_session_id TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK (scope IN ('room', 'inbox')),
+  room_kind TEXT CHECK (room_kind IN ('public', 'private', 'dm')),
+  room_id INTEGER,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (device_session_id) REFERENCES device_sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS message_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN ('created', 'deleted')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS message_event_compaction (
+  channel_id INTEGER PRIMARY KEY,
+  compacted_through INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+);
+
+-- 由数据库在消息写入事务内生成同步游标，HTTP 与 WebSocket 两条提交入口不会产生不同步的事件。
+CREATE TRIGGER IF NOT EXISTS record_message_created_event
+AFTER INSERT ON messages
+BEGIN
+  INSERT INTO message_events (channel_id, message_id, event_type)
+  VALUES (NEW.channel_id, NEW.id, 'created');
+END;
+
+CREATE TRIGGER IF NOT EXISTS record_message_deleted_event
+AFTER UPDATE OF deleted_at ON messages
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+BEGIN
+  INSERT INTO message_events (channel_id, message_id, event_type)
+  VALUES (NEW.channel_id, NEW.id, 'deleted');
+END;
+
+-- 软删除后立即移除置顶引用；消息保留期仍由 GC 独立决定，不因置顶而延长。
+CREATE TRIGGER IF NOT EXISTS clear_pin_after_message_soft_delete
+AFTER UPDATE OF deleted_at ON messages
+WHEN OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL
+BEGIN
+  DELETE FROM channel_pins WHERE message_id = NEW.id;
+END;
 
 CREATE TABLE IF NOT EXISTS pending_r2_delete (
   object_key TEXT PRIMARY KEY,
@@ -249,6 +337,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_source
   ON messages(source, source_message_id)
   WHERE source_message_id IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_channel_client_message
+ON messages(channel_id, sender_id, client_message_id)
+WHERE client_message_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_messages_reply_attention
+ON messages(channel_id, reply_to_sender_id, id)
+WHERE reply_to_sender_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_message_reads_user
   ON message_reads(user_id, updated_at DESC);
 
@@ -272,6 +368,26 @@ CREATE INDEX IF NOT EXISTS idx_pending_r2_delete_next_retry
 
 CREATE INDEX IF NOT EXISTS idx_uploaded_files_owner
   ON uploaded_files(owner_user_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uploaded_files_client_upload
+  ON uploaded_files(owner_user_id, client_upload_id)
+  WHERE client_upload_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_sessions_refresh_token
+  ON device_sessions(refresh_token_hash);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_sessions_user_installation_active
+  ON device_sessions(user_id, installation_id)
+  WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_device_sessions_user_active
+  ON device_sessions(user_id, revoked_at, expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_realtime_tickets_expiry
+  ON realtime_tickets(expires_at, consumed_at);
+
+CREATE INDEX IF NOT EXISTS idx_message_events_channel_sequence
+  ON message_events(channel_id, sequence);
 
 CREATE INDEX IF NOT EXISTS idx_telegram_mappings_channel
   ON telegram_mappings(channel_id, enabled, id);

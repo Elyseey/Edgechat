@@ -1,19 +1,23 @@
 <script setup>
-import { Trash2 } from '@lucide/vue';
+import { Pin, PinOff, Reply, Trash2 } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { t } from '../../i18n.js';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
   x: { type: Number, default: 0 },
-  y: { type: Number, default: 0 }
+  y: { type: Number, default: 0 },
+  canPin: { type: Boolean, default: false },
+  canDelete: { type: Boolean, default: false },
+  pinned: { type: Boolean, default: false }
 });
-const emit = defineEmits(['close', 'delete']);
+const emit = defineEmits(['close', 'reply', 'pin', 'unpin', 'delete']);
 
 const menuEl = ref(null);
-const deleteButtonEl = ref(null);
+const menuHeight = computed(() => 16 + (1 + Number(props.canPin) + Number(props.canDelete)) * 40);
 const menuStyle = computed(() => ({
   left: `${Math.max(8, Math.min(props.x, window.innerWidth - 184))}px`,
-  top: `${Math.max(8, Math.min(props.y, window.innerHeight - 60))}px`
+  top: `${Math.max(8, Math.min(props.y, window.innerHeight - menuHeight.value))}px`
 }));
 
 function handleWindowPointerDown(event) {
@@ -39,7 +43,7 @@ watch(
   async (open) => {
     if (open) {
       await nextTick();
-      deleteButtonEl.value?.focus();
+      menuEl.value?.querySelector('button')?.focus();
     }
   }
 );
@@ -68,12 +72,32 @@ onBeforeUnmount(() => {
         class="message-context-menu"
         :style="menuStyle"
         role="menu"
-        aria-label="消息操作"
+        :aria-label="t('messages.actions')"
         @contextmenu.prevent
       >
-        <button ref="deleteButtonEl" type="button" role="menuitem" @click="emit('delete')">
+		<button type="button" role="menuitem" @click="emit('reply')">
+		  <Reply :size="18" :stroke-width="1.8" aria-hidden="true" />
+		  {{ t('messages.reply') }}
+		</button>
+        <button
+          v-if="canPin"
+          type="button"
+          role="menuitem"
+          @click="emit(pinned ? 'unpin' : 'pin')"
+        >
+          <PinOff v-if="pinned" :size="18" :stroke-width="1.8" aria-hidden="true" />
+          <Pin v-else :size="18" :stroke-width="1.8" aria-hidden="true" />
+          {{ pinned ? t('messages.unpin') : t('messages.pin') }}
+        </button>
+        <button
+		  v-if="canDelete"
+          class="message-context-menu__danger"
+          type="button"
+          role="menuitem"
+          @click="emit('delete')"
+        >
           <Trash2 :size="18" :stroke-width="1.8" aria-hidden="true" />
-          删除消息
+          {{ t('messages.delete') }}
         </button>
       </div>
     </Transition>
@@ -102,11 +126,15 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #c62828;
+  color: #111b21;
   font: inherit;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
+}
+
+.message-context-menu button.message-context-menu__danger {
+  color: #c62828;
 }
 
 .message-context-menu button:hover,

@@ -69,6 +69,19 @@ export async function notifyUserInbox(env, userId, payload) {
 	return response;
 }
 
+export function submitClientRoomAction(env, { room, principal, action }) {
+  return forwardVerifiedRequest({
+    stub: getChannelRoomStub(env, room.kind, room.id),
+    request: new Request(`${INTERNAL_ORIGIN}/client-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room, action })
+    }),
+    pathname: '/client-action',
+    principal
+  });
+}
+
 export async function submitExternalRoomMessage(env, payload) {
 	const room = payload.room;
 	return getChannelRoomStub(env, room.kind, room.id).fetch(

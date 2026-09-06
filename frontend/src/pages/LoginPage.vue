@@ -3,12 +3,18 @@ import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import store from '../store.js';
 import { useCursor } from '../composables/useCursor.js';
+import { useI18n } from '../i18n.js';
+import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
+import { getStoredNativeServerOrigin, isCapacitorAndroid } from '../capacitor-platform.ts';
+import { readLoginSubmission } from '../login-submission.ts';
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const loading = ref(false);
 const error = ref('');
 const form = reactive({
+  serverOrigin: getStoredNativeServerOrigin(),
   username: '',
   password: ''
 });
@@ -16,22 +22,35 @@ const registered = computed(() => route.query.registered === '1');
 
 const usernameInput = ref(null);
 const passwordInput = ref(null);
+const serverInput = ref(null);
 const usernameCursor = ref(null);
 const passwordCursor = ref(null);
+const serverCursor = ref(null);
 
 useCursor([
+  [serverInput, serverCursor],
   [usernameInput, usernameCursor],
   [passwordInput, passwordCursor]
 ]);
 
-async function submit() {
+async function submit(event) {
   loading.value = true;
   error.value = '';
   try {
-    await store.login(form);
+    // Android WebView 的自动填充不一定触发 input 事件，提交时以输入框当前值为准。
+    const submitted = new FormData(event.currentTarget);
+    const { serverOrigin, credentials } = readLoginSubmission(submitted);
+    if (isCapacitorAndroid) {
+      await store.configureNativeServer(serverOrigin);
+    }
+    await store.login(credentials);
     router.push('/');
   } catch (currentError) {
-    error.value = currentError.message;
+    error.value = currentError.message === 'native_server_https_required'
+      ? t('auth.serverHttpsRequired')
+      : currentError.message === 'native_server_unavailable'
+        ? t('auth.serverUnavailable')
+        : currentError.message;
   } finally {
     loading.value = false;
   }
@@ -40,23 +59,40 @@ async function submit() {
 
 <template>
   <div class="login-page">
+    <LanguageSwitch class="login-language-switch" />
     <div class="login-container">
       <div class="title-group">
-        <h1 class="welcome-text">Welcome Back</h1>
+        <h1 class="welcome-text">{{ t('auth.welcomeBack') }}</h1>
         <h2 class="brand-name">{{ store.site.siteName }}</h2>
       </div>
 
-      <p v-if="registered" class="success-hint">注册成功，现在可以使用新账号登录。</p>
+      <p v-if="registered" class="success-hint">{{ t('auth.registerSuccess') }}</p>
 
       <form class="login-form" @submit.prevent="submit">
+        <div v-if="isCapacitorAndroid" class="input-wrapper">
+          <span ref="serverCursor" class="custom-cursor"></span>
+          <input
+            ref="serverInput"
+            v-model.trim="form.serverOrigin"
+            class="login-input"
+            :placeholder="t('auth.serverOrigin')"
+            autocomplete="url"
+            inputmode="url"
+            name="serverOrigin"
+            required
+            type="url"
+          />
+        </div>
         <div class="input-wrapper">
           <span ref="usernameCursor" class="custom-cursor"></span>
           <input
             ref="usernameInput"
             v-model.trim="form.username"
             class="login-input"
-            placeholder="账号"
+            :placeholder="t('auth.account')"
             autocomplete="username"
+            name="username"
+            required
             type="text"
           />
         </div>
@@ -66,14 +102,16 @@ async function submit() {
             ref="passwordInput"
             v-model="form.password"
             class="login-input"
-            placeholder="密码"
+            :placeholder="t('auth.password')"
             autocomplete="current-password"
+            name="password"
+            required
             type="password"
           />
         </div>
 
         <button class="login-btn" :disabled="loading" type="submit">
-          {{ loading ? '登录中...' : '登录' }}
+          {{ loading ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
 
         <p v-if="error" class="error-text">{{ error }}</p>
@@ -268,5 +306,13 @@ async function submit() {
   color: #d9534f;
   margin: 0;
   text-align: center;
+}
+
+.login-language-switch {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  color: #2c4a6e;
 }
 </style>

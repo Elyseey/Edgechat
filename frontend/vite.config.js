@@ -11,7 +11,8 @@ export default defineConfig({
   root: resolve(dirname),
   plugins: [vue()],
   define: {
-    'globalThis.__EDGECHAT_BUILD__': JSON.stringify(buildMetadata)
+    'globalThis.__EDGECHAT_BUILD__': JSON.stringify(buildMetadata),
+    'globalThis.__EDGECHAT_DEMO__': 'false'
   },
   server: {
     port: 5173,

@@ -63,12 +63,29 @@ export function getTelegramChat(botToken, chatId) {
 	return callTelegramApi(botToken, "getChat", { chat_id: String(chatId) });
 }
 
-export function sendTelegramText(botToken, { chatId, text, parseMode = "HTML" }) {
-	return callTelegramApi(botToken, "sendMessage", {
+export function getTelegramUserProfilePhotos(botToken, userId) {
+	return callTelegramApi(botToken, "getUserProfilePhotos", {
+		user_id: Number(userId),
+		offset: 0,
+		limit: 1,
+	});
+}
+
+export function sendTelegramText(botToken, {
+	chatId,
+	text,
+	parseMode = "HTML",
+	replyToMessageId = null,
+}) {
+	const payload = {
 		chat_id: String(chatId),
 		text: String(text),
 		parse_mode: parseMode,
-	});
+	};
+	if (replyToMessageId) {
+		payload.reply_parameters = { message_id: Number(replyToMessageId) };
+	}
+	return callTelegramApi(botToken, "sendMessage", payload);
 }
 
 export function getTelegramFile(botToken, fileId) {
@@ -103,17 +120,27 @@ export function sendTelegramMedia(botToken, {
 	filename,
 	contentType,
 	caption,
+	durationMs = 0,
+	replyToMessageId = null,
 }) {
 	const methods = {
 		photo: ["sendPhoto", "photo"],
 		video: ["sendVideo", "video"],
+		voice: ["sendVoice", "voice"],
+		audio: ["sendAudio", "audio"],
 		document: ["sendDocument", "document"],
 	};
 	const [method, field] = methods[kind] || methods.document;
 	const formData = new FormData();
 	formData.set("chat_id", String(chatId));
 	formData.set("parse_mode", "HTML");
+	if (replyToMessageId) {
+		formData.set("reply_parameters", JSON.stringify({ message_id: Number(replyToMessageId) }));
+	}
 	if (caption) formData.set("caption", String(caption));
+	if (durationMs > 0 && (kind === "voice" || kind === "audio")) {
+		formData.set("duration", String(Math.round(durationMs / 1000)));
+	}
 	formData.set(field, new Blob([bytes], { type: contentType }), filename);
 	return callTelegramMultipartApi(botToken, method, formData);
 }

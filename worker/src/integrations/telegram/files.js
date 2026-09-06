@@ -7,6 +7,11 @@ import { decryptAttachment, encryptAttachment } from "../../encryption.js";
 import { downloadTelegramFile, getTelegramFile } from "./client.js";
 
 export const TELEGRAM_BRIDGE_FILE_LIMIT = 16 * 1024 * 1024;
+export const TELEGRAM_FILE_SKIP_REASON = Object.freeze({
+	TOO_LARGE: "too_large",
+	STORAGE_UNAVAILABLE: "storage_unavailable",
+	NOT_FOUND: "not_found",
+});
 const FILE_RESPONSE_CACHE_CONTROL = "private, no-store";
 
 function telegramObjectKey({ telegramChatId, telegramMessageId, filename }) {
@@ -20,15 +25,21 @@ export async function importTelegramAttachment(env, {
 	telegramMessageId,
 	attachment,
 }) {
-	if (!attachment) return { attachment: null, oversized: false };
+	if (!attachment) return { attachment: null, skipReason: null };
+	if (!env.FILES) {
+		return {
+			attachment: null,
+			skipReason: TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE,
+		};
+	}
 	if (attachment.fileSize > TELEGRAM_BRIDGE_FILE_LIMIT) {
-		return { attachment: null, oversized: true };
+		return { attachment: null, skipReason: TELEGRAM_FILE_SKIP_REASON.TOO_LARGE };
 	}
 
 	const telegramFile = await getTelegramFile(botToken, attachment.fileId);
 	const resolvedSize = Number(telegramFile.file_size || attachment.fileSize || 0);
 	if (resolvedSize > TELEGRAM_BRIDGE_FILE_LIMIT) {
-		return { attachment: null, oversized: true };
+		return { attachment: null, skipReason: TELEGRAM_FILE_SKIP_REASON.TOO_LARGE };
 	}
 	const bytes = await downloadTelegramFile(
 		botToken,
@@ -45,31 +56,59 @@ export async function importTelegramAttachment(env, {
 		customMetadata: { filename: name, edgechatEncryption: "v1", source: "telegram" },
 	});
 	return {
-		attachment: { key, name, type, size: bytes.byteLength },
-		oversized: false,
+		attachment: {
+			key,
+			name,
+			type,
+			size: bytes.byteLength,
+				...(attachment.kind === "voice" || attachment.kind === "audio"
+					? {
+						kind: attachment.kind,
+						durationMs: attachment.durationMs || 0,
+						...(attachment.kind === "voice" ? { waveform: [] } : {}),
+					}
+					: {}),
+		},
+		skipReason: null,
 	};
 }
 
 export async function loadEdgeChatAttachment(env, attachment) {
-	if (!attachment || Number(attachment.size) > TELEGRAM_BRIDGE_FILE_LIMIT) {
-		return null;
+	if (!attachment) {
+		return { file: null, skipReason: TELEGRAM_FILE_SKIP_REASON.NOT_FOUND };
+	}
+	if (Number(attachment.size) > TELEGRAM_BRIDGE_FILE_LIMIT) {
+		return { file: null, skipReason: TELEGRAM_FILE_SKIP_REASON.TOO_LARGE };
+	}
+	if (!env.FILES) {
+		return {
+			file: null,
+			skipReason: TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE,
+		};
 	}
 	const object = await env.FILES.get(attachment.key);
-	if (!object) throw new Error("EdgeChat 附件不存在");
+	if (!object) {
+		return { file: null, skipReason: TELEGRAM_FILE_SKIP_REASON.NOT_FOUND };
+	}
 	const decrypted = await decryptAttachment(env, await object.arrayBuffer(), attachment.key);
 	if (decrypted.bytes.byteLength > TELEGRAM_BRIDGE_FILE_LIMIT) {
-		return null;
+		return { file: null, skipReason: TELEGRAM_FILE_SKIP_REASON.TOO_LARGE };
 	}
 	return {
-		bytes: decrypted.bytes,
-		name: sanitizeFilename(attachment.name),
-		type: normalizeContentType(attachment.type) || "application/octet-stream",
-		size: decrypted.bytes.byteLength,
+		file: {
+			bytes: decrypted.bytes,
+			name: sanitizeFilename(attachment.name),
+				type: normalizeContentType(attachment.type) || "application/octet-stream",
+				size: decrypted.bytes.byteLength,
+				kind: attachment.kind,
+				durationMs: Number(attachment.durationMs || 0),
+			},
+		skipReason: null,
 	};
 }
 
 export async function deleteImportedTelegramAttachment(env, attachment) {
-	if (!attachment?.key) return;
+	if (!attachment?.key || !env.FILES) return;
 	try {
 		await env.FILES.delete(attachment.key);
 	} catch (error) {

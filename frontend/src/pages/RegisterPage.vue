@@ -4,9 +4,12 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api.js';
 import store from '../store.js';
 import { useCursor } from '../composables/useCursor.js';
+import { useI18n } from '../i18n.js';
+import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const loading = ref(false);
 const validating = ref(false);
 const error = ref('');
@@ -55,7 +58,7 @@ async function loadInvite() {
 
 async function submit() {
   if (form.password !== form.confirmPassword) {
-    error.value = '两次输入的密码不一致';
+    error.value = t('auth.passwordMismatch');
     return;
   }
 
@@ -78,14 +81,15 @@ onMounted(() => {
 
 <template>
   <div class="login-page">
+    <LanguageSwitch class="login-language-switch" />
     <div class="login-container">
       <div class="title-group">
-        <h1 class="welcome-text">Welcome Back</h1>
+        <h1 class="welcome-text">{{ t('auth.welcomeBack') }}</h1>
         <h2 class="brand-name">{{ store.site.siteName }}</h2>
       </div>
 
-      <p v-if="validating" class="info-text">正在验证注册链接...</p>
-      <p v-else-if="invite?.note" class="info-text">邀请说明：{{ invite.note }}</p>
+      <p v-if="validating" class="info-text">{{ t('auth.validatingInvite') }}</p>
+      <p v-else-if="invite?.note" class="info-text">{{ t('auth.invitationNote', { note: invite.note }) }}</p>
       <p v-if="error" class="error-text">{{ error }}</p>
 
       <form v-if="invite && !error" class="login-form" @submit.prevent="submit">
@@ -95,7 +99,7 @@ onMounted(() => {
             ref="usernameInput"
             v-model.trim="form.username"
             class="login-input"
-            placeholder="用户名"
+            :placeholder="t('auth.username')"
             autocomplete="username"
             type="text"
           />
@@ -106,7 +110,7 @@ onMounted(() => {
             ref="displayNameInput"
             v-model.trim="form.displayName"
             class="login-input"
-            placeholder="显示名称"
+            :placeholder="t('auth.displayName')"
             autocomplete="nickname"
             type="text"
           />
@@ -117,7 +121,7 @@ onMounted(() => {
             ref="passwordInput"
             v-model="form.password"
             class="login-input"
-            placeholder="密码"
+            :placeholder="t('auth.password')"
             autocomplete="new-password"
             type="password"
           />
@@ -128,14 +132,14 @@ onMounted(() => {
             ref="confirmPasswordInput"
             v-model="form.confirmPassword"
             class="login-input"
-            placeholder="确认密码"
+            :placeholder="t('auth.confirmPassword')"
             autocomplete="new-password"
             type="password"
           />
         </div>
 
         <button class="login-btn" :disabled="loading" type="submit">
-          {{ loading ? '注册中...' : '完成注册' }}
+          {{ loading ? t('auth.registering') : t('auth.completeRegistration') }}
         </button>
       </form>
     </div>
@@ -165,6 +169,14 @@ onMounted(() => {
   transform: translateY(100%);
   animation: tideRise 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   pointer-events: none;
+}
+
+.login-language-switch {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  color: #2c4a6e;
 }
 
 @keyframes tideRise {

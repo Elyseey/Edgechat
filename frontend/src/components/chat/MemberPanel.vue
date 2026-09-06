@@ -4,6 +4,7 @@ import UiAvatar from '../ui/Avatar.vue';
 import UiBadge from '../ui/Badge.vue';
 import UiButton from '../ui/Button.vue';
 import UiSurface from '../ui/Surface.vue';
+import { t } from '../../i18n.js';
 
 defineProps({
   room: {
@@ -43,16 +44,16 @@ const emit = defineEmits(['close', 'update:inviteUserId', 'invite', 'remove-memb
   <UiSurface v-if="room && room.kind !== 'dm'" tone="soft" class="chat-member-panel">
     <div class="chat-member-panel__header">
       <div class="window-heading">
-        <h1 style="font-size: 1.12rem">群组成员</h1>
-        <p>{{ loading ? '同步中...' : `${members.length} 位成员` }}</p>
+        <h1 style="font-size: 1.12rem">{{ t('members.groupMembers') }}</h1>
+        <p>{{ loading ? t('common.syncing') : t('chat.memberCount', { count: members.length }) }}</p>
       </div>
 
       <div class="chat-member-panel__actions">
         <UiBadge variant="secondary">{{ room.myRole || 'member' }}</UiBadge>
         <UiButton v-if="canManage && !room.isGeneral" variant="destructive" size="sm" @click="emit('delete-group')">
-          删除群组
+          {{ t('group.delete') }}
         </UiButton>
-        <button type="button" class="chat-member-panel__close" aria-label="关闭成员列表" @click="emit('close')">
+        <button type="button" class="chat-member-panel__close" :aria-label="t('chat.closeMembers')" @click="emit('close')">
           <X :size="20" aria-hidden="true" />
         </button>
       </div>
@@ -67,7 +68,7 @@ const emit = defineEmits(['close', 'update:inviteUserId', 'invite', 'remove-memb
         </div>
         <div class="member-chip__actions">
           <UiBadge :variant="member.role === 'owner' ? 'warm' : 'secondary'">
-            {{ member.role === 'owner' ? '群主' : '成员' }}
+            {{ member.role === 'owner' ? t('members.owner') : t('members.member') }}
           </UiBadge>
           <UiButton
 			v-if="canManage && !room.isGeneral && member.role !== 'owner'"
@@ -75,7 +76,7 @@ const emit = defineEmits(['close', 'update:inviteUserId', 'invite', 'remove-memb
             size="sm"
             @click="emit('remove-member', member)"
           >
-            移除
+            {{ t('common.remove') }}
           </UiButton>
         </div>
       </div>
@@ -87,13 +88,13 @@ const emit = defineEmits(['close', 'update:inviteUserId', 'invite', 'remove-memb
         :value="inviteUserId"
         @change="emit('update:inviteUserId', $event.target.value)"
       >
-        <option value="">选择要邀请的用户</option>
+        <option value="">{{ t('members.selectInvitee') }}</option>
         <option v-for="user in availableInviteUsers" :key="`invite-${user.id}`" :value="user.id">
           {{ user.displayName }} @{{ user.username }}
         </option>
       </select>
       <UiButton :disabled="inviteSubmitting || !inviteUserId" @click="emit('invite')">
-        {{ inviteSubmitting ? '邀请中...' : '邀请加入' }}
+        {{ inviteSubmitting ? t('members.inviting') : t('members.invite') }}
       </UiButton>
     </div>
   </UiSurface>

@@ -14,10 +14,15 @@ import {
 	formatTelegramMessage,
 	splitTelegramFormattedMessage,
 } from "../worker/src/integrations/telegram/bridge.js";
-import { sendTelegramMedia } from "../worker/src/integrations/telegram/client.js";
+import {
+	sendTelegramMedia,
+	sendTelegramText,
+} from "../worker/src/integrations/telegram/client.js";
 import {
 	importTelegramAttachment,
+	loadEdgeChatAttachment,
 	TELEGRAM_BRIDGE_FILE_LIMIT,
+	TELEGRAM_FILE_SKIP_REASON,
 } from "../worker/src/integrations/telegram/files.js";
 import worker from "../worker/src/index.js";
 
@@ -37,7 +42,8 @@ test("Telegram 文字消息转换为稳定的外部发送者模型", () => {
 				message_id: 9,
 				text: "hello 👋",
 				chat: { id: -100123, title: "Bridge room" },
-				from: { id: 42, first_name: "Alice", last_name: "Chen", is_bot: false },
+					from: { id: 42, first_name: "Alice", last_name: "Chen", is_bot: false },
+					reply_to_message: { message_id: 8 },
 			},
 		}),
 		{
@@ -45,6 +51,7 @@ test("Telegram 文字消息转换为稳定的外部发送者模型", () => {
 				telegramChatTitle: "Bridge room",
 				telegramMessageId: 9,
 				sourceMessageId: "-100123:9",
+				replySourceMessageId: "-100123:8",
 				content: "hello 👋",
 				attachment: null,
 			sender: { id: "42", displayName: "Alice Chen", avatarUrl: "" },
@@ -53,7 +60,7 @@ test("Telegram 文字消息转换为稳定的外部发送者模型", () => {
 	assert.equal(parseTelegramMessageUpdate({ message: { text: "bot", from: { is_bot: true } } }), null);
 });
 
-test("Telegram 图片、视频与普通文件保留原始元数据", () => {
+test("Telegram 图片、视频、语音、音频与普通文件保留原始元数据", () => {
 	const base = {
 		message_id: 10,
 		caption: "说明",
@@ -91,6 +98,42 @@ test("Telegram 图片、视频与普通文件保留原始元数据", () => {
 	});
 	assert.equal(video.attachment.kind, "video");
 	assert.equal(video.attachment.fileName, "clip.mp4");
+	const voice = parseTelegramMessageUpdate({
+		message: {
+			...base,
+			voice: {
+				file_id: "voice",
+				file_unique_id: "voice-u",
+				mime_type: "audio/ogg",
+				file_size: 250,
+				duration: 8,
+			},
+		},
+	});
+	assert.deepEqual(voice.attachment, {
+		kind: "voice",
+		fileId: "voice",
+		fileUniqueId: "voice-u",
+		fileName: "voice-10.ogg",
+		mimeType: "audio/ogg",
+		fileSize: 250,
+		durationMs: 8000,
+	});
+	const audio = parseTelegramMessageUpdate({
+		message: {
+			...base,
+			audio: {
+				file_id: "audio",
+				file_unique_id: "audio-u",
+				file_name: "song.mp3",
+				mime_type: "audio/mpeg",
+				file_size: 350,
+				duration: 12,
+			},
+		},
+	});
+	assert.equal(audio.attachment.kind, "audio");
+	assert.equal(audio.attachment.durationMs, 12000);
 	const document = parseTelegramMessageUpdate({
 		message: {
 			...base,
@@ -107,16 +150,16 @@ test("Telegram 图片、视频与普通文件保留原始元数据", () => {
 	assert.equal(document.content, "说明");
 });
 
-test("EdgeChat 出站消息使用粗体用户名、空行和 HTML 转义", () => {
+test("EdgeChat 出站消息使用粗体用户名、紧邻正文的换行和 HTML 转义", () => {
 	assert.equal(
 		formatTelegramMessage('Alice & Bob', '<hello> "world"'),
-		'<b>Alice &amp; Bob:</b>\n\n&lt;hello&gt; &quot;world&quot;',
+		'<b>Alice &amp; Bob:</b>\n&lt;hello&gt; &quot;world&quot;',
 	);
-	const chunks = splitTelegramFormattedMessage("Alice", `${"a".repeat(4080)}👋b`, 4096);
+	const chunks = splitTelegramFormattedMessage("Alice", `${"a".repeat(4081)}👋b`, 4096);
 	assert.equal(chunks.length, 2);
 	assert.equal(Array.from(chunks[0]).length <= 4096, true);
 	assert.equal(chunks[0].endsWith("👋"), true);
-	assert.equal(chunks[1], "<b>Alice:</b>\n\nb");
+	assert.equal(chunks[1], "<b>Alice:</b>\nb");
 });
 
 test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
@@ -133,7 +176,8 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 			bytes: Uint8Array.from([1, 2, 3]),
 			filename: "clip.mp4",
 			contentType: "video/mp4",
-			caption: "<b>Alice:</b>\n\nhello",
+				caption: "<b>Alice:</b>\nhello",
+				replyToMessageId: 7,
 		});
 	} finally {
 		globalThis.fetch = originalFetch;
@@ -143,8 +187,49 @@ test("Telegram 媒体上传按类型构造 multipart 请求", async () => {
 	assert.equal(captured.init.headers, undefined);
 	assert.equal(captured.init.body.get("chat_id"), "-1001");
 	assert.equal(captured.init.body.get("parse_mode"), "HTML");
-	assert.equal(captured.init.body.get("caption"), "<b>Alice:</b>\n\nhello");
+	assert.equal(captured.init.body.get("caption"), "<b>Alice:</b>\nhello");
+	assert.equal(captured.init.body.get("reply_parameters"), '{"message_id":7}');
 	assert.equal(captured.init.body.get("video").name, "clip.mp4");
+
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return Response.json({ ok: true, result: { message_id: 2 } });
+	};
+	try {
+		await sendTelegramMedia("123:token", {
+			chatId: "-1001",
+			kind: "voice",
+			bytes: Uint8Array.from([4, 5, 6]),
+			filename: "voice.ogg",
+			contentType: "audio/ogg",
+			durationMs: 8400,
+		});
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+	assert.match(captured.url, /\/sendVoice$/);
+	assert.equal(captured.init.body.get("duration"), "8");
+	assert.equal(captured.init.body.get("voice").name, "voice.ogg");
+});
+
+test("Telegram 文字回复使用 reply_parameters 指向同群原消息", async () => {
+	const originalFetch = globalThis.fetch;
+	let captured;
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return Response.json({ ok: true, result: { message_id: 3 } });
+	};
+	try {
+		await sendTelegramText("123:token", {
+			chatId: "-1001",
+			text: "reply",
+			replyToMessageId: 2,
+		});
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+	assert.match(captured.url, /\/sendMessage$/);
+	assert.deepEqual(JSON.parse(captured.init.body).reply_parameters, { message_id: 2 });
 });
 
 test("Telegram 入站附件下载后加密写入 R2，超限时不下载", async () => {
@@ -169,6 +254,7 @@ test("Telegram 入站附件下载后加密写入 R2，超限时不下载", async
 		},
 	};
 	let imported;
+	let importedAudio;
 	try {
 		imported = await importTelegramAttachment(env, {
 			botToken: "123:token",
@@ -176,17 +262,36 @@ test("Telegram 入站附件下载后加密写入 R2，超限时不下载", async
 			telegramMessageId: 9,
 			attachment: {
 				fileId: "file-id",
-				fileName: "a.bin",
-				mimeType: "application/octet-stream",
+				fileName: "voice.ogg",
+				mimeType: "audio/ogg",
 				fileSize: 4,
+				kind: "voice",
+				durationMs: 4200,
+			},
+		});
+		importedAudio = await importTelegramAttachment(env, {
+			botToken: "123:token",
+			telegramChatId: "-1001",
+			telegramMessageId: 10,
+			attachment: {
+				fileId: "audio-id",
+				fileName: "song.mp3",
+				mimeType: "audio/mpeg",
+				fileSize: 4,
+				kind: "audio",
+				durationMs: 12_000,
 			},
 		});
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
-	assert.equal(fetchCount, 2);
-	assert.match(imported.attachment.key, /^telegram\/-1001\/9-[0-9a-f-]+\.bin$/);
-	assert.equal(writes.length, 1);
+	assert.equal(fetchCount, 4);
+	assert.match(imported.attachment.key, /^telegram\/-1001\/9-[0-9a-f-]+\.ogg$/);
+	assert.equal(imported.attachment.kind, "voice");
+	assert.equal(imported.attachment.durationMs, 4200);
+	assert.equal(importedAudio.attachment.kind, "audio");
+	assert.equal(importedAudio.attachment.durationMs, 12_000);
+	assert.equal(writes.length, 2);
 	assert.deepEqual(
 		(await decryptAttachment(env, writes[0].value, writes[0].key)).bytes,
 		Uint8Array.from([1, 2, 3, 4]),
@@ -197,7 +302,28 @@ test("Telegram 入站附件下载后加密写入 R2，超限时不下载", async
 		telegramMessageId: 10,
 		attachment: { fileId: "large", fileSize: TELEGRAM_BRIDGE_FILE_LIMIT + 1 },
 	});
-	assert.deepEqual(oversized, { attachment: null, oversized: true });
+	assert.deepEqual(oversized, {
+		attachment: null,
+		skipReason: TELEGRAM_FILE_SKIP_REASON.TOO_LARGE,
+	});
+
+	const withoutStorage = await importTelegramAttachment({}, {
+		botToken: "123:token",
+		telegramChatId: "-1001",
+		telegramMessageId: 11,
+		attachment: { fileId: "file-id", fileSize: 4 },
+	});
+	assert.deepEqual(withoutStorage, {
+		attachment: null,
+		skipReason: TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE,
+	});
+	assert.deepEqual(
+		await loadEdgeChatAttachment({}, { key: "missing.bin", size: 4 }),
+		{
+			file: null,
+			skipReason: TELEGRAM_FILE_SKIP_REASON.STORAGE_UNAVAILABLE,
+		},
+	);
 });
 
 test("可信 Telegram 外部消息可以直接引用 Bridge 创建的 R2 附件", async () => {
@@ -259,8 +385,8 @@ test("可信 Telegram 外部消息可以直接引用 Bridge 创建的 R2 附件"
 
 	assert.equal(result.created, true);
 	assert.equal(result.message.attachment.key, "telegram/-1001/9-a.bin");
-	assert.equal(insertBinds[13], "file-id");
-	assert.equal(insertBinds[14], "unique-id");
+	assert.equal(insertBinds[16], "file-id");
+	assert.equal(insertBinds[17], "unique-id");
 });
 
 test("Bot Token 与 Webhook Secret 使用用途绑定的服务端密文", async () => {
@@ -302,9 +428,10 @@ test("外部消息密文绑定来源和外部用户 ID", async () => {
 
 test("消息 projection 保留 Telegram 来源而不伪造 EdgeChat 账号", () => {
 	assert.deepEqual(
-		mapMessage({
-			id: 12,
-			content: "hello",
+			mapMessage({
+				id: 12,
+				content: "hello",
+				mentions_json: "[]",
 			created_at: "now",
 			sender_kind: "external",
 			external_sender_id: "42",
@@ -312,9 +439,11 @@ test("消息 projection 保留 Telegram 来源而不伪造 EdgeChat 账号", () 
 			external_sender_avatar_url: null,
 			source: "telegram",
 		}),
-		{
-			id: 12,
-			content: "hello",
+			{
+				id: 12,
+				content: "hello",
+				mentionUserIds: [],
+				mentions: [],
 			createdAt: "now",
 			source: "telegram",
 			sender: {
@@ -322,7 +451,7 @@ test("消息 projection 保留 Telegram 来源而不伪造 EdgeChat 账号", () 
 				id: "42",
 				username: "",
 				displayName: "Alice",
-				avatarUrl: "",
+					avatarUrl: "/api/integrations/telegram/avatar/42",
 				source: "telegram",
 			},
 			attachment: null,

@@ -66,7 +66,11 @@ test("消息删除统一完成权限校验、持久化与实时删除 packet", a
 		},
 		{ type: "persist", db, args: { channelId: 4, messageId: 9 } },
 	]);
-	assert.deepEqual(JSON.parse(result.packet), { type: "message_deleted", messageId: 9 });
+	assert.deepEqual(JSON.parse(result.packet), {
+		protocolVersion: 1,
+		type: "message_deleted",
+		messageId: 9,
+	});
 });
 
 test("消息删除向客户端收敛无权限、无效参数与重复删除错误", async () => {

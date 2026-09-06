@@ -1,11 +1,21 @@
-import { MessageSubmissionError, submitRoomMessage } from '../message-submission.js';
+import {
+  MessageSubmissionError,
+  submitRoomMessage,
+  submitRoomMessageIdempotent
+} from '../message-submission.js';
 import { deleteRoomMessage, MessageDeletionError } from '../message-deletion.js';
+import {
+  MessagePinningError,
+  pinRoomMessage,
+  unpinRoomMessage
+} from '../message-pinning.js';
 import { submitExternalMessage } from '../external-message-submission.js';
 import { forwardEdgeChatMessageToTelegram } from '../integrations/telegram/bridge.js';
 import { authorizeRoom } from '../room-access.js';
 import { validateSession } from '../session.js';
 import { projectUnreadMessage } from '../unread-projection.js';
 import { isVerifiedInternalRequest, parseVerifiedPrincipal } from '../verified-identity.js';
+import { durableObjectHealth } from '../maintenance/do-health.ts';
 
 const MESSAGE_SIZE_LIMIT = 10 * 1024;
 
@@ -19,7 +29,7 @@ function socketMeta(token, principal, room) {
 
 function sendSocketError(ws, message) {
   try {
-    ws.send(JSON.stringify({ type: 'error', error: message }));
+    ws.send(JSON.stringify({ protocolVersion: 1, type: 'error', error: message }));
   } catch {
     // Ignore broken sockets.
   }
@@ -141,13 +151,14 @@ export class ChannelRoom {
     }
   }
 
-  runMessageProjections(room, message) {
+  runMessageProjections(room, message, replyToSenderId = null) {
     this.state.waitUntil(
       Promise.all([
         projectUnreadMessage(this.env, {
           room,
           senderId: message.sender.kind === 'local' ? message.sender.id : null,
-          message
+          message,
+          replyToSenderId
         }),
         forwardEdgeChatMessageToTelegram(this.env, { room, message })
       ])
@@ -168,16 +179,96 @@ export class ChannelRoom {
     const result = await submitExternalMessage(this.env, { room, payload });
     if (result.created) {
       await this.broadcast(result.packet);
-      this.runMessageProjections(room, result.message);
+      this.runMessageProjections(room, result.message, result.replyToSenderId);
     }
     return Response.json({ ok: true, created: result.created, message: result.message });
   }
 
+  async receiveClientAction(request) {
+    if (!isVerifiedInternalRequest(request)) {
+      return Response.json(
+        { error: { code: 'authentication_required', message: '请先登录' } },
+        { status: 401 }
+      );
+    }
+
+    const principal = parseVerifiedPrincipal(request);
+    const payload = await request.json();
+    const room = payload.room;
+    const action = payload.action;
+    const access = principal
+      ? await authorizeRoom(this.env.DB, principal, room?.kind, Number(room?.id))
+      : { ok: false };
+    if (!access.ok) {
+      return Response.json(
+        { error: { code: 'forbidden', message: '无权访问该会话' } },
+        { status: 403 }
+      );
+    }
+
+    const meta = { principal, room: access.room };
+    try {
+      if (action?.type === 'send') {
+        const result = await submitRoomMessageIdempotent(this.env, meta, action);
+        if (result.created) {
+          await this.broadcast(result.packet);
+          this.runMessageProjections(access.room, result.message, result.replyToSenderId);
+        }
+        return Response.json({ created: result.created, message: result.message });
+      }
+      if (action?.type === 'delete_message') {
+        const result = await deleteRoomMessage(this.env, meta, action);
+        await this.broadcast(result.packet);
+        return Response.json({ ok: true, messageId: result.messageId });
+      }
+      if (action?.type === 'pin_message') {
+        const result = await pinRoomMessage(this.env, meta, action);
+        await this.broadcast(result.packet);
+        return Response.json({ ok: true, message: result.message });
+      }
+      if (action?.type === 'unpin_message') {
+        const result = await unpinRoomMessage(this.env, meta, action);
+        await this.broadcast(result.packet);
+        return Response.json({ ok: true, messageId: result.messageId });
+      }
+      return Response.json(
+        { error: { code: 'invalid_request', message: '不支持的消息操作' } },
+        { status: 400 }
+      );
+    } catch (error) {
+      if (
+        error instanceof MessageSubmissionError ||
+        error instanceof MessageDeletionError ||
+        error instanceof MessagePinningError
+      ) {
+        return Response.json(
+          { error: { code: error.code || 'invalid_request', message: error.message } },
+          { status: error.status || 400 }
+        );
+      }
+      console.error(JSON.stringify({
+        message: 'client room action failed',
+        roomId: Number(access.room.id),
+        error: error instanceof Error ? error.message : String(error)
+      }));
+      return Response.json(
+        { error: { code: 'internal_error', message: '消息操作失败' } },
+        { status: 500 }
+      );
+    }
+  }
+
   async fetch(request) {
+    const health = durableObjectHealth(request, 'ChannelRoom');
+    if (health) return health;
     const url = new URL(request.url);
 
     if (url.pathname === '/external-message' && request.method === 'POST') {
       return this.receiveExternalMessage(request);
+    }
+
+    if (url.pathname === '/client-action' && request.method === 'POST') {
+      return this.receiveClientAction(request);
     }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -216,6 +307,7 @@ export class ChannelRoom {
     this.connections.set(server, meta);
     server.send(
       JSON.stringify({
+        protocolVersion: 1,
         type: 'ready',
         room: {
           id: Number(room.id),
@@ -244,7 +336,7 @@ export class ChannelRoom {
       return;
     }
 
-    if (!['send', 'delete_message'].includes(payload.type)) {
+    if (!['send', 'delete_message', 'pin_message', 'unpin_message'].includes(payload.type)) {
       sendSocketError(ws, 'Unsupported message type');
       return;
     }
@@ -260,6 +352,16 @@ export class ChannelRoom {
         await this.broadcast(packet);
         return;
       }
+      if (payload.type === 'pin_message') {
+        const { packet } = await pinRoomMessage(this.env, currentMeta, payload);
+        await this.broadcast(packet);
+        return;
+      }
+      if (payload.type === 'unpin_message') {
+        const { packet } = await unpinRoomMessage(this.env, currentMeta, payload);
+        await this.broadcast(packet);
+        return;
+      }
 
       const { message: saved, packet } = await submitRoomMessage(
         this.env,
@@ -270,7 +372,11 @@ export class ChannelRoom {
       // 未读与外部桥接都属于提交后投影，异步执行以缩短 WebSocket 发送链路。
       this.runMessageProjections(currentMeta.room, saved);
     } catch (error) {
-      if (error instanceof MessageSubmissionError || error instanceof MessageDeletionError) {
+      if (
+        error instanceof MessageSubmissionError ||
+        error instanceof MessageDeletionError ||
+        error instanceof MessagePinningError
+      ) {
         sendSocketError(ws, error.message);
         return;
       }

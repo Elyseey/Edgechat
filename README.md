@@ -1,14 +1,71 @@
 <div align="center">
-  <img src="Edgechat.png" alt="Edgechat 标志" />
+  <img src="Edgechat.png" alt="EdgeChat" width="640" />
+
+  <h3>基于 Cloudflare 全家桶打造的现代团队聊天系统</h3>
+	  <p>账号体系 · 公开/私有群组 · 私信 · 实时消息 · 语音消息 · 文件上传 · 管理后台</p>
+
+  <p>
+    <img src="https://img.shields.io/github/license/aozorae/Edgechat?style=flat-square&color=blue" alt="license" />
+    <img src="https://img.shields.io/github/stars/aozorae/Edgechat?style=flat-square&color=orange" alt="stars" />
+    <img src="https://img.shields.io/github/forks/aozorae/Edgechat?style=flat-square" alt="forks" />
+    <img src="https://img.shields.io/github/issues/aozorae/Edgechat?style=flat-square" alt="issues" />
+    <img src="https://img.shields.io/github/last-commit/aozorae/Edgechat?style=flat-square" alt="last commit" />
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/Vue.js-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3" />
+    <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
+    <img src="https://img.shields.io/badge/Hono-E36002?style=flat-square&logo=hono&logoColor=white" alt="Hono" />
+    <img src="https://img.shields.io/badge/Durable_Objects-WebSocket-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Durable Objects" />
+    <img src="https://img.shields.io/badge/GPL--3.0--or--later-A42E2B?style=flat-square&logo=gnu&logoColor=white" alt="GPL-3.0-or-later" />
+    <img src="https://img.shields.io/badge/Telegram-双向消息桥接-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram Bridge" />
+  </p>
+
+  <p>
+    <a href="README.md"><b>中文</b></a> ·
+    <a href="README.en.md">English</a> ·
+    <a href="README.ja.md">日本語</a> ·
+    <a href="https://edgechat-demo.wcjxxgaq.workers.dev">在线 Demo</a> ·
+    <a href="https://echat.azora.top/">项目文档</a> ·
+    <a href="https://t.me/EdgeChatlounge">Telegram 社区</a>
+  </p>
+
+  > ***这可能是 1000 万以下最好用的 Cloudflare 聊天室***
 </div>
 
-[English README](README.en.md) · [GitHub 仓库](https://github.com/gdz66601/Edgechat) · [项目文档](https://echat.azora.top/) · [开源协议（GPL v3 或更高版本）](https://www.gnu.org/licenses/gpl-3.0)
+<br />
 
-> ***这可能是 1000 万以下最好用的 Cloudflare 聊天室***
+EdgeChat 是一个部署在 Cloudflare 上的团队聊天系统：账号体系、公开群组、私有群组、私信、实时消息、语音消息、文件上传、管理员后台一应俱全。目标很直接——在 Cloudflare 生态里，用尽量低的运维成本，跑起一套能直接落地使用的站内 IM。
 
-EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系、公开群组、私有群组、私信、实时消息、文件上传和管理员后台，目标是在 Cloudflare 生态中以较低运维成本实现一套可直接落地的站内 IM。
+## 最近更新
 
-本项目采用 `GPL-3.0-or-later` 协议，详见 [LICENSE](LICENSE)。
+> [!IMPORTANT]
+> **实验性 WebMCP 支持**：EdgeChat 已率先接入 OpenAI 最近推出的实验性 [Site tools（WebMCP）](https://learn.chatgpt.com/docs/webmcp) 能力。在 ChatGPT 桌面应用的内置浏览器中使用 ChatGPT Work 或 Codex 打开并登录 EdgeChat 后，AI 可以直接发现并调用站点提供的聊天工具。
+
+| 工具 | 功能 | 状态 |
+|---|---|---|
+| `edgechat.login` | 登录并建立当前浏览器会话 | ✅ |
+| `edgechat.list_channels` | 查询用户可见群聊 | ✅ |
+| `edgechat.read_messages` | 获取某聊天室最近消息 | ✅ |
+| `edgechat.send_message` | 向指定房间发送消息 | ✅ |
+| `edgechat.open_dm` | 找到或打开与某人的私聊 | ✅ |
+
+登录工具沿用现有认证与浏览器安全确认，工具结果不会返回密码或 session token。
+
+## 目录
+
+- [界面预览](#界面预览)
+- [在线 Demo](#在线-demo)
+- [特色功能：Telegram 消息双向桥接](#特色功能telegram-消息双向桥接)
+- [为什么是 EdgeChat](#为什么是-edgechat)
+- [功能特性](#功能特性)
+- [技术栈](#技术栈)
+- *[Telegram 社区](#telegram-社区)*
+- [部署](#部署)
+- [快速开始](#快速开始)
+- [项目结构](#项目结构)
+- [贡献](#贡献)
+- [Star History](#star-history)
+- [协议说明](#协议说明)
 
 ## 界面预览
 
@@ -23,41 +80,110 @@ EdgeChat 是一个部署在 Cloudflare 上的聊天系统，提供账号体系�
   </tr>
 </table>
 
+## 在线 Demo
+
+**[edgechat-demo.gdz66601.workers.dev](https://edgechat-demo.gdz66601.workers.dev)**
+
+演示站复用正式项目的 Vue 页面、路由、状态管理和实时消息逻辑，但所有 API、WebSocket、文件上传与 Telegram 回流都在浏览器内存中模拟。刷新页面或点击右上角「重置演示数据」即可恢复初始状态，不会访问正式 Worker，也不会写入 D1、KV 或 R2。
+
+## 特色功能：Telegram 消息双向桥接
+
+管理员可以把 EdgeChat 内的任意一个群组，与一个 Telegram 群组绑定。绑定后，通过 Telegram Bot，两侧的消息会**双向实时转发**——EdgeChat 成员发的消息会同步出现在 Telegram 群里，Telegram 群里的消息也会同步出现在 EdgeChat 里，两边成员就像在同一个群里聊天一样，完全不需要互相切换应用或重复建群。
+
+<div align="center">
+  <img
+    src="https://github.com/user-attachments/assets/eb5d6b5a-4664-41c6-a760-02c4a1398b36"
+    alt="EdgeChat 与 Telegram 双向消息桥接演示"
+    width="90%"
+  />
+  <br />
+  <sub>实时无缝转发，双向同步</sub>
+</div>
+
+## 为什么是 EdgeChat
+
+| | EdgeChat | 自建 Rocket.Chat / Mattermost | 商业 SaaS IM |
+|---|---|---|---|
+| 部署成本 | Cloudflare 免费额度内可跑 | 需要常驻服务器 / 容器 | 按人头订阅收费 |
+| 运维负担 | 无需管理服务器，Serverless | 需要自行运维数据库、缓存 | 无需运维，但不可控 |
+| 数据归属 | 完全在自己的 Cloudflare 账号 | 完全自持 | 数据在第三方 |
+| 上线方式 | GitHub Actions 一键自动部署 | 手动 / Docker Compose | 直接注册 |
+
+> 这张对比表只是给出一个大致的选型参考，实际是否合适取决于你的团队规模和需求，欢迎在 Issue 里讨论指正。
+
 ## 功能特性
 
-- 管理员创建用户，不开放自助注册
+**💬 消息与会话**
 - 支持公开群组、私有群组与私信会话
-- 群主管理成员，管理员后台不提供群组或私信消息正文查看入口
-- 支持实时消息、历史消息分页和文件发送
-- 支持文件上传与头像管理
-- 新写入的消息和新上传的附件使用 AES-256-GCM 服务端加密，历史数据不做批量回填
-- 后台一级导航包含仪表盘、用户管理、注册邀请和网站设置
-- 管理员可在网站设置中由浏览器直接比对源码仓库，检查当前部署是否有更新
-- 现代化 Liquid Glass 风格界面，已适配移动端并支持基础无障碍能力
+- [Telegram 群组双向消息桥接](#特色功能telegram-消息双向桥接)，一个 Bot 打通两侧成员
+- 实时消息、历史消息分页、Telegram 风格语音消息与文件消息
+- 网页支持 Telegram 风格消息回复、引用跳转，以及将回复纳入「有人@我」优先提醒
+- 网页和 Android 均支持录音、波形进度、倍速播放；Telegram voice/audio 可双向同步
+- 文件上传与头像管理
 - 支持定时硬删除过期消息
+
+**🔐 隐私与安全**
+- 新写入的消息与新上传的附件使用 AES-256-GCM 服务端加密，历史数据不做批量回填
+- 管理员后台不提供群组或私信消息正文的查看入口
+- 管理员创建用户，不开放自助注册
+
+**🛠 管理后台**
+- 仪表盘、用户管理、注册邀请、网站设置一级导航
+- 用户支持永久封禁，或按天、小时、分钟设置临时封禁；到期后无需定时任务即可自动恢复
+- 浏览器端直接比对源码仓库，检查当前部署是否有更新
+
+**🎨 体验**
+- 现代化 Liquid Glass 风格界面
+- 适配移动端，支持基础无障碍能力
 
 ## 技术栈
 
-- 前端：Vue 3、Vue Router、Vite
-- 后端：Cloudflare Workers、Hono
-- 实时层：Durable Objects WebSocket Hibernation
-- 数据库：Cloudflare D1
-- 会话：Cloudflare KV
-- 文件：Cloudflare R2
-- 部署：Wrangler、GitHub Actions
+<p>
+  <img src="https://img.shields.io/badge/Frontend-Vue_3_·_Vue_Router_·_Vite-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white" alt="frontend" />
+  <img src="https://img.shields.io/badge/Backend-Cloudflare_Workers_·_Hono-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="backend" />
+  <br />
+  <img src="https://img.shields.io/badge/Realtime-Durable_Objects_(WS_Hibernation)-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="realtime" />
+  <img src="https://img.shields.io/badge/Database-Cloudflare_D1-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="d1" />
+  <img src="https://img.shields.io/badge/Session-Cloudflare_KV-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="kv" />
+  <img src="https://img.shields.io/badge/Files-Cloudflare_R2-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="r2" />
+  <br />
+  <img src="https://img.shields.io/badge/Deploy-Wrangler_·_GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white" alt="deploy" />
+</p>
+
+## Telegram 社区
+
+欢迎加入我们的 [Telegram 社区](https://t.me/EdgeChatlounge)，与其他用户和开发者交流讨论、反馈问题，第一时间获取项目动态。
 
 ## 部署
 
-### GitHub Actions 自动部署
+### GitHub Actions 自动部署（推荐）
 
-推荐优先使用 GitHub Actions 部署，适合长期维护和生产环境更新。
+推荐优先使用 GitHub Actions 部署，适合长期维护和生产环境更新。仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 即可执行自动部署。
 
 - 快速开始：<https://echat.azora.top/guide/getting-started.html>
 - 详细教程：<https://echat.azora.top/guide/actions-deploy.html>
 
-仓库内已提供 `.github/workflows/deploy-worker.yml`，推送到 `master` 或 `main`，或手动触发 `workflow_dispatch` 后即可执行自动部署。
+### Android 客户端
 
-### 隐私与服务端加密
+当前主要发行版是 `capacitor/` 客户端：APK 直接内置 Vue Web UI，以少量 Kotlin 对接系统文件选择、通知、麦克风权限、通知会话跳转和外部链接。它使用包名 `com.aozorae.edgechat.web`，首次登录时由用户填写自己的 EdgeChat HTTPS 服务地址，不绑定固定部署。
+
+- 安装包：从 GitHub Releases 下载 `edgechat-*.apk` 并核对 `SHA256SUMS.txt`
+- 首次使用：登录页填写自己的 EdgeChat HTTPS 服务地址、账号和密码
+- 本地构建：准备 JDK 21 与 Android SDK 36 后运行 `npm run build:capacitor`
+- Debug APK：`capacitor/android/app/build/outputs/apk/debug/app-debug.apk`
+- CI：`.github/workflows/capacitor-android-ci.yml` 上传 `edgechat-capacitor-debug`
+- 发布：推送 `android-v*` 标签或手动运行 `Android Release`，使用四个 `ANDROID_KEYSTORE_*` Secrets 构建签名 APK/AAB
+- 服务切换：退出登录后可修改地址；切换实例时自动清理旧实例令牌
+- 限制：当前不包含 Room 离线数据库、WorkManager Outbox 或 FCM，应用停止接收消息时不承诺后台即时通知
+
+原生 `android/` Kotlin + Jetpack Compose 客户端暂时弃用，不再作为默认发行版。源码、API v1 契约和独立 CI 暂时保留，供历史验证与后续评估；新安装与日常更新请使用 Capacitor 版本。
+
+完整说明：<https://echat.azora.top/guide/android.html>
+
+<details>
+<summary><strong>🔐 隐私与服务端加密说明（点击展开）</strong></summary>
+
+<br />
 
 GitHub Actions 会管理服务端加密 Worker Secrets。首次部署时，如果目标 Worker 尚无加密 Secret，工作流会自动生成随机 32 字节 AES 密钥，以独立的版本化 Secret 注入，并记录当前 active key ID；后续普通部署只检查这些 Secret 是否存在，不会重新生成、覆盖或轮换。生产环境已经存在的 `EDGECHAT_ENCRYPTION_KEYRING` JSON 密钥环也会被原样保留并继续兼容。
 
@@ -75,7 +201,14 @@ GitHub Actions 会管理服务端加密 Worker Secrets。首次部署时，如�
 
 这属于服务端静态加密，不是端到端加密。Worker 会在通过会话权限校验后解密内容，因此 Cloudflare Worker 运行环境和掌握密钥的部署方仍位于信任边界内。作为配套隐私调整，管理员后台的消息搜索与完整会话查看页面及其 API 已移除；管理员仍可看到消息数量等聚合统计。
 
-### 手动部署
+</details>
+
+### 手动部署 / Docker
+
+<details>
+<summary>点击展开手动部署与 Docker 说明</summary>
+
+<br />
 
 如果你希望本地手动部署，完整步骤、资源准备和注意事项请查看文档站教程：
 
@@ -83,31 +216,41 @@ GitHub Actions 会管理服务端加密 Worker Secrets。首次部署时，如�
 - 文档首页：<https://echat.azora.top/>
 - Docker 本地部署：[DOCKER.md](DOCKER.md)
 
+</details>
+
 ## 快速开始
 
-### 安装依赖
-
 ```bash
+# 安装依赖
 npm install
-```
 
-### 前端开发
-
-```bash
+# 前端开发
 npm run dev:frontend
-```
 
-### 本地构建
+# 纯前端 demo（独立端口和构建目录）
+npm run dev:demo
 
-```bash
+# 本地构建
 npm run build
-```
 
-### 本地手动发布
-
-```bash
+# 本地手动发布
 npm run deploy
 ```
+
+<details>
+<summary>更多脚本说明（demo 构建 / 部署、CI 环境变量）</summary>
+
+<br />
+
+```bash
+# 独立构建 demo
+npm run build:demo
+
+# 部署独立 demo Worker
+npm run deploy:demo
+```
+
+demo 使用 `wrangler.demo.toml` 和 `.github/workflows/deploy-demo.yml`，Worker 名称为 `edgechat-demo`。GitHub Actions 仅支持手动触发，并读取 `DEMO_CLOUDFLARE_ACCOUNT_ID`、`DEMO_CLOUDFLARE_API_TOKEN`，不会改变现有生产部署工作流。
 
 在非交互环境下部署时，需要提前设置 `CLOUDFLARE_API_TOKEN`。
 
@@ -120,7 +263,12 @@ $env:CLOUDFLARE_API_TOKEN = "your-token"
 npm run deploy
 ```
 
+</details>
+
 ## 项目结构
+
+<details>
+<summary>点击展开目录树</summary>
 
 ```text
 edgechat/
@@ -134,10 +282,13 @@ edgechat/
 │  │  ├─ router.js
 │  │  ├─ store.js
 │  │  ├─ ws.js
+│  │  ├─ runtime.js
+│  │  ├─ demo/
 │  │  ├─ styles.css
 │  │  ├─ components/ui/
 │  │  └─ pages/
-│  └─ vite.config.js
+│  ├─ vite.config.js
+│  └─ vite.demo.config.js
 ├─ worker/
 │  ├─ schema.sql
 │  ├─ migrations/
@@ -150,11 +301,15 @@ edgechat/
 │     ├─ api/
 │     └─ do/
 ├─ wrangler.toml
+├─ wrangler.demo.toml
 ├─ package.json
 ├─ README.md
 ├─ README.en.md
+├─ README.ja.md
 └─ LICENSE
 ```
+
+</details>
 
 更多实现说明可查看 [TECHNICAL.md](TECHNICAL.md) 和文档站：<https://echat.azora.top/>
 
@@ -162,18 +317,28 @@ edgechat/
 
 欢迎提交 Issue 和 Pull Request，一起完善 EdgeChat。
 
-## 贡献者
-
 感谢所有为项目提供帮助的贡献者：
 
-[![贡献者](https://contrib.rocks/image?repo=gdz66601/Edgechat)](https://github.com/gdz66601/Edgechat/graphs/contributors)
+[![贡献者](https://contrib.rocks/image?repo=aozorae/Edgechat)](https://github.com/aozorae/Edgechat/graphs/contributors)
+
+## Star History
+
+<a href="https://www.star-history.com/?type=date&repos=aozorae%2FEdgechat">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=aozorae/Edgechat&type=date&theme=dark&legend=top-left&sealed_token=GpyqTbdwb3a2OHOT-WlCSoSzrumr3iwtcNluTpGbcU5CuyfP4eKf9TjtDuJ2uY4XK0P6knEB6OFCkbaAMsMCO3vnGPprGvB4f4rd7kmbUNe3fJ8LNaaGVH7JZLDT7SNNy3DC-sBxZwBmfL7gP9AFv1iKX1FgYnRZuOBGcKkbWFlBuoq2TXpYIfWmoUF9" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=aozorae/Edgechat&type=date&legend=top-left&sealed_token=GpyqTbdwb3a2OHOT-WlCSoSzrumr3iwtcNluTpGbcU5CuyfP4eKf9TjtDuJ2uY4XK0P6knEB6OFCkbaAMsMCO3vnGPprGvB4f4rd7kmbUNe3fJ8LNaaGVH7JZLDT7SNNy3DC-sBxZwBmfL7gP9AFv1iKX1FgYnRZuOBGcKkbWFlBuoq2TXpYIfWmoUF9" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=aozorae/Edgechat&type=date&legend=top-left&sealed_token=GpyqTbdwb3a2OHOT-WlCSoSzrumr3iwtcNluTpGbcU5CuyfP4eKf9TjtDuJ2uY4XK0P6knEB6OFCkbaAMsMCO3vnGPprGvB4f4rd7kmbUNe3fJ8LNaaGVH7JZLDT7SNNy3DC-sBxZwBmfL7gP9AFv1iKX1FgYnRZuOBGcKkbWFlBuoq2TXpYIfWmoUF9" />
+ </picture>
+</a>
+
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=24&duration=2500&pause=1000&color=F7D747&width=435&lines=%E2%AD%90+star+%E7%82%B9%E8%B5%B7%E6%9D%A5%EF%BC%81)](https://git.io/typing-svg)
+
+## 协议说明
+
+本项目采用 [`GNU GPL v3.0 or later`](LICENSE)。
+
+你可以使用、修改和分发本项目；如果你分发修改版本，需要继续提供对应源代码，并保持 GPL 兼容。
 
 ## 鸣谢
 
 感谢 <a href="https://linux.do" target="_blank">linux do</a> 在推广方面为本项目做出的贡献。
-
-## 协议说明
-
-本项目采用 `GNU GPL v3.0 or later`。
-
-你可以使用、修改和分发本项目；如果你分发修改版本，需要继续提供对应源代码，并保持 GPL 兼容。

@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import {
 	parseGithubRepository,
 	resolveBuildMetadata,
 } from "../frontend/build-metadata.js";
+import { CHINESE_LOCALE, setLocale } from "../frontend/src/i18n.js";
 import { checkForUpdates } from "../frontend/src/update-check.js";
+
+beforeEach(() => {
+	setLocale(CHINESE_LOCALE);
+});
 
 const build = {
 	repository: "aozorae/Edgechat",

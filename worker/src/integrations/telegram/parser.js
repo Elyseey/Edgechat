@@ -25,6 +25,28 @@ function parseAttachment(message) {
 			fileSize: Number(message.video.file_size || 0),
 		};
 	}
+	if (message.voice?.file_id) {
+		return {
+			kind: "voice",
+			fileId: String(message.voice.file_id),
+			fileUniqueId: String(message.voice.file_unique_id || ""),
+			fileName: `voice-${message.message_id}.ogg`,
+			mimeType: message.voice.mime_type || "audio/ogg",
+			fileSize: Number(message.voice.file_size || 0),
+			durationMs: Number(message.voice.duration || 0) * 1000,
+		};
+	}
+	if (message.audio?.file_id) {
+		return {
+			kind: "audio",
+			fileId: String(message.audio.file_id),
+			fileUniqueId: String(message.audio.file_unique_id || ""),
+			fileName: message.audio.file_name || `audio-${message.message_id}.mp3`,
+			mimeType: message.audio.mime_type || "audio/mpeg",
+			fileSize: Number(message.audio.file_size || 0),
+			durationMs: Number(message.audio.duration || 0) * 1000,
+		};
+	}
 	if (message.document?.file_id) {
 		return {
 			kind: "document",
@@ -52,7 +74,7 @@ export function parseTelegramMessageUpdate(update) {
 		return null;
 	}
 
-	return {
+	const parsed = {
 		telegramChatId: String(message.chat.id),
 		telegramChatTitle: message.chat.title || message.chat.username || "",
 		telegramMessageId: Number(message.message_id),
@@ -65,4 +87,8 @@ export function parseTelegramMessageUpdate(update) {
 			avatarUrl: "",
 		},
 	};
+	if (Number.isInteger(Number(message.reply_to_message?.message_id))) {
+		parsed.replySourceMessageId = `${message.chat.id}:${message.reply_to_message.message_id}`;
+	}
+	return parsed;
 }

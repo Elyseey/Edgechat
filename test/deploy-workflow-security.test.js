@@ -27,9 +27,10 @@ test("Cloudflare 生产凭据只注入实际调用 Cloudflare 的步骤", () => 
 
 	for (const name of [
 		"Checkout",
-		"Setup Node.js",
-		"Install dependencies",
-		"Build frontend assets",
+			"Setup Node.js",
+			"Install dependencies",
+			"Run tests",
+			"Build frontend assets",
 		"Generate wrangler config for CI",
 		"Generate admin bootstrap SQL (optional)",
 	]) {
@@ -49,6 +50,14 @@ test("Cloudflare 生产凭据只注入实际调用 Cloudflare 的步骤", () => 
 		assert.match(step, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
 		assert.match(step, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
 	}
+});
+
+test("生产部署在创建或修改云资源前运行完整测试", () => {
+	const testsStart = workflow.indexOf("      - name: Run tests\n");
+	const resourcesStart = workflow.indexOf("      - name: Ensure Cloudflare resources\n");
+	assert.notEqual(testsStart, -1);
+	assert.equal(testsStart < resourcesStart, true);
+	assert.match(getStep("Run tests"), /run: npm test/);
 });
 
 test("首次部署自动创建密钥，普通部署保留密钥，手动轮换才允许更新", () => {
@@ -81,4 +90,25 @@ test("资源确认脚本仅复用配置的 KV 标题，避免隐式共享会话�
 		/namespace\.title === kvNamespaceTitle && namespace\.id/,
 	);
 	assert.match(script, /setOutput\("kv_namespace_title", kv\.title\);/);
+
+	const resourceStep = getStep("Ensure Cloudflare resources");
+	assert.match(
+		resourceStep,
+		/EDGECHAT_KV_NAMESPACE_TITLE: \$\{\{ vars\.EDGECHAT_KV_NAMESPACE_TITLE \|\| 'cfchat-sessions' \}\}/,
+	);
+});
+
+test("R2 未开通时工作流移除 FILES binding，已开通时保留目标 bucket", () => {
+	const configStep = getStep("Generate wrangler config for CI");
+	assert.match(
+		configStep,
+		/R2_AVAILABLE: \$\{\{ steps\.ensure_resources\.outputs\.r2_available \}\}/,
+	);
+	assert.match(
+		configStep,
+		/R2_BUCKET_NAME: \$\{\{ steps\.ensure_resources\.outputs\.r2_bucket_name \}\}/,
+	);
+	assert.match(configStep, /if \[\[ "\$R2_AVAILABLE" == "true" \]\]/);
+	assert.match(configStep, /bucket_name = \\"\$\{R2_BUCKET_NAME\}\\"/);
+	assert.match(configStep, /\^\\\[\\\[r2_buckets\\\]\\\]\$\/,\/\^\$\/d/);
 });

@@ -29,7 +29,8 @@ function createBrowser(width, height = 760) {
 			removeListener(listeners, type, listener);
 		},
 		visualViewport: {
-			height,
+				height,
+				offsetTop: 0,
 			addEventListener(type, listener) {
 				addListener(viewportListeners, type, listener);
 			},
@@ -62,6 +63,15 @@ test("移动端首次进入只显示会话列表，选择后可进入并返回",
 	assert.equal(viewport.isMobileViewport.value, true);
 	assert.equal(viewport.mobileView.value, "list");
 	assert.equal(browser.properties.get("--chat-viewport-height"), "740px");
+	assert.equal(browser.properties.get("--chat-viewport-offset-top"), "0px");
+
+	window.visualViewport.height = 420;
+	window.visualViewport.offsetTop = 96;
+	for (const listener of browser.viewportListeners.get("scroll")) {
+		listener();
+	}
+	assert.equal(browser.properties.get("--chat-viewport-height"), "420px");
+	assert.equal(browser.properties.get("--chat-viewport-offset-top"), "96px");
 
 	activeRoom.value = { kind: "dm", id: 3 };
 	viewport.openConversationView();
@@ -74,6 +84,7 @@ test("移动端首次进入只显示会话列表，选择后可进入并返回",
 	assert.equal(browser.listeners.size, 0);
 	assert.equal(browser.viewportListeners.size, 0);
 	assert.equal(browser.properties.has("--chat-viewport-height"), false);
+	assert.equal(browser.properties.has("--chat-viewport-offset-top"), false);
 });
 
 test("桌面端保持聊天视图并在缩窄后保留已选会话", () => {

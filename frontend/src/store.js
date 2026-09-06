@@ -1,4 +1,12 @@
 import { reactive } from 'vue';
+import {
+  getStoredNativeServerOrigin,
+  isCapacitorAndroid,
+  restoreStoredNativeServerOrigin,
+  resolveServerAssetUrl,
+  setStoredNativeServerOrigin
+} from './capacitor-platform.ts';
+import { isDemoMode, runtimeSessionToken } from './runtime.js';
 import api from './api.js';
 import {
   addAuthInvalidListener,
@@ -11,7 +19,7 @@ const DEFAULT_SITE_ICON_URL = '/logo.svg';
 
 const state = reactive({
   ready: false,
-  token: getStoredToken(),
+  token: isDemoMode ? runtimeSessionToken : getStoredToken(),
   session: null,
   site: {
     siteName: 'Edgechat',
@@ -38,7 +46,7 @@ function applySiteMetadata(site) {
   }
 
   if (siteIconUrl) {
-    favicon.setAttribute('href', siteIconUrl);
+    favicon.setAttribute('href', resolveServerAssetUrl(siteIconUrl));
   } else {
     favicon.setAttribute('href', DEFAULT_SITE_ICON_URL);
   }
@@ -55,6 +63,12 @@ async function loadSite() {
 
 async function initialize() {
   if (state.ready) {
+    return;
+  }
+
+  if (isCapacitorAndroid && !getStoredNativeServerOrigin()) {
+    clearAuthState();
+    state.ready = true;
     return;
   }
 
@@ -81,6 +95,26 @@ async function login(credentials) {
   state.session = payload.session;
   state.ready = true;
   setStoredToken(payload.token);
+}
+
+async function configureNativeServer(configuredOrigin) {
+  if (!isCapacitorAndroid) {
+    return '';
+  }
+
+  const previousOrigin = getStoredNativeServerOrigin();
+  const nextOrigin = setStoredNativeServerOrigin(configuredOrigin);
+  try {
+    const payload = await api.getSite();
+    if (nextOrigin !== previousOrigin) {
+      clearAuthState();
+    }
+    setSite(payload.site);
+    return nextOrigin;
+  } catch (error) {
+    restoreStoredNativeServerOrigin(previousOrigin);
+    throw new Error('native_server_unavailable', { cause: error });
+  }
 }
 
 async function logout() {
@@ -126,6 +160,7 @@ export default {
   },
   initialize,
   login,
+  configureNativeServer,
   logout,
   setSession,
   setSite,

@@ -1,3 +1,4 @@
+import { externalSenderExists } from "../data/messages.js";
 import {
 	createTelegramMapping,
 	deleteTelegramMapping,
@@ -7,6 +8,7 @@ import {
 	saveTelegramBridgeConfig,
 	updateTelegramMapping,
 } from "../data/telegram.js";
+import { loadTelegramUserAvatar } from "../integrations/telegram/avatar.js";
 import {
 	getTelegramBot,
 	getTelegramChat,
@@ -30,7 +32,66 @@ function telegramApiError(error) {
 		: null;
 }
 
-export function registerTelegramWebhookRoute(app) {
+const AVATAR_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400";
+const MISSING_AVATAR_CACHE_CONTROL = "public, max-age=600, s-maxage=600";
+
+function avatarCacheKey(request, userId) {
+	const url = new URL(request.url);
+	url.pathname = `/api/integrations/telegram/avatar/${userId}`;
+	url.search = "";
+	return new Request(url.toString());
+}
+
+function missingAvatarResponse() {
+	const response = errorResponse("头像不存在", 404);
+	response.headers.set("Cache-Control", MISSING_AVATAR_CACHE_CONTROL);
+	return response;
+}
+
+function telegramAvatarResponse(avatar) {
+	return new Response(avatar.bytes, {
+		headers: {
+			"Cache-Control": AVATAR_CACHE_CONTROL,
+			"Content-Length": String(avatar.bytes.byteLength),
+			"Content-Type": avatar.contentType,
+			"Content-Disposition": "inline",
+			"X-Content-Type-Options": "nosniff",
+			"Referrer-Policy": "no-referrer",
+		},
+	});
+}
+
+export function registerTelegramPublicRoutes(app) {
+	app.get("/api/integrations/telegram/avatar/:userId", async (c) => {
+		const userId = String(c.req.param("userId") || "");
+		if (!/^\d+$/.test(userId)) {
+			return missingAvatarResponse();
+		}
+
+		if (!(await externalSenderExists(c.env.DB, "telegram", userId))) {
+			return missingAvatarResponse();
+		}
+
+		const cache = caches.default;
+		const cacheKey = avatarCacheKey(c.req.raw, userId);
+		const cached = await cache.match(cacheKey);
+		if (cached) return cached;
+
+		const credentials = await getTelegramCredentials(c.env);
+		if (!credentials) {
+			return errorResponse("Telegram Bridge 未配置", 503);
+		}
+
+		try {
+			const avatar = await loadTelegramUserAvatar(credentials.botToken, userId);
+			const response = avatar ? telegramAvatarResponse(avatar) : missingAvatarResponse();
+			await cache.put(cacheKey, response.clone());
+			return response;
+		} catch {
+			return errorResponse("Telegram 头像暂时不可用", 502);
+		}
+	});
+
 	app.post("/api/integrations/telegram/webhook", async (c) => {
 		const credentials = await getTelegramCredentials(c.env);
 		if (!credentials) {
