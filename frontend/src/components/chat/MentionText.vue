@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { tokenizeMentionText, type MessageMention } from "../../mentions.ts";
+import type { MessageMention } from "../../mentions.ts";
+import { tokenizeMessageText } from "../../message-text.ts";
 
 const props = defineProps<{
 	content: string;
@@ -8,17 +9,26 @@ const props = defineProps<{
 	currentUserId?: number;
 }>();
 
-const tokens = computed(() => tokenizeMentionText(props.content, props.mentions || []));
+const tokens = computed(() => tokenizeMessageText(props.content, props.mentions || []));
 </script>
 
 <template>
 	<template v-for="(token, index) in tokens" :key="`${index}:${token.text}`">
 		<span v-if="token.type === 'text'">{{ token.text }}</span>
 		<span
-			v-else
+			v-else-if="token.type === 'mention'"
 			class="message-mention"
 			:class="{ 'message-mention--self': Number(token.userId) === Number(currentUserId) }"
 		>{{ token.text }}</span>
+		<a
+			v-else
+			class="message-link"
+			:href="token.href"
+			target="_blank"
+			rel="noopener noreferrer"
+			@pointerdown.stop
+			@contextmenu.stop
+		>{{ token.text }}</a>
 	</template>
 </template>
 
@@ -32,5 +42,15 @@ const tokens = computed(() => tokenizeMentionText(props.content, props.mentions 
 	padding: 1px 3px;
 	border-radius: 4px;
 	background: rgba(22, 135, 88, 0.14);
+}
+
+.message-link {
+	color: #006aa6;
+	text-decoration: none;
+	overflow-wrap: anywhere;
+}
+
+.message-link:hover {
+	text-decoration: underline;
 }
 </style>
