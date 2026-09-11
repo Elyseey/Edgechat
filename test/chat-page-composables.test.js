@@ -6,6 +6,7 @@ import { createServer } from "vite";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 let vite;
+let useActiveRoom;
 let useConversationFlow;
 let useMessageContextMenu;
 let useUserBlock;
@@ -18,6 +19,9 @@ before(async () => {
 		logLevel: "silent",
 		server: { middlewareMode: true },
 	});
+	({ useActiveRoom } = await vite.ssrLoadModule(
+		"/frontend/src/composables/useActiveRoom.js",
+	));
 	({ useConversationFlow } = await vite.ssrLoadModule(
 		"/frontend/src/composables/useConversationFlow.ts",
 	));
@@ -168,4 +172,23 @@ test("私信拉黑先确认，并同步当前会话与侧栏状态", async () =>
 	assert.equal(await userBlock.toggleUserBlock(), true);
 	assert.equal(userBlock.isBlockedByMe.value, false);
 	assert.deepEqual(calls.map(([type]) => type), ["confirm", "confirm", "block", "unblock"]);
+});
+
+test("刷新后打开私信保留服务端返回的拉黑状态", () => {
+	const activeRoom = ref(null);
+	const { selectDm } = useActiveRoom({ activeRoom });
+	selectDm({
+		id: 10,
+		name: "Alice",
+		otherUser: { id: 2, displayName: "Alice" },
+		isBlockedByMe: true,
+	});
+
+	const userBlock = useUserBlock({
+		activeRoom,
+		dms: ref([]),
+		error: ref(""),
+	});
+	assert.equal(activeRoom.value.isBlockedByMe, true);
+	assert.equal(userBlock.isBlockedByMe.value, true);
 });
