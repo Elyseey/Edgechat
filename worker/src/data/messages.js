@@ -1,4 +1,5 @@
 import { decryptMessageContent, encryptMessageContent } from "../encryption.js";
+import { cleanupR2Keys } from "../gc.js";
 import { pickAttachment, publicFileUrl } from "../utils.js";
 import { fileBelongsToUser } from "./uploaded-files.js";
 
@@ -43,6 +44,45 @@ const MESSAGE_SELECT = `SELECT
   u.id AS sender_id, u.username AS sender_username,
   u.display_name AS sender_display_name, u.avatar_key AS sender_avatar_key
  FROM messages m JOIN users u ON u.id = m.sender_id`;
+
+export async function getMessageDeletionTarget(db, messageId) {
+	const { results } = await db
+		.prepare(
+			`SELECT m.id, m.channel_id, m.sender_id, m.attachment_key,
+			        c.kind AS channel_kind
+			 FROM messages m
+			 JOIN channels c ON c.id = m.channel_id
+			 WHERE m.id = ?
+			   AND m.deleted_at IS NULL
+			 LIMIT 1`,
+		)
+		.bind(Number(messageId))
+		.all();
+	return results[0] || null;
+}
+
+export async function deleteMessageById(env, messageId) {
+	const target = await getMessageDeletionTarget(env.DB, messageId);
+	if (!target) {
+		return null;
+	}
+
+	const result = await env.DB
+		.prepare(
+			`DELETE FROM messages
+			 WHERE id = ? AND deleted_at IS NULL`,
+		)
+		.bind(Number(messageId))
+		.run();
+	if (Number(result.meta?.changes || 0) !== 1) {
+		return null;
+	}
+
+	if (target.attachment_key) {
+		await cleanupR2Keys(env, [target.attachment_key]);
+	}
+	return target;
+}
 
 export async function listMessages(env, roomId, before = null, limit = 30) {
 	const filters = ["m.channel_id = ?", "m.deleted_at IS NULL"];

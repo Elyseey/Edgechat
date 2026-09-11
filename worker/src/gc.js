@@ -3,6 +3,7 @@ const DEFAULT_SOFT_DELETE_RETENTION_DAYS = 60;
 const DEFAULT_BATCH_SIZE = 500;
 const DEFAULT_MAX_BATCHES_PER_RUN = 20;
 const DEFAULT_R2_DELETE_MAX_RETRY = 8;
+const DEFAULT_ORPHAN_UPLOAD_RETENTION_DAYS = 1;
 const MAX_ERROR_LENGTH = 500;
 const DELETE_ALLOWED_IDENTIFIERS = {
   messages: new Set(['id', 'channel_id', 'sender_id']),
@@ -39,6 +40,10 @@ function getGcConfig(env) {
     r2DeleteMaxRetry: toPositiveInteger(
       env.R2_DELETE_MAX_RETRY,
       DEFAULT_R2_DELETE_MAX_RETRY
+    ),
+    orphanUploadRetentionDays: toPositiveInteger(
+      env.ORPHAN_UPLOAD_RETENTION_DAYS,
+      DEFAULT_ORPHAN_UPLOAD_RETENTION_DAYS
     )
   };
 }
@@ -84,7 +89,8 @@ function createSummary() {
     r2Deleted: 0,
     r2DeleteFailed: 0,
     r2DeleteQueued: 0,
-    r2SkippedReferenced: 0
+    r2SkippedReferenced: 0,
+    orphanUploadsDeleted: 0
   };
 }
 
@@ -112,21 +118,29 @@ async function isR2KeyReferenced(db, key) {
     .prepare(
       `SELECT 1 AS found
        FROM (
-         SELECT attachment_key AS object_key
-         FROM messages
-         WHERE attachment_key = ?
-         UNION ALL
-         SELECT avatar_key AS object_key
-         FROM users
-         WHERE avatar_key = ?
-         UNION ALL
-         SELECT avatar_key AS object_key
-         FROM channels
-         WHERE avatar_key = ?
-       ) refs
+          SELECT attachment_key AS object_key
+          FROM messages
+          WHERE attachment_key = ?
+            AND deleted_at IS NULL
+          UNION ALL
+          SELECT avatar_key AS object_key
+          FROM users
+          WHERE avatar_key = ?
+            AND deleted_at IS NULL
+          UNION ALL
+          SELECT avatar_key AS object_key
+          FROM channels
+          WHERE avatar_key = ?
+            AND deleted_at IS NULL
+          UNION ALL
+          SELECT setting_value AS object_key
+          FROM site_settings
+          WHERE setting_key = 'site_icon_url'
+            AND setting_value IN (?, ?)
+        ) refs
        LIMIT 1`
     )
-    .bind(key, key, key)
+    .bind(key, key, key, key, `/files/${encodeURIComponent(key)}`)
     .all();
   return Boolean(results[0]);
 }
@@ -156,6 +170,36 @@ async function removePendingR2Delete(db, key) {
   await db
     .prepare(
       `DELETE FROM pending_r2_delete
+       WHERE object_key = ?`
+    )
+    .bind(key)
+    .run();
+}
+
+async function reserveR2Delete(db, key) {
+  await db
+    .prepare(
+      `INSERT INTO pending_r2_delete (
+         object_key,
+         retry_count,
+         next_retry_at,
+         last_error,
+         created_at,
+         updated_at
+       )
+       VALUES (?, 0, CURRENT_TIMESTAMP, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT(object_key) DO UPDATE
+       SET next_retry_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP`
+    )
+    .bind(key)
+    .run();
+}
+
+async function removeUploadedFileMetadata(db, key) {
+  await db
+    .prepare(
+      `DELETE FROM uploaded_files
        WHERE object_key = ?`
     )
     .bind(key)
@@ -231,8 +275,19 @@ async function processR2CandidateKeys(env, db, keys, summary) {
       continue;
     }
 
+    await reserveR2Delete(db, key);
+    // Mark the key as pending before the final reference check so new messages
+    // cannot bind an object that is already in the deletion workflow.
+    if (await isR2KeyReferenced(db, key)) {
+      await removePendingR2Delete(db, key);
+      summary.r2SkippedReferenced += 1;
+      continue;
+    }
+
+    await removeUploadedFileMetadata(db, key);
     try {
       await env.FILES.delete(key);
+      await removePendingR2Delete(db, key);
       summary.r2Deleted += 1;
     } catch (error) {
       summary.r2DeleteFailed += 1;
@@ -279,6 +334,7 @@ async function runRetryQueueStep(env, config, summary) {
 
       try {
         await env.FILES.delete(key);
+        await removeUploadedFileMetadata(env.DB, key);
         await removePendingR2Delete(env.DB, key);
         summary.retryQueueDeleted += 1;
         summary.r2Deleted += 1;
@@ -296,6 +352,87 @@ async function runRetryQueueStep(env, config, summary) {
         summary.retryQueueFailed += 1;
       }
     }
+
+    if (results.length < config.batchSize) {
+      break;
+    }
+  }
+}
+
+async function collectUploadedFileKeysByOwner(db, userIds) {
+  if (!userIds.length) {
+    return [];
+  }
+
+  const { results } = await db
+    .prepare(
+      `SELECT object_key
+       FROM uploaded_files
+       WHERE owner_user_id IN (${placeholders(userIds.length)})`
+    )
+    .bind(...userIds)
+    .all();
+  return uniqueKeys(results.map((row) => row.object_key));
+}
+
+async function deleteUploadedFileMetadataByOwner(db, userIds) {
+  if (!userIds.length) {
+    return 0;
+  }
+
+  const { meta } = await db
+    .prepare(
+      `DELETE FROM uploaded_files
+       WHERE owner_user_id IN (${placeholders(userIds.length)})`
+    )
+    .bind(...userIds)
+    .run();
+  return Number(meta?.changes || 0);
+}
+
+async function runOrphanedUploadsStep(env, config, summary) {
+  let batches = 0;
+
+  while (batches < config.maxBatchesPerRun) {
+    const { results } = await env.DB
+      .prepare(
+        `SELECT object_key
+         FROM uploaded_files
+         WHERE created_at < datetime('now', ?)
+           AND NOT EXISTS (
+             SELECT 1 FROM messages
+             WHERE messages.attachment_key = uploaded_files.object_key
+               AND messages.deleted_at IS NULL
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM users
+             WHERE users.avatar_key = uploaded_files.object_key
+               AND users.deleted_at IS NULL
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM channels
+             WHERE channels.avatar_key = uploaded_files.object_key
+               AND channels.deleted_at IS NULL
+           )
+         ORDER BY created_at ASC
+         LIMIT ?`
+      )
+      .bind(`-${config.orphanUploadRetentionDays} day`, config.batchSize)
+      .all();
+
+    if (!results.length) {
+      break;
+    }
+
+    batches += 1;
+    const before = summary.r2Deleted;
+    await processR2CandidateKeys(
+      env,
+      env.DB,
+      results.map((row) => row.object_key),
+      summary
+    );
+    summary.orphanUploadsDeleted += summary.r2Deleted - before;
 
     if (results.length < config.batchSize) {
       break;
@@ -492,6 +629,7 @@ async function runHardDeleteUsersStep(env, config, summary) {
     batches += 1;
     const userIds = results.map((row) => Number(row.id));
     const avatarKeys = results.map((row) => row.avatar_key);
+    const ownedFileKeys = await collectUploadedFileKeysByOwner(env.DB, userIds);
     const attachmentKeys = await collectMessageAttachmentsByColumn(
       env.DB,
       'sender_id',
@@ -499,6 +637,7 @@ async function runHardDeleteUsersStep(env, config, summary) {
     );
 
     await clearUserReferences(env, userIds);
+    await deleteUploadedFileMetadataByOwner(env.DB, userIds);
     summary.userMessagesDeleted += await deleteRowsByIds(
       env.DB,
       'messages',
@@ -521,7 +660,7 @@ async function runHardDeleteUsersStep(env, config, summary) {
     await processR2CandidateKeys(
       env,
       env.DB,
-      [...attachmentKeys, ...avatarKeys],
+      [...attachmentKeys, ...avatarKeys, ...ownedFileKeys],
       summary
     );
 
@@ -541,6 +680,7 @@ export async function runScheduledGc(env) {
   await runHardDeleteInvitesStep(env, config, summary);
   await runHardDeleteChannelsStep(env, config, summary);
   await runHardDeleteUsersStep(env, config, summary);
+  await runOrphanedUploadsStep(env, config, summary);
 
   console.log(JSON.stringify({
     type: 'scheduled_gc_summary',
@@ -548,5 +688,12 @@ export async function runScheduledGc(env) {
     summary
   }));
 
+  return summary;
+}
+
+export async function cleanupR2Keys(env, keys) {
+  await ensureGcSchema(env.DB);
+  const summary = createSummary();
+  await processR2CandidateKeys(env, env.DB, keys, summary);
   return summary;
 }

@@ -52,14 +52,15 @@ function handleRoomAccessRevoked(room) {
 
 const {
   messages, loading, wsStatus, composerText, pendingAttachment, sending,
-  messagesEl, fileInputEl, isOwnMessage,
-  loadMessages, connectSocket, disconnectSocket, sendMessage, handleComposerKeydown,
+  deletingMessageId, messagesEl, fileInputEl, isOwnMessage,
+  loadMessages, connectSocket, disconnectSocket, sendMessage, deleteMessage, handleComposerKeydown,
   openFilePicker, uploadAttachment, clearAttachment, loadOlder
 } = useChatRoom({
   activeRoom,
   session,
   error,
   onRoomActivity: handleRoomActivity,
+  onRoomMessageDeleted: () => { void refreshSidebar(); },
   onRoomAccessRevoked: handleRoomAccessRevoked
 });
 
@@ -282,8 +283,19 @@ onBeforeUnmount(() => {
                 {{ msg.sender.displayName }}
               </div>
               <p v-if="msg.content">{{ msg.content }}</p>
-              <MessageAttachment v-if="msg.attachment" :attachment="msg.attachment" />
-              <span class="message-time">{{ formatBubbleTime(msg.createdAt) }}</span>
+               <MessageAttachment v-if="msg.attachment" :attachment="msg.attachment" />
+               <div class="message-meta">
+                 <span class="message-time">{{ formatBubbleTime(msg.createdAt) }}</span>
+                 <button
+                   v-if="isOwnMessage(msg) || session?.isAdmin"
+                   type="button"
+                   class="message-delete"
+                   :disabled="deletingMessageId === msg.id"
+                   @click="deleteMessage(msg)"
+                 >
+                   {{ deletingMessageId === msg.id ? '删除中...' : '删除' }}
+                 </button>
+               </div>
             </div>
           </article>
         </section>
@@ -783,15 +795,43 @@ onBeforeUnmount(() => {
   margin-bottom: 4px;
 }
 
-.message-time {
+.message-meta {
   position: absolute;
   right: 8px;
   bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-time {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   font-size: 11px;
   line-height: 1;
   color: #667781;
   white-space: nowrap;
   user-select: none;
+}
+
+.message-delete {
+  margin-right: 29px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #dc2626;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.message-delete:hover {
+  text-decoration: underline;
+}
+
+.message-delete:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .message-bubble p {

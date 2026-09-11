@@ -68,3 +68,12 @@ export async function notifyUserInbox(env, userId, payload) {
 	});
 	return response;
 }
+
+export async function notifyRoomMessageDeleted(env, kind, roomId, messageId) {
+	const stub = getChannelRoomStub(env, kind, roomId);
+	return stub.fetch(`${INTERNAL_ORIGIN}/broadcast`, {
+		method: "POST",
+		headers: createInternalHeaders({ "Content-Type": "application/json" }),
+		body: JSON.stringify({ type: "message_deleted", messageId: Number(messageId) }),
+	});
+}

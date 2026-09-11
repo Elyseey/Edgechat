@@ -14,7 +14,9 @@ export function useChatRoom({
 	session,
 	error,
 	onRoomActivity = () => {},
+	onRoomMessageDeleted = () => {},
 	onRoomAccessRevoked = () => {},
+	confirmAction = (message) => window.confirm(message),
 }) {
 	const messages = ref([]);
 	const loading = ref(false);
@@ -22,6 +24,7 @@ export function useChatRoom({
 	const composerText = ref("");
 	const pendingAttachment = ref(null);
 	const sending = ref(false);
+	const deletingMessageId = ref(null);
 	const messagesEl = ref(null);
 	const fileInputEl = ref(null);
 
@@ -95,6 +98,14 @@ export function useChatRoom({
 				messages.value = [...messages.value, payload.message];
 				applyActiveRoomActivity(payload.message);
 				nextTick().then(scrollToBottom);
+			}
+			if (payload.type === "message_deleted" && payload.messageId) {
+				const messageId = Number(payload.messageId);
+				const nextMessages = messages.value.filter((item) => Number(item.id) !== messageId);
+				if (nextMessages.length !== messages.value.length) {
+					messages.value = nextMessages;
+					onRoomMessageDeleted({ messageId });
+				}
 			}
 			if (payload.type === "error") {
 				error.value = payload.error;
@@ -176,6 +187,28 @@ export function useChatRoom({
 		}
 	}
 
+	async function deleteMessage(message) {
+		const messageId = Number(message?.id);
+		if (!Number.isInteger(messageId) || messageId <= 0 || deletingMessageId.value) {
+			return;
+		}
+		if (!confirmAction("确认删除这条消息吗？附件也会在没有其他引用时回收。")) {
+			return;
+		}
+
+		deletingMessageId.value = messageId;
+		error.value = "";
+		try {
+			await api.deleteMessage(messageId);
+			messages.value = messages.value.filter((item) => Number(item.id) !== messageId);
+			onRoomMessageDeleted({ messageId });
+		} catch (currentError) {
+			error.value = currentError.message;
+		} finally {
+			deletingMessageId.value = null;
+		}
+	}
+
 	function handleComposerKeydown(event) {
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
@@ -232,6 +265,7 @@ export function useChatRoom({
 		composerText,
 		pendingAttachment,
 		sending,
+		deletingMessageId,
 		messagesEl,
 		fileInputEl,
 		isOwnMessage,
@@ -239,6 +273,7 @@ export function useChatRoom({
 		connectSocket,
 		disconnectSocket,
 		sendMessage,
+		deleteMessage,
 		handleComposerKeydown,
 		openFilePicker,
 		uploadAttachment,

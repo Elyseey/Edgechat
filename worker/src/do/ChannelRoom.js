@@ -2,7 +2,7 @@ import { MessageSubmissionError, submitRoomMessage } from '../message-submission
 import { authorizeRoom } from '../room-access.js';
 import { validateSession } from '../session.js';
 import { projectUnreadMessage } from '../unread-projection.js';
-import { parseVerifiedPrincipal } from '../verified-identity.js';
+import { isVerifiedInternalRequest, parseVerifiedPrincipal } from '../verified-identity.js';
 
 const MESSAGE_SIZE_LIMIT = 10 * 1024;
 
@@ -140,6 +140,30 @@ export class ChannelRoom {
 
   async fetch(request) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/broadcast') {
+      if (!isVerifiedInternalRequest(request) || request.method !== 'POST') {
+        return new Response('Forbidden', { status: 403 });
+      }
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return new Response('Invalid payload', { status: 400 });
+      }
+      if (
+        payload?.type !== 'message_deleted' ||
+        !Number.isInteger(Number(payload.messageId)) ||
+        Number(payload.messageId) <= 0
+      ) {
+        return new Response('Invalid payload', { status: 400 });
+      }
+      await this.broadcast(JSON.stringify({
+        type: 'message_deleted',
+        messageId: Number(payload.messageId),
+      }));
+      return new Response('ok');
+    }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected websocket', { status: 426 });

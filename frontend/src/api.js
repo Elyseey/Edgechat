@@ -128,6 +128,9 @@ export default {
     }
     return request(`/messages?${query.toString()}`);
   },
+  deleteMessage(messageId) {
+    return request(`/messages/${messageId}`, { method: 'DELETE' });
+  },
   markRoomRead(kind, roomId, messageId) {
     return request('/messages/read', {
       method: 'POST',
