@@ -78,6 +78,15 @@ export function createMessageSubmission({
 				packet: JSON.stringify({ protocolVersion: 1, type: "message", message }),
 			};
 		} catch (error) {
+			if (
+				error?.message === "Invalid attachment" ||
+				error?.message === "Attachment is not available"
+			) {
+				throw new MessageSubmissionError(
+					"附件不存在、无权使用或正在清理，请重新上传",
+					"attachment_unavailable",
+			);
+			}
 			if (error?.message === "Message content cannot be empty") {
 				throw new MessageSubmissionError("消息内容不能为空");
 			}
