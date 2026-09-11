@@ -8,6 +8,7 @@ const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 let vite;
 let useConversationFlow;
 let useMessageContextMenu;
+let useUserBlock;
 
 before(async () => {
 	vite = await createServer({
@@ -22,6 +23,9 @@ before(async () => {
 	));
 	({ useMessageContextMenu } = await vite.ssrLoadModule(
 		"/frontend/src/composables/useMessageContextMenu.ts",
+	));
+	({ useUserBlock } = await vite.ssrLoadModule(
+		"/frontend/src/composables/useUserBlock.ts",
 	));
 });
 
@@ -122,4 +126,46 @@ test("消息菜单允许所有会话成员通过右键和触摸长按打开回�
 		globalThis.setTimeout = nativeSetTimeout;
 		globalThis.clearTimeout = nativeClearTimeout;
 	}
+});
+
+test("私信拉黑先确认，并同步当前会话与侧栏状态", async () => {
+	const activeRoom = ref({
+		id: 10,
+		kind: "dm",
+		otherUser: { id: 2, displayName: "Alice" },
+		isBlockedByMe: false,
+	});
+	const dms = ref([{ ...activeRoom.value }]);
+	const error = ref("");
+	const calls = [];
+	let confirmed = false;
+	const userBlock = useUserBlock({
+		activeRoom,
+		dms,
+		error,
+		confirmBlock(message) {
+			calls.push(["confirm", message]);
+			return confirmed;
+		},
+		blockApi: {
+			async blockUser(userId) {
+				calls.push(["block", userId]);
+				return { blockedByMe: true };
+			},
+			async unblockUser(userId) {
+				calls.push(["unblock", userId]);
+				return { blockedByMe: false };
+			},
+		},
+	});
+
+	assert.equal(await userBlock.toggleUserBlock(), false);
+	assert.equal(userBlock.isBlockedByMe.value, false);
+	confirmed = true;
+	assert.equal(await userBlock.toggleUserBlock(), true);
+	assert.equal(userBlock.isBlockedByMe.value, true);
+	assert.equal(dms.value[0].isBlockedByMe, true);
+	assert.equal(await userBlock.toggleUserBlock(), true);
+	assert.equal(userBlock.isBlockedByMe.value, false);
+	assert.deepEqual(calls.map(([type]) => type), ["confirm", "confirm", "block", "unblock"]);
 });

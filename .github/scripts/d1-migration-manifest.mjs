@@ -147,6 +147,11 @@ export const D1_MIGRATIONS = [
 			"index:idx_messages_reply_attention",
 		],
 	},
+	{
+		id: "2026-09-11-user-blocks",
+		file: "worker/migrations/2026-09-11-user-blocks.sql",
+		artifacts: ["table:user_blocks", "index:idx_user_blocks_blocked"],
+	},
 ];
 
 // b3f6855 曾发布、0c13e8f 已撤回的迁移：仅识别历史 ledger，不要求新安装创建废弃表，也不删除旧数据。

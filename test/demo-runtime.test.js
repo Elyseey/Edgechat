@@ -160,6 +160,51 @@ test('demo room socket echoes sent messages through the real-time contract', asy
   inboxSocket.close();
 });
 
+test('demo direct messages honor blocking and resume after unblocking', async () => {
+	await requestDemo('/users/2/block', { method: 'PUT' });
+	assert.equal((await requestDemo('/bootstrap')).dms[0].isBlockedByMe, true);
+
+	await requestDemo('/auth/login', {
+		method: 'POST',
+		body: { username: 'alice', password: 'demo' }
+	});
+	const frames = [];
+	let socket;
+	await new Promise((resolve) => {
+		socket = connectDemoRoomSocket({
+			kind: 'dm',
+			roomId: 10,
+			onMessage(frame) {
+				frames.push(JSON.parse(frame));
+			},
+			onStatus(event) {
+				if (event.status === 'open') resolve();
+			}
+		});
+	});
+	const before = (await requestDemo('/messages?kind=dm&roomId=10')).messages.length;
+	socket.send(JSON.stringify({ type: 'send', content: 'blocked message' }));
+	assert.deepEqual(frames.at(-1), {
+		type: 'error',
+		error: '发送被拒，你已经被拉黑'
+	});
+	assert.equal((await requestDemo('/messages?kind=dm&roomId=10')).messages.length, before);
+
+	await requestDemo('/auth/login', {
+		method: 'POST',
+		body: { username: 'admin', password: 'demo' }
+	});
+	await requestDemo('/users/2/block', { method: 'DELETE' });
+	await requestDemo('/auth/login', {
+		method: 'POST',
+		body: { username: 'alice', password: 'demo' }
+	});
+	socket.send(JSON.stringify({ type: 'send', content: 'restored message' }));
+	assert.equal(frames.at(-1).type, 'message');
+	assert.equal(frames.at(-1).message.content, 'restored message');
+	socket.close();
+});
+
 test('demo room socket persists pin, unpin and pinned-message deletion', async () => {
   const frames = [];
   let socket;

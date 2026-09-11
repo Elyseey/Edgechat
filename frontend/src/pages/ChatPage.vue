@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowLeft, Bell, BellOff, Menu, Settings, UsersRound } from '@lucide/vue';
+import { ArrowLeft, Ban, Bell, BellOff, Menu, Settings, UsersRound } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
@@ -34,6 +34,7 @@ import { useConversationCreation } from '../composables/useConversationCreation.
 import { useMessageContextMenu } from '../composables/useMessageContextMenu.ts';
 import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
+import { useUserBlock } from '../composables/useUserBlock.ts';
 import { resolveMentionUserIds } from '../mentions.ts';
 import store from '../store.js';
 import { useI18n } from '../i18n.js';
@@ -93,6 +94,11 @@ const {
   onOpenRoom: openRoomFromNotification
 });
 const activeRoomMuted = computed(() => isRoomMuted(activeRoom.value));
+const {
+  isBlockedByMe: activeDmBlockedByMe,
+  saving: userBlockSaving,
+  toggleUserBlock
+} = useUserBlock({ activeRoom, dms, error });
 
 function handleRoomActivity({ room, message }) {
   applyConversationActivity({
@@ -534,6 +540,21 @@ onBeforeUnmount(() => {
               role="status"
             ></div>
             <button
+              v-if="activeRoom.kind === 'dm'"
+              type="button"
+              class="chat-header__button chat-header__button--danger"
+              :class="{ 'chat-header__button--blocked': activeDmBlockedByMe }"
+              :title="activeDmBlockedByMe ? t('chat.unblockUser') : t('chat.blockUser')"
+              :aria-label="activeDmBlockedByMe ? t('chat.unblockUser') : t('chat.blockUser')"
+              :aria-pressed="activeDmBlockedByMe"
+              :aria-busy="userBlockSaving"
+              :disabled="userBlockSaving"
+              @click="toggleUserBlock"
+            >
+              <Ban :size="19" aria-hidden="true" />
+              <span>{{ activeDmBlockedByMe ? t('chat.unblock') : t('chat.block') }}</span>
+            </button>
+            <button
               type="button"
               class="chat-header__button"
               :class="{ 'chat-header__button--active': activeRoomMuted }"
@@ -656,7 +677,7 @@ onBeforeUnmount(() => {
 		  v-model="composerText"
 		  :pending-attachment="pendingAttachment"
 		  :sending="sending"
-			  :disabled="!activeRoom"
+			  :disabled="!activeRoom || activeDmBlockedByMe"
 			  :error="error"
 			  :mention-candidates="mentionCandidates"
 			  :replying-to="replyingTo"
@@ -1059,6 +1080,18 @@ onBeforeUnmount(() => {
   border-color: rgba(0, 128, 105, 0.28);
   background: rgba(0, 128, 105, 0.08);
   color: #008069;
+}
+
+.chat-header__button--danger:hover,
+.chat-header__button--blocked {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.chat-header__button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .header-action:focus-visible {
