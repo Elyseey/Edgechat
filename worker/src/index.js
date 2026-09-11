@@ -30,6 +30,7 @@ import { registerChannelRoutes } from './api/channels.js';
 import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
+import { registerUserBlockRoutes } from './api/user-blocks.ts';
 import { registerV1Routes } from './api/v1.js';
 import {
   registerTelegramAdminRoutes,
@@ -321,6 +322,7 @@ app.use('/api/admin/*', adminMiddleware);
 
 registerMessageRoutes(app);
 registerDmRoutes(app);
+registerUserBlockRoutes(app);
 registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);

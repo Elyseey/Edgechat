@@ -172,6 +172,12 @@ export default {
   listDms() {
     return request('/dm');
   },
+  blockUser(userId) {
+    return request(`/users/${Number(userId)}/block`, { method: 'PUT' });
+  },
+  unblockUser(userId) {
+    return request(`/users/${Number(userId)}/block`, { method: 'DELETE' });
+  },
   uploadFile(file) {
     const form = new FormData();
     form.append('file', file);

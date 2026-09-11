@@ -128,6 +128,16 @@ CREATE TABLE IF NOT EXISTS messages (
   FOREIGN KEY (sender_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id INTEGER NOT NULL,
+  blocked_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (blocker_id, blocked_id),
+  CHECK (blocker_id != blocked_id),
+  FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS channel_pins (
   channel_id INTEGER PRIMARY KEY,
   message_id INTEGER NOT NULL UNIQUE,
@@ -436,6 +446,9 @@ CREATE INDEX IF NOT EXISTS idx_channels_kind
 
 CREATE INDEX IF NOT EXISTS idx_users_username
   ON users(username);
+
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked
+  ON user_blocks(blocked_id, blocker_id);
 
 CREATE INDEX IF NOT EXISTS idx_registration_invites_active
   ON registration_invites(created_at DESC, deleted_at, consumed_at);

@@ -8,6 +8,7 @@ import {
   projectDemoDm,
   projectDemoUser,
   roomKey,
+  setDemoUserBlocked,
   storeDemoFile
 } from './state.js';
 
@@ -52,7 +53,7 @@ function sessionForUser(user) {
 function bootstrapPayload() {
   return {
     channels: demoState.channels.map(projectDemoChannel),
-    dms: demoState.dms.map(projectDemoDm),
+    dms: demoState.dms.map((dm) => projectDemoDm(dm, demoState.session.userId)),
     users: demoState.users
       .map(projectDemoUser)
       .filter((user) => Number(user.id) !== Number(demoState.session.userId) && !user.isDisabled)
@@ -262,6 +263,16 @@ export async function requestDemo(path, options = {}) {
   if (method === 'GET' && pathname === '/users') {
     return { users: bootstrapPayload().users };
   }
+  let match = pathname.match(/^\/users\/(\d+)\/block$/);
+  if ((method === 'PUT' || method === 'DELETE') && match) {
+    const userId = Number(match[1]);
+    if (userId === Number(demoState.session.userId) || !findDemoUser(userId)) {
+      fail('请选择有效用户');
+    }
+    const blockedByMe = method === 'PUT';
+    setDemoUserBlocked(demoState.session.userId, userId, blockedByMe);
+    return { blockedByMe };
+  }
   if (method === 'GET' && pathname === '/bootstrap') {
     return bootstrapPayload();
   }
@@ -274,7 +285,7 @@ export async function requestDemo(path, options = {}) {
     return { channel: createGroup(body) };
   }
 
-  let match = pathname.match(/^\/channels\/(\d+)\/join$/);
+  match = pathname.match(/^\/channels\/(\d+)\/join$/);
   if (method === 'POST' && match) {
     const channel = findDemoChannel(match[1]);
     if (!channel || channel.kind !== 'public') fail('公开群组不存在', 404);
@@ -357,7 +368,10 @@ export async function requestDemo(path, options = {}) {
   if (method === 'POST' && pathname === '/dm/open') {
     const user = findDemoUser(body.userId);
     if (!user) fail('用户不存在', 404);
-    let dm = demoState.dms.find((item) => Number(item.otherUser.id) === Number(user.id));
+    let dm = demoState.dms.find(
+      (item) => item.participantIds.includes(Number(demoState.session.userId))
+        && item.participantIds.includes(Number(user.id))
+    );
     if (!dm) {
       dm = {
         id: demoState.nextDmId++,
@@ -371,10 +385,10 @@ export async function requestDemo(path, options = {}) {
       demoState.dms.push(dm);
       demoState.messages[roomKey('dm', dm.id)] = [];
     }
-    return { dm: projectDemoDm(dm) };
+    return { dm: projectDemoDm(dm, demoState.session.userId) };
   }
   if (method === 'GET' && pathname === '/dm') {
-    return { dms: demoState.dms.map(projectDemoDm) };
+    return { dms: demoState.dms.map((dm) => projectDemoDm(dm, demoState.session.userId)) };
   }
   if (method === 'POST' && pathname === '/upload') {
     const file = body.get('file');

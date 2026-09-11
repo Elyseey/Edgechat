@@ -350,7 +350,8 @@ export function createDemoFixtures() {
     users,
     channels,
     dms,
-    messages,
+		messages,
+		userBlocks: new Set(),
     pinnedMessages: {
       'public:1': messages['public:1'][1]
     },
