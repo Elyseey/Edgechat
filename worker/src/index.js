@@ -19,7 +19,10 @@ import {
 import { getSiteSettings } from './data/site-settings.js';
 import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
-import { resolveAvatarKeyUpdate } from './avatar-policy.js';
+import {
+  isR2ObjectPendingDeleteError,
+  resolveAvatarKeyUpdate
+} from './avatar-policy.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
 import { registerMaintenanceRoutes } from './api/maintenance.ts';
@@ -266,13 +269,20 @@ app.patch('/api/me/profile', async (c) => {
     updates.splice(1, 0, 'avatar_key = ?');
     binds.push(avatarUpdate.key);
   }
-  await c.env.DB.prepare(
-    `UPDATE users
-     SET ${updates.join(', ')}
-     WHERE id = ?`
-  )
-    .bind(...binds, session.userId)
-    .run();
+  try {
+    await c.env.DB.prepare(
+      `UPDATE users
+       SET ${updates.join(', ')}
+       WHERE id = ?`
+    )
+      .bind(...binds, session.userId)
+      .run();
+  } catch (currentError) {
+    if (isR2ObjectPendingDeleteError(currentError)) {
+      return errorResponse('头像文件正在清理，请重新上传');
+    }
+    throw currentError;
+  }
 
   const nextSession = await getSession(c.env, session.token);
   const merged = {

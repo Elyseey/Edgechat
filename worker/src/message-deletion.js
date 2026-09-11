@@ -45,17 +45,16 @@ export function createMessageDeletion({
 			throw new MessageDeletionError("消息不存在或已被删除");
 		}
 
-		if (attachmentKey) {
-			try {
-				await cleanupAttachments(env, [attachmentKey]);
-			} catch (error) {
-				console.warn("Failed to clean up deleted message attachment", error);
-			}
-		}
+		const cleanupPromise = attachmentKey
+			? Promise.resolve().then(() => cleanupAttachments(env, [attachmentKey])).catch((error) => {
+					console.warn("Failed to clean up deleted message attachment", error);
+				})
+			: null;
 
 		return {
-				messageId,
-				packet: JSON.stringify({ protocolVersion: 1, type: "message_deleted", messageId }),
+			messageId,
+			packet: JSON.stringify({ protocolVersion: 1, type: "message_deleted", messageId }),
+			cleanupPromise,
 		};
 	};
 }

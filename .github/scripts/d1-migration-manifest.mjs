@@ -147,6 +147,22 @@ export const D1_MIGRATIONS = [
 			"index:idx_messages_reply_attention",
 		],
 	},
+	{
+		id: "2026-09-11-r2-cleanup-guards",
+		file: "worker/migrations/2026-09-11-r2-cleanup-guards.sql",
+		artifacts: [
+			"index:idx_gc_uploaded_created",
+			"index:idx_gc_message_attachment",
+			"index:idx_gc_user_avatar",
+			"index:idx_gc_channel_avatar",
+			"trigger:prevent_pending_message_attachment_insert",
+			"trigger:prevent_pending_message_attachment_update",
+			"trigger:prevent_pending_user_avatar_insert",
+			"trigger:prevent_pending_user_avatar_update",
+			"trigger:prevent_pending_channel_avatar_insert",
+			"trigger:prevent_pending_channel_avatar_update",
+		],
+	},
 ];
 
 // b3f6855 曾发布、0c13e8f 已撤回的迁移：仅识别历史 ledger，不要求新安装创建废弃表，也不删除旧数据。

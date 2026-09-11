@@ -470,6 +470,9 @@ async function persistMessage(env, {
 			.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
 	} catch (error) {
+		if (String(error?.message || error).includes("r2_object_pending_delete")) {
+			throw new Error("Attachment is not available");
+		}
 		if (sourceMessageId && String(error?.message || error).includes("UNIQUE")) {
 			const existing = await getMessageBySource(env, source, sourceMessageId);
 			if (existing) {

@@ -1,6 +1,10 @@
 import { getOwnedUploadedFileMetadata } from "./data/uploaded-files.js";
 import { ApiError } from "./errors.js";
 
+export function isR2ObjectPendingDeleteError(error) {
+	return String(error?.message || error).includes("r2_object_pending_delete");
+}
+
 export async function resolveAvatarKeyUpdate(db, userId, payload) {
 	if (!Object.hasOwn(payload, "avatarKey")) {
 		return { provided: false, key: null };

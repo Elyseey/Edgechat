@@ -127,7 +127,6 @@ const {
   session,
   error,
   onRoomActivity: handleRoomActivity,
-  onRoomMessageDeleted: () => { void refreshSidebar(); },
   onRoomAccessRevoked: handleRoomAccessRevoked
 });
 

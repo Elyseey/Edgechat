@@ -16,7 +16,6 @@ export function useChatRoom({
 	session,
 	error,
 	onRoomActivity = () => {},
-	onRoomMessageDeleted = () => {},
 	onRoomAccessRevoked = () => {},
 	roomApi = api,
 	openRoomConnection = connectRoomSocket,
@@ -156,9 +155,6 @@ export function useChatRoom({
 			}
 			if (payload.type === "message_deleted") {
 				const messageId = Number(payload.messageId);
-				const hadMessage = messages.value.some(
-					(message) => Number(message.id) === messageId,
-				);
 				messages.value = messages.value
 					.filter((message) => Number(message.id) !== messageId)
 					.map((message) =>
@@ -168,9 +164,6 @@ export function useChatRoom({
 					);
 				if (Number(pinnedMessage.value?.id) === messageId) {
 					pinnedMessage.value = null;
-				}
-				if (hadMessage) {
-					onRoomMessageDeleted({ messageId });
 				}
 			}
 			if (payload.type === "message_pinned" && payload.message) {

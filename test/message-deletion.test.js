@@ -91,11 +91,12 @@ test("消息删除后会回收不再引用的附件", async () => {
 	});
 	const env = { DB: {}, FILES: {} };
 
-	await remove(
+	const result = await remove(
 		env,
 		{ room: { id: 4, kind: "private" }, principal: { userId: 7 } },
 		{ messageId: 9 },
 	);
+	await result.cleanupPromise;
 
 	assert.deepEqual(cleaned, [{ env, keys: ["7/voice.webm"] }]);
 });

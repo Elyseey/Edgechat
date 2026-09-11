@@ -74,6 +74,10 @@ export async function getOwnedUploadedFileMetadata(db, key, userId) {
 			`SELECT filename, content_type, size
 			 FROM uploaded_files
 			 WHERE object_key = ? AND owner_user_id = ?
+			   AND NOT EXISTS (
+			     SELECT 1 FROM pending_r2_delete
+			     WHERE pending_r2_delete.object_key = uploaded_files.object_key
+			   )
 			 LIMIT 1`,
 		)
 		.bind(String(key), Number(userId))

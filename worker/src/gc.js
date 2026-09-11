@@ -7,6 +7,34 @@ const DEFAULT_MAX_BATCHES_PER_RUN = 20;
 const DEFAULT_R2_DELETE_MAX_RETRY = 8;
 const DEFAULT_ORPHAN_UPLOAD_RETENTION_DAYS = 1;
 const MAX_ERROR_LENGTH = 500;
+export const ORPHAN_UPLOAD_QUERY = `SELECT object_key, created_at
+  FROM uploaded_files
+  WHERE created_at < datetime('now', ?)
+    AND (
+      created_at > ?
+      OR (created_at = ? AND object_key > ?)
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM pending_r2_delete
+      WHERE pending_r2_delete.object_key = uploaded_files.object_key
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM messages
+      WHERE messages.attachment_key = uploaded_files.object_key
+        AND messages.deleted_at IS NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM users
+      WHERE users.avatar_key = uploaded_files.object_key
+        AND users.deleted_at IS NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM channels
+      WHERE channels.avatar_key = uploaded_files.object_key
+        AND channels.deleted_at IS NULL
+    )
+  ORDER BY created_at ASC, object_key ASC
+  LIMIT ?`;
 const DELETE_ALLOWED_IDENTIFIERS = {
   messages: new Set(['id', 'channel_id', 'sender_id']),
   registration_invites: new Set(['id']),
@@ -212,27 +240,6 @@ async function isR2KeyReferenced(db, key) {
   return Boolean(results[0]);
 }
 
-async function queueR2DeleteFailure(db, key, errorMessage) {
-  await db
-    .prepare(
-      `INSERT INTO pending_r2_delete (
-         object_key,
-         retry_count,
-         next_retry_at,
-         last_error,
-         created_at,
-         updated_at
-       )
-       VALUES (?, 0, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(object_key) DO UPDATE
-       SET next_retry_at = CURRENT_TIMESTAMP,
-           last_error = excluded.last_error,
-           updated_at = CURRENT_TIMESTAMP`
-    )
-    .bind(key, errorMessage)
-    .run();
-}
-
 async function removePendingR2Delete(db, key) {
   await db
     .prepare(
@@ -244,7 +251,7 @@ async function removePendingR2Delete(db, key) {
 }
 
 async function reserveR2Delete(db, key) {
-  await db
+  const { meta } = await db
     .prepare(
       `INSERT INTO pending_r2_delete (
          object_key,
@@ -255,12 +262,17 @@ async function reserveR2Delete(db, key) {
          updated_at
        )
        VALUES (?, 0, CURRENT_TIMESTAMP, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(object_key) DO UPDATE
-       SET next_retry_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP`
+       ON CONFLICT(object_key) DO NOTHING`
     )
     .bind(key)
     .run();
+  return Number(meta?.changes || 0) > 0;
+}
+
+async function reserveR2DeleteKeys(db, keys) {
+  for (const key of uniqueKeys(keys)) {
+    await reserveR2Delete(db, key);
+  }
 }
 
 async function completeR2Delete(db, key) {
@@ -340,7 +352,10 @@ async function processR2CandidateKeys(env, db, keys, summary) {
       continue;
     }
 
-    await reserveR2Delete(db, key);
+    const reserved = await reserveR2Delete(db, key);
+    if (!reserved) {
+      continue;
+    }
     // Mark the key as pending before the final reference check so new messages
     // cannot bind an object that is already in the deletion workflow.
     if (await isR2KeyReferenced(db, key)) {
@@ -356,7 +371,14 @@ async function processR2CandidateKeys(env, db, keys, summary) {
     } catch (error) {
       summary.r2DeleteFailed += 1;
       summary.r2DeleteQueued += 1;
-      await queueR2DeleteFailure(db, key, safeErrorMessage(error));
+      const retryCount = 1;
+      await markR2RetryFailure(
+        db,
+        key,
+        retryCount,
+        retryDelayMinutes(retryCount, getGcConfig(env).r2DeleteMaxRetry),
+        safeErrorMessage(error)
+      );
     }
   }
 }
@@ -455,32 +477,19 @@ async function deleteUploadedFileMetadataByOwner(db, userIds) {
 
 async function runOrphanedUploadsStep(env, config, summary) {
   let batches = 0;
+  let cursorCreatedAt = '';
+  let cursorKey = '';
 
   while (batches < config.maxBatchesPerRun) {
     const { results } = await env.DB
-      .prepare(
-        `SELECT object_key
-         FROM uploaded_files
-         WHERE created_at < datetime('now', ?)
-           AND NOT EXISTS (
-             SELECT 1 FROM messages
-             WHERE messages.attachment_key = uploaded_files.object_key
-               AND messages.deleted_at IS NULL
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM users
-             WHERE users.avatar_key = uploaded_files.object_key
-               AND users.deleted_at IS NULL
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM channels
-             WHERE channels.avatar_key = uploaded_files.object_key
-               AND channels.deleted_at IS NULL
-           )
-         ORDER BY created_at ASC
-         LIMIT ?`
+      .prepare(ORPHAN_UPLOAD_QUERY)
+      .bind(
+        `-${config.orphanUploadRetentionDays} day`,
+        cursorCreatedAt,
+        cursorCreatedAt,
+        cursorKey,
+        config.batchSize
       )
-      .bind(`-${config.orphanUploadRetentionDays} day`, config.batchSize)
       .all();
 
     if (!results.length) {
@@ -488,6 +497,9 @@ async function runOrphanedUploadsStep(env, config, summary) {
     }
 
     batches += 1;
+    const lastRow = results.at(-1);
+    cursorCreatedAt = String(lastRow.created_at || '');
+    cursorKey = String(lastRow.object_key || '');
     const before = summary.r2Deleted;
     await processR2CandidateKeys(
       env,
@@ -673,7 +685,10 @@ async function runHardDeleteUsersStep(env, config, summary) {
       'sender_id',
       userIds
     );
+    const r2CandidateKeys = [...attachmentKeys, ...avatarKeys, ...ownedFileKeys];
 
+    // 持久化删除任务必须先于上传登记和用户记录删除；中途失败时任务仍可重试。
+    await reserveR2DeleteKeys(env.DB, r2CandidateKeys);
     await clearUserReferences(env, userIds);
     await deleteUploadedFileMetadataByOwner(env.DB, userIds);
     summary.userMessagesDeleted += await deleteRowsByIds(
@@ -693,13 +708,6 @@ async function runHardDeleteUsersStep(env, config, summary) {
       'users',
       'id',
       userIds
-    );
-
-    await processR2CandidateKeys(
-      env,
-      env.DB,
-      [...attachmentKeys, ...avatarKeys, ...ownedFileKeys],
-      summary
     );
 
     if (results.length < config.batchSize) {
@@ -731,7 +739,6 @@ export async function runScheduledGc(env) {
 }
 
 export async function cleanupR2Keys(env, keys) {
-  await ensureGcSchema(env.DB);
   const summary = createSummary();
   await processR2CandidateKeys(env, env.DB, keys, summary);
   return summary;
