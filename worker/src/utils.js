@@ -1,3 +1,5 @@
+import { normalizeAudioAttachmentMetadata } from "./attachment-metadata.js";
+
 export function jsonResponse(data, init = {}) {
   return new Response(JSON.stringify(data), {
     ...init,
@@ -10,6 +12,20 @@ export function jsonResponse(data, init = {}) {
 
 export function errorResponse(message, status = 400) {
   return jsonResponse({ error: message }, { status });
+}
+
+export function v1ErrorResponse(code, message, status = 400) {
+  return jsonResponse({ error: { code, message } }, { status });
+}
+
+export function errorCodeForStatus(status) {
+  if (status === 401) return 'authentication_required';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'not_found';
+  if (status === 413) return 'payload_too_large';
+  if (status === 503) return 'service_unavailable';
+  if (status >= 500) return 'internal_error';
+  return 'invalid_request';
 }
 
 export const MAX_JSON_BODY_SIZE = 10 * 1024 * 1024;
@@ -54,13 +70,15 @@ export function pickAttachment(payload, options = {}) {
     return null;
   }
 
-  return {
-    key,
-    name: String(payload.name),
-    type: String(payload.type),
-    size: Number(payload.size) || 0,
-    url: `/files/${encodeURIComponent(key)}`
-  };
+	const type = String(payload.type);
+	return {
+		key,
+		name: String(payload.name),
+		type,
+		size: Number(payload.size) || 0,
+		url: `/files/${encodeURIComponent(key)}`,
+		...normalizeAudioAttachmentMetadata(payload, type),
+	};
 }
 
 export function publicFileUrl(key) {
@@ -81,26 +99,4 @@ export function randomToken(byteLength = 24) {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-export function canMutateAdminUser({
-  actorUserId,
-  targetUserId,
-  targetIsAdmin,
-  targetWillBeActive,
-  activeAdminCount
-}) {
-  if (targetWillBeActive) {
-    return { ok: true };
-  }
-
-  if (Number(actorUserId) === Number(targetUserId)) {
-    return { ok: false, message: '不能禁用或删除当前管理员账号' };
-  }
-
-  if (targetIsAdmin && Number(activeAdminCount || 0) <= 1) {
-    return { ok: false, message: '不能禁用或删除最后一个管理员账号' };
-  }
-
-  return { ok: true };
 }

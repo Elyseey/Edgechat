@@ -1,112 +1,144 @@
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import assert from "node:assert/strict";
+import test from "node:test";
 
+import { softDeleteMessage } from "../worker/src/data/messages.js";
 import {
-	deleteMessageById,
-	getMessageDeletionTarget,
-} from '../worker/src/data/messages.js';
+	createMessageDeletion,
+	MessageDeletionError,
+} from "../worker/src/message-deletion.js";
 
-function read(relativePath) {
-	return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
-}
-
-function createFakeDb({ referenced = false } = {}) {
-	const queries = [];
-	const deletedRows = [];
+function createMutationDb(changes = 1) {
+	const capture = { sql: "", binds: [] };
 	return {
-		queries,
-		deletedRows,
-		prepare(sql) {
-			queries.push(sql);
-			return {
-				bind(...bindings) {
-					return {
-						async all() {
-							if (sql.includes('FROM messages m') && sql.includes('channel_kind')) {
-								return {
-									results: [{
-										id: 8,
-										channel_id: 3,
-										sender_id: 7,
-										attachment_key: '7/voice.webm',
-										channel_kind: 'dm',
-									}],
-								};
-							}
-							if (sql.includes('FROM (')) {
-								return { results: referenced ? [{ found: 1 }] : [] };
-							}
-							return { results: [] };
-						},
-						async run() {
-							if (sql.includes('DELETE FROM messages')) {
-								return { meta: { changes: 1 } };
-							}
-							if (sql.includes('DELETE FROM uploaded_files')) {
-								deletedRows.push({ table: 'uploaded_files', bindings });
-							}
-							if (sql.includes('DELETE FROM pending_r2_delete')) {
-								deletedRows.push({ table: 'pending_r2_delete', bindings });
-							}
-							return { meta: { changes: 1 } };
-						},
-					};
-				},
-			};
+		capture,
+		db: {
+			prepare(sql) {
+				capture.sql = sql;
+				return {
+					bind(...binds) {
+						capture.binds = binds;
+						return this;
+					},
+					async run() {
+						return { meta: { changes } };
+					},
+				};
+			},
 		},
-		async batch() {},
 	};
 }
 
-test('消息删除目标同时返回频道类型和附件 key', async () => {
-	const db = createFakeDb();
-	const target = await getMessageDeletionTarget(db, 8);
+test("消息软删除限定消息与房间，并保留记录供后续清理", async () => {
+	const { db, capture } = createMutationDb();
 
-	assert.deepEqual(target, {
-		id: 8,
-		channel_id: 3,
-		sender_id: 7,
-		attachment_key: '7/voice.webm',
-		channel_kind: 'dm',
+	assert.equal(await softDeleteMessage(db, { channelId: "4", messageId: "9" }), true);
+	assert.deepEqual(capture.binds, [9, 4]);
+	assert.match(capture.sql, /SET deleted_at = CURRENT_TIMESTAMP/);
+	assert.match(capture.sql, /AND deleted_at IS NULL/);
+});
+
+test("消息删除统一完成权限校验、持久化与实时删除 packet", async () => {
+	const calls = [];
+	const remove = createMessageDeletion({
+		async authorize(db, principal, kind, roomId) {
+			calls.push({ type: "authorize", db, principal, kind, roomId });
+			return { ok: true };
+		},
+		async persistDeletion(db, args) {
+			calls.push({ type: "persist", db, args });
+			return true;
+		},
+	});
+	const db = {};
+	const result = await remove(
+		{ DB: db },
+		{ room: { id: 4, kind: "private" }, principal: { userId: 7 } },
+		{ messageId: "9" },
+	);
+
+	assert.deepEqual(calls, [
+		{
+			type: "authorize",
+			db,
+			principal: { userId: 7 },
+			kind: "private",
+			roomId: 4,
+		},
+		{ type: "persist", db, args: { channelId: 4, messageId: 9 } },
+	]);
+	assert.deepEqual(JSON.parse(result.packet), {
+		protocolVersion: 1,
+		type: "message_deleted",
+		messageId: 9,
 	});
 });
 
-test('删除消息会清理未被其他资源引用的 R2 对象', async () => {
-	const db = createFakeDb();
-	const deletedKeys = [];
-	const target = await deleteMessageById({
-		DB: db,
-		FILES: { async delete(key) { deletedKeys.push(key); } },
-	}, 8);
+test("消息删除后会回收不再引用的附件", async () => {
+	const cleaned = [];
+	const remove = createMessageDeletion({
+		async authorize() {
+			return { ok: true };
+		},
+		async getDeletionTarget() {
+			return { attachment_key: "7/voice.webm" };
+		},
+		async persistDeletion() {
+			return true;
+		},
+		async cleanupAttachments(env, keys) {
+			cleaned.push({ env, keys });
+		},
+	});
+	const env = { DB: {}, FILES: {} };
 
-	assert.equal(target.id, 8);
-	assert.deepEqual(deletedKeys, ['7/voice.webm']);
-	assert.deepEqual(db.deletedRows, [
-		{ table: 'uploaded_files', bindings: ['7/voice.webm'] },
-		{ table: 'pending_r2_delete', bindings: ['7/voice.webm'] },
-	]);
+	await remove(
+		env,
+		{ room: { id: 4, kind: "private" }, principal: { userId: 7 } },
+		{ messageId: 9 },
+	);
+
+	assert.deepEqual(cleaned, [{ env, keys: ["7/voice.webm"] }]);
 });
 
-test('仍有其他活跃引用时删除消息不会删除 R2 对象', async () => {
-	const db = createFakeDb({ referenced: true });
-	const deletedKeys = [];
-	await deleteMessageById({
-		DB: db,
-		FILES: { async delete(key) { deletedKeys.push(key); } },
-	}, 8);
+test("消息删除向客户端收敛无权限、无效参数与重复删除错误", async () => {
+	const denied = createMessageDeletion({
+		async authorize() {
+			return { ok: false };
+		},
+	});
+	await assert.rejects(
+		denied(
+			{ DB: {} },
+			{ room: { id: 4, kind: "private" }, principal: { userId: 7 } },
+			{ messageId: 9 },
+		),
+		(error) => error instanceof MessageDeletionError && error.message === "无权删除该消息",
+	);
 
-	assert.deepEqual(deletedKeys, []);
-	assert.deepEqual(db.deletedRows, []);
-});
+	const missing = createMessageDeletion({
+		async authorize() {
+			return { ok: true };
+		},
+		async persistDeletion() {
+			return false;
+		},
+	});
+	await assert.rejects(
+		missing(
+			{ DB: {} },
+			{ room: { id: 4, kind: "private" }, principal: { userId: 7 } },
+			{ messageId: 9 },
+		),
+		(error) =>
+			error instanceof MessageDeletionError && error.message === "消息不存在或已被删除",
+	);
 
-test('消息删除接口和前端删除入口均已声明', () => {
-	const apiSource = read('../worker/src/api/messages.js');
-	const clientSource = read('../frontend/src/api.js');
-	const roomSource = read('../frontend/src/composables/useChatRoom.js');
-
-	assert.match(apiSource, /app\.delete\('\/api\/messages\/:messageId'/);
-	assert.match(apiSource, /只能删除自己发送的消息/);
-	assert.match(clientSource, /deleteMessage\(messageId\)/);
-	assert.match(roomSource, /message_deleted/);
+	await assert.rejects(
+		missing(
+			{ DB: {} },
+			{ room: { id: 4, kind: "private" }, principal: { userId: 7 } },
+			{ messageId: 0 },
+		),
+		(error) => error instanceof MessageDeletionError && error.message === "消息不存在",
+	);
 });

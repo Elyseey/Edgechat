@@ -1,4 +1,9 @@
 import api from "./api.js";
+import {
+	connectRuntimeInboxSocket,
+	connectRuntimeRoomSocket,
+	isDemoMode,
+} from "./runtime.js";
 
 function openSocket(url, { onMessage, onStatus }) {
 	const socket = new WebSocket(url);
@@ -30,6 +35,9 @@ function openSocket(url, { onMessage, onStatus }) {
 }
 
 export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
+	if (isDemoMode) {
+		return connectRuntimeRoomSocket({ kind, roomId, onMessage, onStatus });
+	}
 	return openSocket(api.getRoomWebSocketUrl(kind, roomId), {
 		onMessage,
 		onStatus,
@@ -37,5 +45,8 @@ export function connectRoomSocket({ kind, roomId, onMessage, onStatus }) {
 }
 
 export function connectInboxSocket({ onMessage, onStatus }) {
+	if (isDemoMode) {
+		return connectRuntimeInboxSocket({ onMessage, onStatus });
+	}
 	return openSocket(api.getInboxWebSocketUrl(), { onMessage, onStatus });
 }

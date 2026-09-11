@@ -1,53 +1,10 @@
-import {
-  deleteMessageById,
-  getMessageDeletionTarget,
-  listMessages
-} from '../data/messages.js';
+import { listMessages } from '../data/messages.js';
+import { getPinnedMessage } from '../data/pins.js';
 import { markRoomRead } from '../data/unread.js';
 import { authorizeRoom, isRoomKind } from '../room-access.js';
-import { notifyRoomMessageDeleted } from '../do-bridge.js';
 import { errorResponse, parseJsonRequest, sanitizeLimit } from '../utils.js';
 
 export function registerMessageRoutes(app) {
-  app.delete('/api/messages/:messageId', async (c) => {
-    const session = c.get('session');
-    const messageId = Number(c.req.param('messageId'));
-    if (!Number.isInteger(messageId) || messageId <= 0) {
-      return errorResponse('消息不存在', 404);
-    }
-
-    const target = await getMessageDeletionTarget(c.env.DB, messageId);
-    if (!target) {
-      return errorResponse('消息不存在', 404);
-    }
-
-    const access = await authorizeRoom(
-      c.env.DB,
-      session,
-      target.channel_kind,
-      target.channel_id,
-    );
-    if (!access.ok) {
-      return errorResponse('无权删除该消息', 403);
-    }
-    if (!session.isAdmin && Number(target.sender_id) !== Number(session.userId)) {
-      return errorResponse('只能删除自己发送的消息', 403);
-    }
-
-    const deleted = await deleteMessageById(c.env, messageId);
-    if (!deleted) {
-      return errorResponse('消息不存在', 404);
-    }
-
-    try {
-      await notifyRoomMessageDeleted(c.env, target.channel_kind, target.channel_id, messageId);
-    } catch (error) {
-      console.warn('Failed to broadcast message deletion', error);
-    }
-
-    return c.json({ ok: true, messageId });
-  });
-
   app.get('/api/messages', async (c) => {
     const session = c.get('session');
     const kind = c.req.query('kind');
@@ -65,7 +22,10 @@ export function registerMessageRoutes(app) {
       return errorResponse('无权访问该会话', 403);
     }
 
-    const messages = await listMessages(c.env, roomId, before, limit);
+    const [messages, pinnedMessage] = await Promise.all([
+      listMessages(c.env, roomId, before, limit),
+      getPinnedMessage(c.env, roomId)
+    ]);
     await markRoomRead(c.env.DB, {
       channelId: roomId,
       userId: session.userId
@@ -78,7 +38,8 @@ export function registerMessageRoutes(app) {
         name: access.room.name,
         description: access.room.description
       },
-      messages
+      messages,
+      pinnedMessage
     });
   });
 

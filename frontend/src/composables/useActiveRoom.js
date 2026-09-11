@@ -1,4 +1,5 @@
 import { computed } from "vue";
+import { t } from "../i18n.js";
 
 export function useActiveRoom({ activeRoom }) {
 	const activeRoomKey = computed(() =>
@@ -18,39 +19,12 @@ export function useActiveRoom({ activeRoom }) {
 		Boolean(activeRoom.value && activeRoom.value.kind !== "dm"),
 	);
 
-	const activeRoomSubtitle = computed(() => {
-		if (!activeRoom.value) {
-			return "从左侧会话列表中选择联系人或群组开始聊天。";
-		}
-
-			if (activeRoom.value.kind === "dm") {
-				return `与 @${activeRoom.value.otherUser?.username || activeRoom.value.name} 的私信`;
-			}
-
-			if (activeRoom.value.isGeneral) {
-				const memberCount = activeRoom.value.memberCount
-					? ` · ${activeRoom.value.memberCount} 位成员`
-					: "";
-				return `全员群组${memberCount}`;
-			}
-
-		const visibility =
-			activeRoom.value.kind === "private" ? "私有群组" : "公开群组";
-		const owner = activeRoom.value.ownerDisplayName
-			? ` · 群主 ${activeRoom.value.ownerDisplayName}`
-			: "";
-		const memberCount = activeRoom.value.memberCount
-			? ` · ${activeRoom.value.memberCount} 位成员`
-			: "";
-		return `${visibility}${owner}${memberCount}`;
-	});
-
 	function applyActiveChannel(channel) {
-			activeRoom.value = {
-				id: channel.id,
-				kind: channel.kind,
-				name: channel.name,
-				isGeneral: Boolean(channel.isGeneral),
+		activeRoom.value = {
+			id: channel.id,
+			kind: channel.kind,
+			name: channel.name,
+			isGeneral: Boolean(channel.isGeneral),
 			description: channel.description,
 			avatarUrl: channel.avatarUrl || "",
 			avatarKey: channel.avatarKey || "",
@@ -59,11 +33,6 @@ export function useActiveRoom({ activeRoom }) {
 			myRole: channel.myRole || "",
 			memberCount: Number(channel.memberCount || 0),
 		};
-
-	}
-
-	function selectChannel(channel) {
-		applyActiveChannel(channel);
 	}
 
 	function selectDm(dm) {
@@ -77,24 +46,38 @@ export function useActiveRoom({ activeRoom }) {
 
 	function roomLabel(room) {
 		if (!room) {
-			return "未选择会话";
+			return t("chat.noConversationSelected");
 		}
-
 		if (room.kind === "dm") {
 			return room.otherUser?.displayName || room.name;
 		}
-
 		return room.name;
+	}
+
+	function roomSubtitle(room, connected = false) {
+		if (!room) {
+			return "";
+		}
+		if (room.kind === "dm") {
+			return room.otherUser?.username
+				? `@${room.otherUser.username}`
+				: connected
+					? t("chat.online")
+					: t("chat.connecting");
+		}
+		if (room.memberCount) {
+			return t("chat.memberCount", { count: room.memberCount });
+		}
+		return room.isGeneral ? t("chat.generalGroup") : t("chat.groupConversation");
 	}
 
 	return {
 		activeRoomKey,
 		canManageActiveRoom,
 		hasManageLayer,
-		activeRoomSubtitle,
 		applyActiveChannel,
-		selectChannel,
 		selectDm,
-			roomLabel,
+		roomLabel,
+		roomSubtitle,
 	};
 }

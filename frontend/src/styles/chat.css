@@ -244,11 +244,30 @@
   }
 
   .chat-member-panel {
-    padding: 14px 16px;
+    min-height: 100%;
+    padding: 16px;
+  }
+
+  .chat-member-panel__header {
+    align-items: center;
+  }
+
+  .chat-member-panel__actions {
+    align-items: center;
   }
 
   .member-chip {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+
+  .member-chip__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .chat-member-panel > .chat-member-panel__actions:last-child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 }

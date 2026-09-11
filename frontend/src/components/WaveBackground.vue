@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 const canvasRef = ref(null);
 let rafId = null;
+let resizeHandler = null;
 
 const waves = [
   { amp: 12, freq: 0.004, speed: 0.018, baseY: 0.92, harmonics: [{ ampRatio: 0.2, freqRatio: 2.0, speedRatio: 0.4, phase: 0.8 }], colors: ['#3a7aaa', '#4688b4'] },
@@ -27,7 +28,7 @@ const spots = [
   { x: 0.45, y: 0.58, r: 75, dx: 20, dy: 10, speed: 0.026, phase: 3.2 }
 ];
 
-function getColor(ctx, c1, c2, t) {
+function getColor(c1, c2, t) {
   const r = parseInt(c1.slice(1,3),16) * (1-t) + parseInt(c2.slice(1,3),16) * t;
   const g = parseInt(c1.slice(3,5),16) * (1-t) + parseInt(c2.slice(3,5),16) * t;
   const b = parseInt(c1.slice(5,7),16) * (1-t) + parseInt(c2.slice(5,7),16) * t;
@@ -69,7 +70,7 @@ function drawWaves(ctx, w, h, time) {
     ctx.lineTo(w, h);
     ctx.closePath();
 
-    const fill = getColor(ctx, wave.colors[0], wave.colors[1], colorT);
+    const fill = getColor(wave.colors[0], wave.colors[1], colorT);
     ctx.fillStyle = fill;
     ctx.fill();
 
@@ -103,12 +104,12 @@ function drawWaves(ctx, w, h, time) {
   });
 }
 
-function loop(ctx, w, h) {
+function loop(ctx, canvas) {
   let time = 0;
   function frame() {
     time += 0.5;
-    ctx.clearRect(0, 0, w, h);
-    drawWaves(ctx, w, h, time);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawWaves(ctx, canvas.width, canvas.height, time);
     rafId = requestAnimationFrame(frame);
   }
   frame();
@@ -118,19 +119,20 @@ onMounted(() => {
   const canvas = canvasRef.value;
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const w = canvas.width = window.innerWidth;
-  const h = canvas.height = window.innerHeight;
-  loop(ctx, w, h);
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  loop(ctx, canvas);
 
-  const onResize = () => {
+  resizeHandler = () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   };
-  window.addEventListener('resize', onResize);
+  window.addEventListener('resize', resizeHandler);
 });
 
 onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId);
+  if (resizeHandler) window.removeEventListener('resize', resizeHandler);
 });
 </script>
 

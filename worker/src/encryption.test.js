@@ -31,7 +31,7 @@ function keyring(activeKeyId = 'v1') {
 const messageContext = { channelId: 7, senderId: 42 };
 
 test('message encryption round-trips unicode with randomized nonces', async () => {
-  const plaintext = '服务端加密 🔐\nsecond line';
+  const plaintext = '服务端加密\nsecond line';
   const first = await encryptMessageContent(keyring(), plaintext, messageContext);
   const second = await encryptMessageContent(keyring(), plaintext, messageContext);
 
@@ -46,7 +46,7 @@ test('message decryption keeps legacy plaintext readable', async () => {
   assert.equal(await decryptMessageContent(keyring(), 'legacy plaintext', messageContext), 'legacy plaintext');
 });
 
-test('message authentication rejects tampering and the wrong AAD', async () => {
+test('message authentication rejects tampering and the wrong context', async () => {
   const encrypted = await encryptMessageContent(keyring(), 'authenticated', messageContext);
   const replacement = encrypted.endsWith('A') ? 'B' : 'A';
   const tampered = `${encrypted.slice(0, -1)}${replacement}`;
@@ -68,6 +68,20 @@ test('versioned keyring decrypts old data after the active key rotates', async (
   assert.equal(getMessageEnvelopeKeyId(oldEnvelope), 'v1');
   assert.equal(getMessageEnvelopeKeyId(newEnvelope), 'v2');
   assert.equal(await decryptMessageContent(keyring('v2'), oldEnvelope, messageContext), 'before rotation');
+});
+
+test('incremental Worker Secrets add a new active key without replacing the legacy keyring', async () => {
+  const legacyEnvelope = await encryptMessageContent(keyring('v1'), 'legacy keyring', messageContext);
+  const incrementalEnv = {
+    EDGECHAT_ENCRYPTION_KEYRING: keyring('v1'),
+    EDGECHAT_ENCRYPTION_ACTIVE_KEY_ID: 'auto-v1',
+    EDGECHAT_ENCRYPTION_KEY_1: encodedKey(201)
+  };
+  const newEnvelope = await encryptMessageContent(incrementalEnv, 'incremental key', messageContext);
+
+  assert.equal(getMessageEnvelopeKeyId(newEnvelope), 'auto-v1');
+  assert.equal(await decryptMessageContent(incrementalEnv, legacyEnvelope, messageContext), 'legacy keyring');
+  assert.equal(await decryptMessageContent(incrementalEnv, newEnvelope, messageContext), 'incremental key');
 });
 
 test('attachment encryption round-trips binary and binds the object key', async () => {

@@ -5,9 +5,7 @@ export function useConversationCreation({
 	users,
 	dms,
 	error,
-	refreshSidebar,
-	conversationItems,
-	openConversation,
+	refreshAndOpen,
 	openGroupDialog,
 	conversationApi = api,
 }) {
@@ -46,16 +44,9 @@ export function useConversationCreation({
 		error.value = "";
 		try {
 			const payload = await conversationApi.openDm(user.id);
-			await refreshSidebar();
-			const item = conversationItems.value.find(
-				(conversation) =>
-					conversation.kind === "dm" &&
-					Number(conversation.id) === Number(payload.dm.id),
-			);
-
-			// 刷新后的侧栏投影通常包含新私聊；保留返回值兜底，避免投影延迟阻断用户进入会话。
-			await openConversation(
-				item || { kind: "dm", id: payload.dm.id, source: payload.dm },
+			await refreshAndOpen(
+				{ kind: "dm", id: payload.dm.id },
+				{ kind: "dm", id: payload.dm.id, source: payload.dm },
 			);
 			closeAddConversation();
 		} catch (currentError) {

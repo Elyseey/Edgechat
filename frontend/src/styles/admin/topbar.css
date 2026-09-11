@@ -27,6 +27,13 @@
   overflow-wrap: anywhere;
 }
 
+.admin-topbar__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--admin-space-xs);
+}
+
 .admin-topbar__settings {
   min-height: 42px;
   display: inline-flex;
@@ -68,5 +75,9 @@
   .admin-topbar__settings {
     min-height: 38px;
     padding-inline: var(--admin-space-sm);
+  }
+
+  .admin-topbar__settings span {
+    display: none;
   }
 }

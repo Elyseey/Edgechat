@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-export const D1_MIGRATION_LEDGER = "edgechat_schema_migrations";
+import { D1_MIGRATION_LEDGER } from "../../worker/src/maintenance/schema-contract.ts";
+export { D1_MIGRATION_LEDGER };
 
 function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -14,7 +15,7 @@ function normalizedMigrationSql(sql) {
   return sql.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 }
 
-function migrationChecksums(sql) {
+export function migrationChecksums(sql) {
   const normalizedSql = normalizedMigrationSql(sql);
   return {
     current: checksum(normalizedSql),
@@ -27,7 +28,13 @@ function ledgerInsert(migration, checksum) {
 VALUES (${sqlString(migration.id)}, ${sqlString(checksum)});`;
 }
 
-export async function buildD1MigrationPlan({ migrations, appliedMigrations, artifacts, readSql }) {
+export async function buildD1MigrationPlan({
+  migrations,
+  repairs = [],
+  appliedMigrations,
+  artifacts,
+  readSql,
+}) {
   const chunks = [
     `CREATE TABLE IF NOT EXISTS ${D1_MIGRATION_LEDGER} (
   migration_id TEXT PRIMARY KEY,
@@ -36,6 +43,17 @@ export async function buildD1MigrationPlan({ migrations, appliedMigrations, arti
 );`,
   ];
   const decisions = [];
+
+  for (const repair of repairs) {
+    const shouldApply = repair.whenArtifacts.every((artifact) => artifacts.has(artifact));
+    if (!shouldApply) {
+      continue;
+    }
+
+    chunks.push(`-- 执行遗留数据库修复 ${repair.id}。`);
+    chunks.push((await readSql(repair.file)).trim());
+    decisions.push({ id: repair.id, action: "repair" });
+  }
 
   for (const migration of migrations) {
     const sql = await readSql(migration.file);

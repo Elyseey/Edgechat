@@ -1,6 +1,7 @@
 import { ensureDmChannel } from '../data/dm-provisioning.js';
 import { listAdminDms, listUserDms } from '../data/dm-queries.js';
 import { errorResponse, parseJsonRequest } from '../utils.js';
+import { activeUserSql } from '../user-status.js';
 
 export function registerDmRoutes(app) {
   app.get('/api/dm', async (c) => {
@@ -22,7 +23,7 @@ export function registerDmRoutes(app) {
       `SELECT id, username, display_name, avatar_key
        FROM users
        WHERE id = ?
-         AND is_disabled = 0
+         AND ${activeUserSql()}
          AND deleted_at IS NULL
        LIMIT 1`
     )

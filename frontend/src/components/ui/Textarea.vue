@@ -33,6 +33,12 @@ function handleInput(event) {
   syncHeight();
 }
 
+function focus() {
+  textareaEl.value?.focus();
+}
+
+defineExpose({ element: textareaEl, focus });
+
 watch(() => props.modelValue, () => nextTick(syncHeight));
 onMounted(syncHeight);
 </script>

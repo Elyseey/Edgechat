@@ -1,6 +1,7 @@
 import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
-
-const API_PREFIX = '/api';
+import { getEdgeChatServerOrigin, resolveServerUrl } from './capacitor-platform.ts';
+import { localizedError, localizeErrorMessage } from './localized-error.js';
+import { getRuntimeFileUrl, isDemoMode, requestRuntime } from './runtime.js';
 
 function buildHeaders(extra = {}) {
   const headers = { ...extra };
@@ -12,7 +13,15 @@ function buildHeaders(extra = {}) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_PREFIX}${path}`, {
+  if (isDemoMode) {
+    try {
+      return await requestRuntime(path, options);
+    } catch (error) {
+      throw localizedError(error);
+    }
+  }
+
+  const response = await fetch(resolveServerUrl(`/api${path}`), {
     ...options,
     headers: buildHeaders(options.headers),
     body:
@@ -29,13 +38,14 @@ async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
-    const message = payload?.error || payload || 'Request failed';
-    const error = new Error(message);
+    const rawMessage = payload?.error?.message || payload?.error || payload || 'Request failed';
+    const error = new Error(localizeErrorMessage(rawMessage));
     error.status = response.status;
     error.payload = payload;
+    error.rawMessage = rawMessage;
 
     if (response.status === 401 && typeof window !== 'undefined') {
-      dispatchAuthInvalid(message);
+      dispatchAuthInvalid(error.message);
     }
 
     throw error;
@@ -128,8 +138,18 @@ export default {
     }
     return request(`/messages?${query.toString()}`);
   },
-  deleteMessage(messageId) {
-    return request(`/messages/${messageId}`, { method: 'DELETE' });
+  getRecentMessages(kind, roomId, limit = 30) {
+    const query = new URLSearchParams({ limit: String(limit) });
+    return request(
+      `/v1/rooms/${encodeURIComponent(kind)}/${Number(roomId)}/messages?${query.toString()}`
+    );
+  },
+  sendRoomMessage(kind, roomId, payload) {
+    return request(`/v1/rooms/${encodeURIComponent(kind)}/${Number(roomId)}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
   },
   markRoomRead(kind, roomId, messageId) {
     return request('/messages/read', {
@@ -162,14 +182,14 @@ export default {
   },
   getRoomWebSocketUrl(kind, roomId) {
     const token = getStoredToken();
-    const url = new URL(`/api/ws/${kind}/${roomId}`, window.location.origin);
+    const url = new URL(`/api/ws/${kind}/${roomId}`, getEdgeChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');
     return url.toString();
   },
   getInboxWebSocketUrl() {
     const token = getStoredToken();
-    const url = new URL('/api/inbox/ws', window.location.origin);
+    const url = new URL('/api/inbox/ws', getEdgeChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');
     return url.toString();
@@ -179,15 +199,18 @@ export default {
     if (!raw) {
       return '';
     }
+    if (isDemoMode) {
+      return getRuntimeFileUrl(raw);
+    }
 
     const url = raw.startsWith('/files/')
-      ? new URL(raw, window.location.origin)
-      : new URL(`/files/${encodeURIComponent(raw)}`, window.location.origin);
+      ? new URL(resolveServerUrl(raw), getEdgeChatServerOrigin())
+      : new URL(resolveServerUrl(`/files/${encodeURIComponent(raw)}`), getEdgeChatServerOrigin());
     const token = getStoredToken();
     if (token) {
       url.searchParams.set('token', token);
     }
-    return url.pathname + url.search;
+    return resolveServerUrl(url.pathname + url.search);
   },
   adminUsers() {
     return request('/admin/users');
@@ -195,8 +218,46 @@ export default {
   adminOverview() {
     return request('/admin/overview');
   },
+  adminMaintenance() {
+    return request('/admin/maintenance');
+  },
+  adminStorageScan(cursor = '') {
+    const query = new URLSearchParams();
+    if (cursor) {
+      query.set('cursor', cursor);
+    }
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request(`/admin/storage/scan${suffix}`);
+  },
   adminSiteSettings() {
     return request('/admin/site-settings');
+  },
+  adminTelegram() {
+    return request('/admin/telegram');
+  },
+  saveAdminTelegramConfig(payload) {
+    return request('/admin/telegram/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  createAdminTelegramMapping(payload) {
+    return request('/admin/telegram/mappings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  updateAdminTelegramMapping(mappingId, payload) {
+    return request(`/admin/telegram/mappings/${mappingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  deleteAdminTelegramMapping(mappingId) {
+    return request(`/admin/telegram/mappings/${mappingId}`, { method: 'DELETE' });
   },
   listAdminRegisterLinks() {
     return request('/admin/register-links');
@@ -256,19 +317,6 @@ export default {
   },
   adminDms() {
     return request('/admin/dms');
-  },
-  adminRoomMessages(kind, roomId, before) {
-    const query = before ? `?before=${encodeURIComponent(String(before))}` : '';
-    return request(`/admin/rooms/${kind}/${roomId}/messages${query}`);
-  },
-  searchMessages(params) {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        query.set(key, String(value));
-      }
-    });
-    return request(`/admin/messages/search?${query.toString()}`);
   },
   getRegisterInvite(token) {
     return request(`/register-links/${encodeURIComponent(token)}`);

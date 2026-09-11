@@ -15,7 +15,10 @@ import {
   getChannelMembership
 } from '../room-access.js';
 import { ApiError } from '../errors.js';
+import { resolveAvatarKeyUpdate } from '../avatar-policy.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
+import { activeUserSql } from '../user-status.js';
+import { hardDeleteChannel } from '../data/channel-deletion.ts';
 
 function normalizeMemberIds(payload) {
   const source = Array.isArray(payload.memberUserIds)
@@ -38,7 +41,7 @@ async function ensureValidInvitees(db, userIds) {
       `SELECT id
        FROM users
        WHERE deleted_at IS NULL
-         AND is_disabled = 0
+         AND ${activeUserSql()}
          AND id IN (${placeholders})`
     )
     .bind(...userIds)
@@ -195,12 +198,6 @@ export function registerChannelRoutes(app) {
     const payload = await parseJsonRequest(c.req.raw);
     const name =
       payload.name === undefined ? undefined : String(payload.name || '').trim();
-    const avatarKey =
-      payload.avatarKey === undefined
-        ? undefined
-        : payload.avatarKey
-          ? String(payload.avatarKey)
-          : null;
 
     if (name !== undefined && !name) {
       return errorResponse('群组名称不能为空');
@@ -219,15 +216,17 @@ export function registerChannelRoutes(app) {
       return errorResponse('general 系统群组不能改名');
     }
 
+    const avatarUpdate = await resolveAvatarKeyUpdate(c.env.DB, session.userId, payload);
+
     const updates = [];
     const binds = [];
     if (name !== undefined) {
       updates.push('name = ?');
       binds.push(name);
     }
-    if (avatarKey !== undefined) {
+    if (avatarUpdate.provided) {
       updates.push('avatar_key = ?');
-      binds.push(avatarKey);
+      binds.push(avatarUpdate.key);
     }
 
     if (!updates.length) {
@@ -341,15 +340,7 @@ export function registerChannelRoutes(app) {
       return errorResponse('general 系统群组不能删除');
     }
 
-    await c.env.DB.prepare(
-      `UPDATE channels
-       SET deleted_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND kind IN ('public', 'private')
-         AND deleted_at IS NULL`
-    )
-      .bind(channelId)
-      .run();
+    await hardDeleteChannel(c.env.DB, channelId);
 
     return c.json({ ok: true });
   });
@@ -369,15 +360,7 @@ export function registerChannelRoutes(app) {
       return errorResponse('general 系统群组不能删除');
     }
 
-    await c.env.DB.prepare(
-      `UPDATE channels
-       SET deleted_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND kind IN ('public', 'private')
-         AND deleted_at IS NULL`
-    )
-      .bind(channelId)
-      .run();
+    await hardDeleteChannel(c.env.DB, channelId);
 
     return c.json({ ok: true });
   });

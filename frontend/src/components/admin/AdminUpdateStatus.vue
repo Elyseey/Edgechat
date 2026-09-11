@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { checkForUpdates, getBuildInfo } from "../../update-check.js";
+import { formatDateTime, t } from "../../i18n.js";
 import UiButton from "../ui/Button.vue";
 import UiSurface from "../ui/Surface.vue";
 
@@ -9,7 +10,7 @@ const checking = ref(false);
 const result = ref(null);
 const error = ref("");
 
-const shortCommit = computed(() => build.commit.slice(0, 7) || "未知");
+const shortCommit = computed(() => build.commit.slice(0, 7) || t('updates.unknown'));
 const statusTone = computed(() => {
 	if (error.value) {
 		return "error";
@@ -21,22 +22,25 @@ const statusTone = computed(() => {
 });
 const statusTitle = computed(() => {
 	if (checking.value) {
-		return "正在检查更新";
+			return t('updates.checkingTitle');
 	}
 	if (error.value) {
-		return "暂时无法检查";
+			return t('updates.unavailableTitle');
 	}
 	if (!result.value) {
-		return "等待检查";
+			return t('updates.waitingTitle');
 	}
 	if (result.value.state === "local-ahead") {
-		return "当前部署领先于远端";
+			return t('updates.localAheadTitle');
 	}
-	return result.value.updateAvailable ? "发现可用更新" : "已是最新版本";
+		return result.value.updateAvailable ? t('updates.availableTitle') : t('updates.currentTitle');
 });
 const statusDetail = computed(() => {
 	if (checking.value) {
-		return `正在比对 ${build.repository || "代码仓库"} 的 ${build.branch || "当前"} 分支。`;
+			return t('updates.comparing', {
+				repository: build.repository || t('updates.repositoryFallback'),
+				branch: build.branch || t('updates.branchFallback'),
+			});
 	}
 	if (error.value) {
 		return error.value;
@@ -45,22 +49,20 @@ const statusDetail = computed(() => {
 		return "";
 	}
 	if (result.value.state === "local-ahead") {
-		return `当前部署领先 ${result.value.localCommitCount} 个提交。`;
+			return t('updates.localAheadDetail', { count: result.value.localCommitCount });
 	}
 	if (result.value.state === "diverged") {
-		return `远端有 ${result.value.remoteCommitCount} 个新提交，且双方分支已经产生差异。`;
+			return t('updates.divergedDetail', { count: result.value.remoteCommitCount });
 	}
 	if (result.value.updateAvailable) {
-		return `远端有 ${result.value.remoteCommitCount} 个新提交。`;
+			return t('updates.availableDetail', { count: result.value.remoteCommitCount });
 	}
-	return `当前部署与远端 ${build.branch} 分支一致。`;
+		return t('updates.currentDetail', { branch: build.branch });
 });
 
 function formatDate(value) {
 	const date = new Date(value);
-	return Number.isNaN(date.getTime())
-		? ""
-		: date.toLocaleString("zh-CN", { hour12: false });
+		return Number.isNaN(date.getTime()) ? "" : formatDateTime(date);
 }
 
 async function checkUpdates() {
@@ -70,7 +72,7 @@ async function checkUpdates() {
 		result.value = await checkForUpdates({ build });
 	} catch (currentError) {
 		result.value = null;
-		error.value = currentError instanceof Error ? currentError.message : "版本检查失败";
+			error.value = currentError instanceof Error ? currentError.message : t('updates.checkFailed');
 	} finally {
 		checking.value = false;
 	}
@@ -83,7 +85,7 @@ onMounted(checkUpdates);
 	<UiSurface class="panel admin-update-panel">
 		<div class="admin-update-panel__header">
 			<div>
-				<h3 class="panel-title">版本更新</h3>
+					<h3 class="panel-title">{{ t('updates.title') }}</h3>
 				<p class="admin-update-panel__repository">
 					<a
 						v-if="build.repository"
@@ -93,11 +95,11 @@ onMounted(checkUpdates);
 					>
 						{{ build.repository }}
 					</a>
-					<span v-else>未识别代码仓库</span>
+						<span v-else>{{ t('updates.unknownRepository') }}</span>
 				</p>
 			</div>
 			<UiButton variant="secondary" size="sm" :disabled="checking" @click="checkUpdates">
-				{{ checking ? "检查中..." : "检查更新" }}
+					{{ checking ? t('updates.checking') : t('updates.check') }}
 			</UiButton>
 		</div>
 
@@ -116,24 +118,24 @@ onMounted(checkUpdates);
 
 		<div class="admin-update-panel__meta">
 			<div>
-				<span>当前提交</span>
+					<span>{{ t('updates.currentCommit') }}</span>
 				<code>{{ shortCommit }}</code>
 			</div>
 			<div>
-				<span>跟踪分支</span>
-				<strong>{{ build.branch || "未知" }}</strong>
+					<span>{{ t('updates.trackedBranch') }}</span>
+					<strong>{{ build.branch || t('updates.unknown') }}</strong>
 			</div>
 		</div>
 
 		<div v-if="result?.latestCommit" class="admin-update-panel__latest">
 			<div>
-				<span>最新提交</span>
+					<span>{{ t('updates.latestCommit') }}</span>
 				<strong>{{ result.latestCommit.message || result.latestCommit.sha.slice(0, 7) }}</strong>
 				<small v-if="result.latestCommit.committedAt">
 					{{ formatDate(result.latestCommit.committedAt) }}
 				</small>
 			</div>
-			<a :href="result.compareUrl" target="_blank" rel="noreferrer">查看更新内容</a>
+				<a :href="result.compareUrl" target="_blank" rel="noreferrer">{{ t('updates.viewChanges') }}</a>
 		</div>
 	</UiSurface>
 </template>

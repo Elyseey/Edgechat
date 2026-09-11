@@ -1,5 +1,6 @@
 import { nextDailyUtcHour } from '../utils.js';
 import { runScheduledGc } from '../gc.js';
+import { durableObjectHealth } from '../maintenance/do-health.ts';
 
 export class Scheduler {
   constructor(state, env) {
@@ -7,7 +8,9 @@ export class Scheduler {
     this.env = env;
   }
 
-  async fetch() {
+  async fetch(request) {
+    const health = durableObjectHealth(request, 'Scheduler');
+    if (health) return health;
     const currentAlarm = await this.state.storage.getAlarm();
     if (!currentAlarm) {
       await this.state.storage.setAlarm(nextDailyUtcHour(3));

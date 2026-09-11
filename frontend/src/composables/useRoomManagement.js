@@ -1,5 +1,6 @@
 import { computed, reactive, ref, watch } from "vue";
 import api from "../api.js";
+import { t } from "../i18n.js";
 
 export function useRoomManagement({
 	activeRoom,
@@ -7,8 +8,7 @@ export function useRoomManagement({
 	users,
 	error,
 	refreshSidebar,
-	conversationItems,
-	openConversation,
+	refreshAndOpen,
 	canManageActiveRoom,
 	onRoomDeleted = () => {},
 	returnToConversationList = () => {},
@@ -17,7 +17,11 @@ export function useRoomManagement({
 }) {
 	const showCreateGroup = ref(false);
 	const creatingGroup = ref(false);
-	const createGroupForm = reactive({ name: "", memberUserIds: [] });
+	const createGroupForm = reactive({
+		name: "",
+		kind: "private",
+		memberUserIds: [],
+	});
 	const groupMembers = ref([]);
 	const memberLoading = ref(false);
 	const inviteSubmitting = ref(false);
@@ -31,6 +35,7 @@ export function useRoomManagement({
 		avatarUrl: "",
 		avatarKey: "",
 	});
+	let memberLoadGeneration = 0;
 
 	const availableInviteUsers = computed(() => {
 		const memberIds = new Set(
@@ -46,12 +51,15 @@ export function useRoomManagement({
 	}
 
 	function openCreateGroup() {
+		error.value = "";
 		showCreateGroup.value = true;
 	}
 
 	function closeCreateGroup() {
+		error.value = "";
 		showCreateGroup.value = false;
 		createGroupForm.name = "";
+		createGroupForm.kind = "private";
 		createGroupForm.memberUserIds = [];
 	}
 
@@ -65,7 +73,7 @@ export function useRoomManagement({
 	}
 
 	async function createGroup() {
-		if (!createGroupForm.name.trim()) {
+		if (!createGroupForm.name.trim() || creatingGroup.value) {
 			return;
 		}
 
@@ -74,18 +82,10 @@ export function useRoomManagement({
 		try {
 			const payload = await roomApi.createGroup({
 				name: createGroupForm.name.trim(),
-				kind: "private",
+				kind: createGroupForm.kind,
 				memberUserIds: createGroupForm.memberUserIds,
 			});
-			await refreshSidebar();
-			const item = conversationItems.value.find(
-				(conversation) =>
-					conversation.kind === payload.channel.kind &&
-					Number(conversation.id) === Number(payload.channel.id),
-			);
-			if (item) {
-				await openConversation(item);
-			}
+			await refreshAndOpen(payload.channel);
 			closeCreateGroup();
 		} catch (currentError) {
 			error.value = currentError.message;
@@ -95,14 +95,23 @@ export function useRoomManagement({
 	}
 
 	async function loadMembers() {
-		if (!activeRoom.value || activeRoom.value.kind === "dm") {
+		const room = activeRoom.value;
+		if (!room || room.kind === "dm") {
 			groupMembers.value = [];
 			return;
 		}
 
+		const generation = ++memberLoadGeneration;
 		memberLoading.value = true;
 		try {
-				const payload = await roomApi.getChannelMembers(activeRoom.value.id);
+			const payload = await roomApi.getChannelMembers(room.id);
+			if (
+				generation !== memberLoadGeneration ||
+				activeRoom.value?.kind !== room.kind ||
+				Number(activeRoom.value?.id) !== Number(room.id)
+			) {
+				return;
+			}
 			groupMembers.value = payload.members;
 			activeRoom.value.canManage = payload.room.canManage;
 			activeRoom.value.myRole = payload.room.myRole;
@@ -113,9 +122,13 @@ export function useRoomManagement({
 			activeRoom.value.avatarKey = payload.room.avatarKey || "";
 			syncGroupSettingsForm();
 		} catch (currentError) {
-			error.value = currentError.message;
+			if (generation === memberLoadGeneration) {
+				error.value = currentError.message;
+			}
 		} finally {
-			memberLoading.value = false;
+			if (generation === memberLoadGeneration) {
+				memberLoading.value = false;
+			}
 		}
 	}
 
@@ -172,7 +185,7 @@ export function useRoomManagement({
 			) {
 			return;
 		}
-		if (!confirmAction(`Remove ${member.displayName} from this group?`)) {
+			if (!confirmAction(t('group.removeMemberConfirm', { name: member.displayName }))) {
 			return;
 		}
 
@@ -194,7 +207,7 @@ export function useRoomManagement({
 			) {
 			return;
 		}
-		if (!confirmAction(`Delete group ${activeRoom.value.name}?`)) {
+			if (!confirmAction(t('group.deleteConfirm', { name: activeRoom.value.name }))) {
 			return;
 		}
 
@@ -212,8 +225,8 @@ export function useRoomManagement({
 		}
 	}
 
-	async function uploadGroupAvatar(event) {
-		const file = event.target.files?.[0];
+	async function uploadGroupAvatar(fileOrEvent) {
+		const file = fileOrEvent instanceof File ? fileOrEvent : fileOrEvent.target.files?.[0];
 		if (!file || !activeRoom.value) {
 			return;
 		}
@@ -228,7 +241,9 @@ export function useRoomManagement({
 			error.value = currentError.message;
 		} finally {
 			groupAvatarUploading.value = false;
-			event.target.value = "";
+			if (!(fileOrEvent instanceof File)) {
+				fileOrEvent.target.value = "";
+			}
 		}
 	}
 
@@ -239,7 +254,7 @@ export function useRoomManagement({
 
 		const name = groupSettingsForm.name.trim();
 		if (!name) {
-			error.value = "Please enter a group name.";
+				error.value = t('group.enterName');
 			return;
 		}
 
@@ -275,11 +290,15 @@ export function useRoomManagement({
 	watch(
 		() => activeRoom.value && `${activeRoom.value.kind}:${activeRoom.value.id}`,
 		() => {
+			memberLoadGeneration += 1;
 			groupMembers.value = [];
 			inviteUserId.value = "";
 			showGroupEditor.value = false;
 			showMemberPanel.value = false;
 			syncGroupSettingsForm();
+			if (activeRoom.value?.kind !== "dm") {
+				void loadMembers();
+			}
 		},
 	);
 

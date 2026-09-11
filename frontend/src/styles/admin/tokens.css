@@ -45,8 +45,7 @@ body {
   overflow-x: clip;
 }
 
-.admin-page,
-.admin-room-page {
+.admin-page {
   font-family: var(--admin-font);
   color: var(--admin-text);
 }

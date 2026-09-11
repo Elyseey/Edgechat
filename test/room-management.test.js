@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
 import { useRoomManagement } from "../frontend/src/composables/useRoomManagement.js";
 
@@ -22,7 +22,7 @@ function createHarness(overrides = {}) {
 	const roomApi = {
 		async createGroup(payload) {
 			calls.push(["createGroup", payload]);
-			return { channel: { id: 9, kind: "private" } };
+			return { channel: { id: 9, kind: payload.kind } };
 		},
 		async getChannelMembers(id) {
 			calls.push(["getChannelMembers", id]);
@@ -54,17 +54,16 @@ function createHarness(overrides = {}) {
 		},
 		...overrides.roomApi,
 	};
-	const conversationItems = ref([{ id: 9, kind: "private" }]);
 	const refreshSidebar = async () => calls.push(["refreshSidebar"]);
-	const openConversation = async (item) => calls.push(["openConversation", item]);
+	const refreshAndOpen = async (identity) =>
+		calls.push(["refreshAndOpen", identity]);
 	const management = useRoomManagement({
 		activeRoom,
 		channels,
 		users,
 		error,
 		refreshSidebar,
-		conversationItems,
-		openConversation,
+		refreshAndOpen,
 		canManageActiveRoom: computed(() => Boolean(activeRoom.value?.canManage)),
 		onRoomDeleted: () => calls.push(["onRoomDeleted"]),
 		returnToConversationList: () => calls.push(["returnToConversationList"]),
@@ -86,11 +85,63 @@ test("创建群组状态和导航由 room management module 统一拥有", async
 
 	assert.deepEqual(calls, [
 		["createGroup", { name: "New team", kind: "private", memberUserIds: [2] }],
-		["refreshSidebar"],
-		["openConversation", { id: 9, kind: "private" }],
+		["refreshAndOpen", { id: 9, kind: "private" }],
 	]);
 	assert.equal(management.creation.show.value, false);
-	assert.deepEqual(management.creation.form, { name: "", memberUserIds: [] });
+	assert.deepEqual(management.creation.form, {
+		name: "",
+		kind: "private",
+		memberUserIds: [],
+	});
+});
+
+test("公开群组创建会保留类型并允许不预先邀请成员", async () => {
+	const { management, calls } = createHarness();
+	management.creation.open();
+	management.creation.form.name = "公开讨论";
+	management.creation.form.kind = "public";
+	await management.creation.submit();
+
+	assert.deepEqual(calls, [
+		["createGroup", { name: "公开讨论", kind: "public", memberUserIds: [] }],
+		["refreshAndOpen", { id: 9, kind: "public" }],
+	]);
+});
+
+test("创建失败保留表单与错误提示，关闭或重新打开时清除旧错误", async () => {
+	const { management, error } = createHarness({
+		roomApi: { async createGroup() { throw new Error("群组名称已存在"); } },
+	});
+	error.value = "旧错误";
+	management.creation.open();
+	assert.equal(error.value, "");
+	management.creation.form.name = "Team";
+	await management.creation.submit();
+	assert.equal(management.creation.show.value, true);
+	assert.equal(management.creation.form.name, "Team");
+	assert.equal(management.creation.submitting.value, false);
+	assert.equal(error.value, "群组名称已存在");
+	management.creation.close();
+	assert.equal(error.value, "");
+});
+
+test("创建请求进行中不会重复提交", async () => {
+	let resolveCreate;
+	let callCount = 0;
+	const { management } = createHarness({
+		roomApi: {
+			createGroup() {
+				callCount += 1;
+				return new Promise((resolve) => { resolveCreate = resolve; });
+			},
+		},
+	});
+	management.creation.form.name = "Team";
+	const pending = management.creation.submit();
+	await management.creation.submit();
+	assert.equal(callCount, 1);
+	resolveCreate({ channel: { id: 9, kind: "private" } });
+	await pending;
 });
 
 test("成员加载、邀请和移除通过同一 module 接口更新状态", async () => {
@@ -156,4 +207,33 @@ test("general 管理动作不会发出移除成员或删除群组请求", async 
 
 	assert.equal(calls.length, 0);
 	assert.notEqual(activeRoom.value, null);
+});
+
+test("快速切换群组时旧成员请求不会覆盖当前会话", async () => {
+	const resolvers = new Map();
+	const { management, activeRoom } = createHarness({
+		roomApi: {
+			getChannelMembers(id) {
+				return new Promise((resolve) => resolvers.set(Number(id), resolve));
+			},
+		},
+	});
+	const firstLoad = management.members.load();
+	activeRoom.value = { id: 5, kind: "private", name: "Next" };
+	await nextTick();
+
+	resolvers.get(4)({
+		room: { name: "Old" },
+		members: [{ id: 4, username: "old", displayName: "Old" }],
+	});
+	await firstLoad;
+	assert.deepEqual(management.members.items.value, []);
+	assert.equal(activeRoom.value.name, "Next");
+
+	resolvers.get(5)({
+		room: { name: "Next", canManage: false, myRole: "member" },
+		members: [{ id: 5, username: "next", displayName: "Next" }],
+	});
+	await nextTick();
+	assert.equal(management.members.items.value[0].username, "next");
 });

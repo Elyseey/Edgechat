@@ -1,7 +1,11 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import api from '../../api.js';
+import { useOverlayLifecycle } from '../../composables/useOverlayLifecycle.js';
+import { t } from '../../i18n.js';
 import { isPreviewableImageAttachment } from './attachment-utils.js';
+import { isAudioAttachment } from '../../voice-message.js';
+import VoiceMessage from './VoiceMessage.vue';
 
 const props = defineProps({
   attachment: {
@@ -14,8 +18,16 @@ const previewOpen = ref(false);
 const previewEl = ref(null);
 const imageFailed = ref(false);
 const isImage = computed(() => isPreviewableImageAttachment(props.attachment));
-const displayName = computed(() => props.attachment?.name || '附件');
-const openOriginalLabel = computed(() => `打开原图：${displayName.value}`);
+const isAudio = computed(() => isAudioAttachment(props.attachment));
+const displayName = computed(() => props.attachment?.name || t('attachments.fallback'));
+const openOriginalLabel = computed(() => t('attachments.openOriginalNamed', { name: displayName.value }));
+const attachmentUrl = computed(() => api.getFileUrl(props.attachment?.key || props.attachment?.url));
+
+useOverlayLifecycle({
+  open: previewOpen,
+  onClose: closePreview,
+  focusTarget: previewEl
+});
 
 function openPreview() {
   if (!isImage.value || imageFailed.value) {
@@ -23,44 +35,29 @@ function openPreview() {
   }
 
   previewOpen.value = true;
-  nextTick(() => previewEl.value?.focus());
 }
 
 function closePreview() {
   previewOpen.value = false;
 }
 
-function handleKeydown(event) {
-  if (event.key === 'Escape') {
-    closePreview();
-  }
-}
-
-watch(previewOpen, (open) => {
-  const method = open ? 'addEventListener' : 'removeEventListener';
-  window[method]('keydown', handleKeydown);
-});
-
 watch(
-  () => props.attachment?.url,
+  () => props.attachment?.key || props.attachment?.url,
   () => {
     imageFailed.value = false;
   }
 );
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown);
-});
 </script>
 
 <template>
-  <div class="message-attachment" :class="{ 'message-attachment--image': isImage }">
-    <template v-if="isImage">
+	  <div class="message-attachment" :class="{ 'message-attachment--image': isImage, 'message-attachment--audio': isAudio }">
+	    <VoiceMessage v-if="isAudio" :attachment="attachment" />
+	    <template v-else-if="isImage">
       <button
         v-if="!imageFailed"
         type="button"
         class="message-attachment__image-button"
-        :aria-label="`预览图片：${displayName}`"
+        :aria-label="t('attachments.previewNamed', { name: displayName })"
         @click="openPreview"
       >
         <img
@@ -88,7 +85,7 @@ onBeforeUnmount(() => {
           class="image-preview-overlay"
           role="dialog"
           aria-modal="true"
-          :aria-label="`图片预览：${displayName}`"
+          :aria-label="t('attachments.imagePreviewNamed', { name: displayName })"
           tabindex="-1"
           @click.self="closePreview"
         >
@@ -101,10 +98,10 @@ onBeforeUnmount(() => {
               rel="noreferrer"
               :aria-label="openOriginalLabel"
             >
-              打开原图
+              {{ t('attachments.openOriginal') }}
             </a>
-            <button type="button" class="image-preview-overlay__close" @click="closePreview">
-              关闭
+            <button type="button" class="image-preview-overlay__close" :aria-label="t('attachments.closePreview')" @click="closePreview">
+              {{ t('common.close') }}
             </button>
           </div>
           <img class="image-preview-overlay__image" :src="attachmentUrl" :alt="displayName" />

@@ -6,6 +6,14 @@ const chatPage = readFileSync(
 	new URL("../frontend/src/pages/ChatPage.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
+const avatarComponent = readFileSync(
+	new URL("../frontend/src/components/ui/Avatar.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
+const replyPreview = readFileSync(
+	new URL("../frontend/src/components/chat/MessageReplyPreview.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
 
 function getStyleRule(selector) {
 	const marker = `${selector} {`;
@@ -19,7 +27,11 @@ function getStyleRule(selector) {
 test("短文本消息为右下角时间戳预留末行空间", () => {
 	assert.match(
 		chatPage,
-		/:class="\{ 'message-bubble--with-attachment': msg\.attachment \}"/,
+		/'message-bubble--with-attachment': msg\.attachment/,
+	);
+	assert.match(
+		chatPage,
+		/'message-bubble--highlighted': Number\(highlightedMessageId\) === Number\(msg\.id\)/,
 	);
 
 	const bubble = getStyleRule(".message-bubble");
@@ -37,4 +49,33 @@ test("短文本消息为右下角时间戳预留末行空间", () => {
 	);
 	assert.match(reserve, /display:\s*inline-block;/);
 	assert.match(reserve, /width:\s*3\.5em;/);
+});
+
+test("非本人消息在气泡前显示圆形发送者头像", () => {
+	assert.match(chatPage, /<UiAvatar\s+v-if="!isOwnMessage\(msg\)"/);
+	assert.match(chatPage, /:src="msg\.sender\.avatarUrl"/);
+	assert.match(chatPage, /:fallback="msg\.sender\.displayName"/);
+
+	const row = getStyleRule(".message-row");
+	assert.match(row, /align-items:\s*flex-end;/);
+	assert.match(row, /gap:\s*8px;/);
+
+	const avatar = getStyleRule(".message-avatar");
+	assert.match(avatar, /width:\s*34px;/);
+	assert.match(avatar, /height:\s*34px;/);
+	assert.match(avatar, /border-radius:\s*50%;/);
+});
+
+test("远程头像加载失败时显示姓名缩写", () => {
+	assert.match(avatarComponent, /const showImage = computed/);
+	assert.match(avatarComponent, /failedSrc\.value !== props\.src/);
+	assert.match(avatarComponent, /@error="handleImageError"/);
+});
+
+test("回复气泡显示引用预览并复用消息定位能力", () => {
+	assert.match(chatPage, /<MessageReplyPreview/);
+	assert.match(chatPage, /@reveal="revealMessage\(msg\.replyToMessageId\)"/);
+	assert.match(chatPage, /:replying-to="replyingTo"/);
+	assert.match(replyPreview, /border-left:\s*3px solid #008069;/);
+	assert.match(replyPreview, /messages\.replyDeleted/);
 });

@@ -11,7 +11,7 @@ const keyring = JSON.stringify({
   }
 });
 
-function fileDb({ accessible }) {
+function fileDb({ accessible, metadata = true }) {
   return {
     prepare(sql) {
       return {
@@ -19,9 +19,9 @@ function fileDb({ accessible }) {
           return {
             async all() {
               if (sql.includes('SELECT filename, content_type, size')) {
-                return {
-                  results: [{ filename: '报告.bin', content_type: 'application/octet-stream', size: 4 }]
-                };
+                return metadata
+                  ? { results: [{ filename: '报告.bin', content_type: 'application/octet-stream', size: 4 }] }
+                  : { results: [] };
               }
               return { results: accessible ? [{ found: 1 }] : [] };
             }
@@ -31,6 +31,31 @@ function fileDb({ accessible }) {
     }
   };
 }
+
+test('attachment upload reports when the deployment has no R2 binding', async () => {
+  const app = new Hono();
+  app.use('/api/*', async (c, next) => {
+    c.set('session', { userId: 42 });
+    return next();
+  });
+  registerUploadRoutes(app);
+
+  const formData = new FormData();
+  formData.set('file', new File(['hello'], 'hello.txt', { type: 'text/plain' }));
+  const response = await app.request(
+    'https://edgechat.test/api/upload',
+    {
+      method: 'POST',
+      body: formData
+    },
+    {}
+  );
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: '当前部署没有绑定 R2，无法上传附件'
+  });
+});
 
 test('authorized attachment download decrypts bytes and disables shared caching', async () => {
   const objectKey = '42/example.bin';
@@ -55,7 +80,11 @@ test('authorized attachment download decrypts bytes and disables shared caching'
     {},
     {
       DB: fileDb({ accessible: true }),
-      FILES: { async get() { return object; } },
+      FILES: {
+        async get() {
+          return object;
+        }
+      },
       EDGECHAT_ENCRYPTION_KEYRING: keyring
     }
   );
@@ -76,11 +105,67 @@ test('unauthorized attachment download is rejected before reading R2', async () 
     {},
     {
       DB: fileDb({ accessible: false }),
-      FILES: { async get() { r2Read = true; return null; } },
+      FILES: {
+        async get() {
+          r2Read = true;
+          return null;
+        }
+      },
       EDGECHAT_ENCRYPTION_KEYRING: keyring
     }
   );
 
   assert.equal(response.status, 403);
   assert.equal(r2Read, false);
+});
+
+test('authorized attachment download reports when the deployment has no R2 binding', async () => {
+  const app = new Hono();
+  registerUploadRoutes(app);
+
+  const response = await app.request(
+    'https://edgechat.test/files/42/private.bin',
+    {},
+    { DB: fileDb({ accessible: true }) }
+  );
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: '当前部署没有绑定 R2，无法读取附件'
+  });
+});
+
+test('telegram attachment downloads through message authorization without uploaded file ownership', async () => {
+  const objectKey = 'telegram/-1001/9-example.jpg';
+  const plaintext = Uint8Array.from([5, 6, 7]);
+  const ciphertext = await encryptAttachment(keyring, plaintext, objectKey);
+  const app = new Hono();
+  registerUploadRoutes(app);
+
+  const response = await app.request(
+    `https://edgechat.test/files/${encodeURIComponent(objectKey)}`,
+    {},
+    {
+      DB: fileDb({ accessible: true, metadata: false }),
+      FILES: {
+        async get() {
+          return {
+            customMetadata: { filename: 'telegram-photo.jpg' },
+            async arrayBuffer() {
+              return ciphertext.buffer;
+            },
+            writeHttpMetadata(headers) {
+              headers.set('content-type', 'image/jpeg');
+            }
+          };
+        }
+      },
+      EDGECHAT_ENCRYPTION_KEYRING: keyring
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), plaintext);
+  assert.equal(response.headers.get('content-type'), 'image/jpeg');
+  assert.match(response.headers.get('content-disposition'), /telegram-photo\.jpg/);
 });

@@ -2,7 +2,6 @@ const INTERNAL_AUTH_HEADER = "x-cfchat-internal-auth";
 const VERIFIED_USER_ID_HEADER = "x-cfchat-verified-user-id";
 const VERIFIED_IS_ADMIN_HEADER = "x-cfchat-verified-is-admin";
 const VERIFIED_AT_HEADER = "x-cfchat-verified-at";
-const VERIFIED_TOKEN_HEADER = "x-cfchat-verified-session-token";
 const INTERNAL_AUTH_VALUE = "worker-verified";
 
 export function isVerifiedInternalRequest(request) {
@@ -20,7 +19,6 @@ export function createVerifiedPrincipalHeaders(sourceHeaders, principal) {
 	headers.set(VERIFIED_USER_ID_HEADER, String(principal.userId));
 	headers.set(VERIFIED_IS_ADMIN_HEADER, principal.isAdmin ? "1" : "0");
 	headers.set(VERIFIED_AT_HEADER, String(Date.now()));
-	if (principal.token) headers.set(VERIFIED_TOKEN_HEADER, String(principal.token));
 	return headers;
 }
 
@@ -47,9 +45,6 @@ export function parseVerifiedPrincipal(request) {
 	return {
 		userId,
 		isAdmin: request.headers.get(VERIFIED_IS_ADMIN_HEADER) === "1",
-		...(request.headers.get(VERIFIED_TOKEN_HEADER)
-			? { token: request.headers.get(VERIFIED_TOKEN_HEADER) }
-			: {}),
 	};
 }
 
