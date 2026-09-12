@@ -332,7 +332,34 @@ Edgechat/
 
 ## 鸣谢
 
-感谢 [linux do](https://linux.do) 在项目推广方面提供的帮助。
+<div align="center">
+
+### ✨ 特别鸣谢
+
+<table>
+<tr>
+<td align="center" width="140">
+<a href="https://github.com/VenLac">
+<img src="https://github.com/VenLac.png" width="100" style="border-radius:50%" alt="VenLac"/>
+</a>
+</td>
+<td>
+
+**[VenLac](https://github.com/VenLac)**（Venlacy）
+
+[![GitHub](https://img.shields.io/badge/GitHub-VenLac-181717?style=flat-square&logo=github)](https://github.com/VenLac)
+
+项目早期贡献了大量核心代码，为 EdgeChat 的整体架构奠定了基础；同时凭借自身在社区中的影响力，为项目推广做出了突出贡献。
+
+</td>
+</tr>
+</table>
+
+</div>
+
+<br>
+
+感谢 [linux do](https://linux.do) 在推广方面为本项目做出的贡献。
 
 ## 免责声明
 
