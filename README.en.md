@@ -6,9 +6,9 @@ EdgeChat serves developers, Cloudflare users, and the self-hosting community. Th
 
 If your product or service is related to **developer tools, cloud services, self-hosted applications, or the open-source ecosystem**, you can advertise in the README:
 
-- **Sponsor — $15 / month**
+- **Sponsor — $5 / month**
   Display your logo, name, and link in the Sponsors section.
-- **Featured Sponsor — $30 / month**
+- **Featured Sponsor — $10 / month**
   Receive a higher placement, a larger logo, and a one-line description.
 
 Advertisements are limited to brands related to developer tools, cloud services, self-hosted products, and the open-source ecosystem to keep them relevant to readers.

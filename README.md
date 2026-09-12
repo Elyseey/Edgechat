@@ -6,9 +6,9 @@ EdgeChat 面向开发者、Cloudflare 用户及自托管社区，目前 GitHub �
 
 如果你的产品或服务面向 **开发者工具、云服务、自托管应用或开源生态**，可以考虑在 README 中投放展示位：
 
-- **Sponsor — $15 / 月**
+- **Sponsor — $5 / 月**
   在 Sponsors 区域展示 Logo、名称及跳转链接。
-- **Featured Sponsor — $30 / 月**
+- **Featured Sponsor — $10 / 月**
   更靠前的展示位置，更大尺寸 Logo，附一句话简介。
 
 投放内容仅限与开发者工具、云服务、自托管产品、开源生态相关的品牌，以保证读者体验的相关性。
