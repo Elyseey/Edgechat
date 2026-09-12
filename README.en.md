@@ -1,3 +1,22 @@
+<details>
+<summary><b>📢 EdgeChat Partnerships and Advertising</b></summary>
+<br />
+
+EdgeChat serves developers, Cloudflare users, and the self-hosting community. The project currently has 666 Stars on GitHub, and its README receives sustained visibility.
+
+If your product or service is related to **developer tools, cloud services, self-hosted applications, or the open-source ecosystem**, you can advertise in the README:
+
+- **Sponsor — $15 / month**
+  Display your logo, name, and link in the Sponsors section.
+- **Featured Sponsor — $30 / month**
+  Receive a higher placement, a larger logo, and a one-line description.
+
+Advertisements are limited to brands related to developer tools, cloud services, self-hosted products, and the open-source ecosystem to keep them relevant to readers.
+
+To place an advertisement, contact us through the [Telegram Community](https://t.me/EdgeChatlounge) or open an [Issue](https://github.com/aozorae/Edgechat/issues).
+
+</details>
+
 <div align="center">
   <img src="Edgechat.png" alt="EdgeChat" width="640" />
 
