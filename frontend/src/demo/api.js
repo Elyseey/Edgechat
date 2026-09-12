@@ -62,6 +62,15 @@ function bootstrapPayload() {
   };
 }
 
+function contactsPayload() {
+  return {
+    users: demoState.users
+      .map(projectDemoUser)
+      .filter((user) => !user.isDisabled)
+      .map(({ id, username, displayName, avatarUrl }) => ({ id, username, displayName, avatarUrl }))
+  };
+}
+
 function telegramPayload() {
   return cloneDemo({
     config: demoState.telegram.config,
@@ -270,6 +279,9 @@ export async function requestDemo(path, options = {}) {
   }
   if (method === 'GET' && pathname === '/users') {
     return { users: bootstrapPayload().users };
+  }
+  if (method === 'GET' && pathname === '/contacts') {
+    return contactsPayload();
   }
   let match = pathname.match(/^\/users\/([^/]+)\/profile$/);
   if (method === 'GET' && match) {

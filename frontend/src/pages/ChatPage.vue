@@ -1,7 +1,7 @@
 <script setup>
-import { ArrowLeft, Ban, Bell, BellOff, Menu, Settings, UsersRound } from '@lucide/vue';
+import { ArrowLeft, Ban, Bell, BellOff, ContactRound, Menu, MessageCircle, Settings, UsersRound } from '@lucide/vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import {
   consumeNativeRoomTarget,
   NATIVE_ROOM_OPEN_EVENT
@@ -41,10 +41,12 @@ import { resolveMentionUserIds } from '../mentions.ts';
 import store from '../store.js';
 import api from '../api.js';
 import UserProfileDialog from '../components/chat/UserProfileDialog.vue';
+import ContactsPage from './ContactsPage.vue';
 import { useUserProfile } from '../composables/useUserProfile.ts';
 import { useI18n } from '../i18n.js';
 
 const router = useRouter();
+const route = useRoute();
 const { formatTime: formatLocaleTime, t } = useI18n();
 const error = ref('');
 const activeRoom = ref(null);
@@ -55,6 +57,9 @@ const publicGroupPreview = ref(null);
 const joiningPublicGroup = ref(false);
 const session = computed(() => store.session);
 const showAdminEntry = computed(() => Boolean(session.value?.isAdmin));
+const isContactsView = computed(() => route.name === 'contacts');
+const contactsVisited = ref(isContactsView.value);
+const inboxActiveRoom = computed(() => isContactsView.value ? null : activeRoom.value);
 
 const { activeRoomKey, canManageActiveRoom, applyActiveChannel, selectDm, roomLabel, roomSubtitle } =
   useActiveRoom({ activeRoom });
@@ -147,7 +152,7 @@ function handleRoomAccessRevoked(room) {
 const {
   messages, pinnedMessage, highlightedMessageId, loading, wsStatus, composerText, pendingAttachment, sending,
   messagesEl, isOwnMessage,
-  loadMessages, activateRoom, deactivateRoom, disconnectSocket, sendMessage, sendVoiceMessage, deleteMessage,
+	  loadMessages, activateRoom, deactivateRoom, pauseRoom, disconnectSocket, sendMessage, sendVoiceMessage, deleteMessage,
 	  pinMessage, unpinMessage, revealPinnedMessage,
 	  revealMessage,
   uploadAttachment, clearAttachment, loadOlder
@@ -155,12 +160,13 @@ const {
   activeRoom,
   session,
   error,
+  roomVisible: computed(() => !isContactsView.value),
   onRoomActivity: handleRoomActivity,
   onRoomAccessRevoked: handleRoomAccessRevoked
 });
 
 const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
-  activeRoom,
+  activeRoom: inboxActiveRoom,
   markConversationRead,
   applyConversationActivity,
   notifyInApp: notifyInAppRoom,
@@ -250,9 +256,11 @@ const {
   openDm,
   onNavigate: () => {
     closeMemberPanel();
-    messageComposer.value?.focus();
-    // 被拉黑会话的输入区不可聚焦时，仍把焦点移到目标会话而非旧头像。
-    if (!document.activeElement?.closest('.message-composer')) profileTargetHeader.value?.focus();
+    void router.push('/').then(() => nextTick(() => {
+      messageComposer.value?.focus();
+      // 被拉黑会话的输入区不可聚焦时，仍把焦点移到目标会话而非旧头像。
+      if (!document.activeElement?.closest('.message-composer')) profileTargetHeader.value?.focus();
+    }));
   }
 });
 function openLocalUserProfile(user) {
@@ -332,6 +340,7 @@ async function confirmPublicGroupJoin() {
 async function openRoomFromNotification(room) {
   try {
     await openByIdentity(room);
+    await router.push('/');
   } catch (currentError) {
     error.value = currentError.message;
   }
@@ -344,6 +353,8 @@ function toggleActiveRoomMute() {
 function logout() { store.logout(); router.push('/login'); }
 function openAdmin() { router.push('/admin'); }
 function openSettings() { router.push('/settings'); }
+function openChat() { router.push('/'); }
+function openContacts() { router.push('/contacts'); }
 let nativeRoomNavigationReady = false;
 function openNativeRoom() {
   if (!nativeRoomNavigationReady) return;
@@ -382,6 +393,10 @@ watch(activeRoomKey, async (k) => {
     deactivateRoom();
     return;
   }
+	  if (isContactsView.value) {
+	    pauseRoom();
+	    return;
+	  }
   openConversationView();
   const loaded = await activateRoom();
   if (!loaded || activeRoomKey.value !== k) return;
@@ -391,6 +406,21 @@ watch(activeRoomKey, async (k) => {
     if (messagesEl.value) {
       messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
     }
+  }
+});
+
+watch(isContactsView, async (showContacts, wasContacts) => {
+  if (showContacts) {
+    contactsVisited.value = true;
+    closeMessageMenu();
+	    cancelMessageLongPress();
+	    closeMemberPanel();
+	    pauseRoom();
+	    return;
+  }
+  if (wasContacts && activeRoom.value) {
+    openConversationView();
+    await activateRoom();
   }
 });
 
@@ -467,13 +497,38 @@ onBeforeUnmount(() => {
     :class="{
       'chat-layout--mobile': isMobileViewport,
       'chat-layout--mobile-list': isMobileViewport && mobileView === 'list',
-      'chat-layout--mobile-chat': isMobileViewport && mobileView === 'chat'
+      'chat-layout--mobile-chat': isMobileViewport && mobileView === 'chat',
+      'chat-layout--contacts': isContactsView
     }"
   >
     <!-- Far-Left Navigation Sidebar -->
     <aside class="right-sidebar">
       <div class="right-sidebar-inner">
         <div class="right-sidebar-section right-sidebar-actions">
+          <button
+            type="button"
+            class="right-sidebar-action right-sidebar-action--labeled tooltip"
+            :class="{ 'right-sidebar-action--current': !isContactsView }"
+            :data-tooltip="t('nav.chats')"
+            :aria-label="t('nav.chats')"
+            :aria-current="!isContactsView ? 'page' : undefined"
+            @click="openChat"
+          >
+            <MessageCircle :size="20" aria-hidden="true" />
+            <span class="right-sidebar-action__label">{{ t('nav.chats') }}</span>
+          </button>
+          <button
+            type="button"
+            class="right-sidebar-action right-sidebar-action--labeled tooltip"
+            :class="{ 'right-sidebar-action--current': isContactsView }"
+            :data-tooltip="t('contacts.title')"
+            :aria-label="t('contacts.title')"
+            :aria-current="isContactsView ? 'page' : undefined"
+            @click="openContacts"
+          >
+            <ContactRound :size="20" aria-hidden="true" />
+            <span class="right-sidebar-action__label">{{ t('contacts.title') }}</span>
+          </button>
           <button
             type="button"
             class="right-sidebar-action right-sidebar-action--labeled tooltip"
@@ -578,8 +633,15 @@ onBeforeUnmount(() => {
       </div>
     </aside>
 
+    <ContactsPage
+      v-if="contactsVisited"
+      v-show="isContactsView"
+      @open-navigation="showMobileNavigation = true"
+      @open-profile="openLocalUserProfile"
+    />
+
     <!-- Right Main Chat Window -->
-    <main class="chat-main">
+    <main v-if="!isContactsView" class="chat-main">
       <template v-if="activeRoom">
         <header class="chat-header">
           <button
@@ -782,7 +844,7 @@ onBeforeUnmount(() => {
       </div>
     </main>
 
-    <div v-if="showMemberPanel" class="room-management-layer" @click.self="closeMemberPanel">
+    <div v-if="!isContactsView && showMemberPanel" class="room-management-layer" @click.self="closeMemberPanel">
       <aside class="room-management-sidebar">
         <MemberPanel
           :room="activeRoom"
@@ -809,7 +871,10 @@ onBeforeUnmount(() => {
       :notifications-enabled="notificationsEnabled"
       :notification-label="notificationActionLabel"
       :notification-disabled="notificationToggleDisabled"
+      :active-view="isContactsView ? 'contacts' : 'chat'"
       @close="closeMobileNavigation"
+      @chat="navigateFromMobileDrawer(openChat)"
+      @contacts="navigateFromMobileDrawer(openContacts)"
       @settings="navigateFromMobileDrawer(openSettings)"
       @admin="navigateFromMobileDrawer(openAdmin)"
       @notification="toggleNotifications"
@@ -900,6 +965,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: #ffffff;
   border-right: 1px solid #e9edef;
+}
+
+.chat-layout--contacts .left-sidebar {
+  display: none;
 }
 
 .left-sidebar .sidebar-inner {
@@ -1056,6 +1125,11 @@ onBeforeUnmount(() => {
 }
 
 .right-sidebar-action--notification-active {
+  background: rgba(0, 128, 105, 0.1);
+  color: #008069;
+}
+
+.right-sidebar-action--current {
   background: rgba(0, 128, 105, 0.1);
   color: #008069;
 }

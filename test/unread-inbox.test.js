@@ -112,6 +112,20 @@ test("前台其他会话保留未读并显示应用内通知", () => {
 	assert.deepEqual(harness.read, []);
 });
 
+test("通讯录隐藏原会话后只累计未读而不提交已读", () => {
+	const activeRoom = ref({ kind: "private", id: 2 });
+	const harness = createInboxHarness({ activeRoom, pageActive: true });
+	activeRoom.value = null;
+	harness.emit({ ...messagePayload, mentionsMe: false, mentionUnreadCount: 0 });
+
+	assert.equal(harness.activity[0].unreadCount, 3);
+	assert.deepEqual(harness.read, []);
+	assert.deepEqual(harness.apiRead, []);
+	assert.deepEqual(harness.inAppNotifications, [
+		{ ...messagePayload, mentionsMe: false, mentionUnreadCount: 0 },
+	]);
+});
+
 test("页面失焦时保留未读并只触发系统通知", () => {
 	const hiddenActiveRoom = createInboxHarness({
 		activeRoom: ref({ kind: "private", id: 2 }),

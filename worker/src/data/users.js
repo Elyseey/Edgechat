@@ -71,6 +71,19 @@ export async function listActiveUsers(db, excludeUserId) {
 	return results.map(mapUserSummary);
 }
 
+export async function listContacts(db) {
+	const { results } = await db
+		.prepare(
+			`SELECT id, username, display_name, avatar_key
+			 FROM users
+			 WHERE deleted_at IS NULL
+			   AND ${activeUserSql()}
+			 ORDER BY display_name ASC, username ASC, id ASC`,
+		)
+		.all();
+	return results.map(mapUserSummary);
+}
+
 export async function listAdminUsers(db) {
 	const { results } = await db
 		.prepare(

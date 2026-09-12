@@ -156,7 +156,7 @@ test("用户简介新安装、旧库升级与重复迁移规划保持数据", as
 	const migration = D1_MIGRATIONS.find((item) => item.id === "2026-09-12-user-bio");
 	for (const fresh of [false, true]) {
 		const database = new SQL.Database();
-		database.exec(fresh ? schema : schema.replace("  bio TEXT NOT NULL DEFAULT '',\n", ""));
+		database.exec(fresh ? schema : schema.replace(/ {2}bio TEXT NOT NULL DEFAULT '',\r?\n/, ""));
 		database.run("INSERT INTO users (username, display_name, password_hash, password_salt) VALUES ('legacy', 'Legacy', 'hash', 'salt')");
 		const options = {
 			migrations: [migration], appliedMigrations: new Map(),

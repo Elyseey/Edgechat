@@ -11,11 +11,12 @@ test.beforeEach(() => {
   resetDemoState();
 });
 
-test('demo backend exposes chat, admin, storage and Telegram fixture data', async () => {
-  const [site, session, bootstrap, overview, storage, telegram] = await Promise.all([
+test('demo backend exposes chat, contacts, admin, storage and Telegram fixture data', async () => {
+	const [site, session, bootstrap, contacts, overview, storage, telegram] = await Promise.all([
     requestDemo('/site'),
     requestDemo('/auth/session'),
-    requestDemo('/bootstrap'),
+		requestDemo('/bootstrap'),
+		requestDemo('/contacts'),
     requestDemo('/admin/overview'),
     requestDemo('/admin/storage/scan'),
     requestDemo('/admin/telegram')
@@ -24,7 +25,11 @@ test('demo backend exposes chat, admin, storage and Telegram fixture data', asyn
   assert.equal(site.site.siteName, 'EdgeChat Demo');
   assert.equal(session.session.isAdmin, true);
   assert.equal(bootstrap.channels.some((channel) => channel.isGeneral), true);
-  assert.equal(bootstrap.dms.length, 1);
+	assert.equal(bootstrap.dms.length, 1);
+	assert.equal(contacts.users.some((user) => user.id === session.session.userId), true);
+	assert.equal(contacts.users.some((user) => user.displayName.length > 20), true);
+	assert.equal(contacts.users.filter((user) => user.displayName === 'Alice').length, 2);
+	assert.equal(contacts.users.some((user) => 'bio' in user || 'isAdmin' in user), false);
   assert.equal(overview.channels.length, 4);
   assert.equal(storage.scannedObjects, 4);
   assert.equal(storage.items.some((item) => item.ownerType === 'telegram'), true);

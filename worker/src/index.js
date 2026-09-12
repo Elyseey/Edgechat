@@ -22,6 +22,7 @@ import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
 import { registerMaintenanceRoutes } from './api/maintenance.ts';
 import { registerChannelRoutes } from './api/channels.js';
+import { registerContactRoutes } from './api/contacts.ts';
 import { registerDmRoutes } from './api/dm.js';
 import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
@@ -273,6 +274,7 @@ app.get('/api/bootstrap', async (c) => {
 app.use('/api/admin/*', adminMiddleware);
 
 registerMessageRoutes(app);
+registerContactRoutes(app);
 registerDmRoutes(app);
 registerUserBlockRoutes(app);
 registerUserProfileRoutes(app);
