@@ -14,6 +14,10 @@ const replyPreview = readFileSync(
 	new URL("../frontend/src/components/chat/MessageReplyPreview.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
+const messageMarkdown = readFileSync(
+	new URL("../frontend/src/components/chat/MessageMarkdown.vue", import.meta.url),
+	"utf8",
+).replaceAll("\r\n", "\n");
 
 function getStyleRule(selector) {
 	const marker = `${selector} {`;
@@ -44,11 +48,10 @@ test("短文本消息为右下角时间戳预留末行空间", () => {
 	assert.match(time, /position:\s*absolute;/);
 	assert.match(time, /white-space:\s*nowrap;/);
 
-	const reserve = getStyleRule(
-		".message-bubble:not(.message-bubble--with-attachment) p::after",
+	assert.match(
+		messageMarkdown,
+		/\.message-markdown::after\s*{[^}]*display:\s*inline-block;[^}]*width:\s*3\.5em;/s,
 	);
-	assert.match(reserve, /display:\s*inline-block;/);
-	assert.match(reserve, /width:\s*3\.5em;/);
 });
 
 test("非本人消息在气泡前显示圆形发送者头像", () => {

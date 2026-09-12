@@ -15,7 +15,7 @@ import InAppNotificationStack from '../components/chat/InAppNotificationStack.vu
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageComposer from '../components/chat/MessageComposer.vue';
-import MentionText from '../components/chat/MentionText.vue';
+import MessageMarkdown from '../components/chat/MessageMarkdown.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
 import MessageReplyPreview from '../components/chat/MessageReplyPreview.vue';
 import PinnedMessageBar from '../components/chat/PinnedMessageBar.vue';
@@ -423,6 +423,17 @@ function replyToSelectedMessage() {
 	nextTick(() => messageComposer.value?.focus());
 }
 
+async function copySelectedMessage() {
+	const content = String(messageMenu.value.message?.content || '');
+	closeMessageMenu();
+	if (!content) return;
+	try {
+		await navigator.clipboard.writeText(content);
+	} catch {
+		error.value = t('messages.copyFailed');
+	}
+}
+
 onMounted(() => {
   startViewportSync();
   window.addEventListener('focus', syncNotificationPermission);
@@ -715,13 +726,12 @@ onBeforeUnmount(() => {
 				:clickable="!msg.replyTo.deleted"
 				@reveal="revealMessage(msg.replyToMessageId)"
 			  />
-		              <p v-if="msg.content">
-				<MentionText
-				  :content="msg.content"
-				  :mentions="msg.mentions"
-				  :current-user-id="session?.userId"
-				/>
-			  </p>
+			  <MessageMarkdown
+				v-if="msg.content"
+				:content="msg.content"
+				:mentions="msg.mentions"
+				:current-user-id="session?.userId"
+			  />
               <MessageAttachment v-if="msg.attachment" :attachment="msg.attachment" />
               <span class="message-time">{{ formatBubbleTime(msg.createdAt) }}</span>
             </div>
@@ -733,10 +743,12 @@ onBeforeUnmount(() => {
           :x="messageMenu.x"
           :y="messageMenu.y"
 		  :can-pin="canPinMessages"
-		  :can-delete="canModerateMessages"
-          :pinned="selectedMessageIsPinned"
-		  @close="closeMessageMenu"
-		  @reply="replyToSelectedMessage"
+			  :can-delete="canModerateMessages"
+			  :can-copy="Boolean(messageMenu.message?.content)"
+			  :pinned="selectedMessageIsPinned"
+			  @close="closeMessageMenu"
+			  @copy="copySelectedMessage"
+			  @reply="replyToSelectedMessage"
           @pin="pinSelectedMessage"
           @unpin="unpinSelectedMessage"
           @delete="confirmDeleteMessage"
@@ -751,6 +763,7 @@ onBeforeUnmount(() => {
 			  :error="error"
 			  :mention-candidates="mentionCandidates"
 			  :replying-to="replyingTo"
+			  :context-key="activeRoomKey"
 			  @send="sendComposerMessage"
 			  @voice-recorded="sendComposerVoice"
 			  @cancel-reply="replyingTo = null"
@@ -1345,23 +1358,6 @@ onBeforeUnmount(() => {
 
 .message-bubble__reply {
 	margin-bottom: 5px;
-}
-
-.message-bubble p {
-  margin: 0;
-  font-size: 14.5px;
-  line-height: 1.45;
-  color: #111b21;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* 短消息在末行预留时间戳宽度，避免气泡收缩后正文与右下角时间重叠。 */
-.message-bubble:not(.message-bubble--with-attachment) p::after {
-  content: '';
-  display: inline-block;
-  width: 3.5em;
-  height: 0;
 }
 
 .chat-empty {

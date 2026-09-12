@@ -1,8 +1,8 @@
 <script setup>
-import { LoaderCircle, Mic, Paperclip, Send, Trash2, X } from "@lucide/vue";
-import { computed, nextTick, ref, watch } from "vue";
+import { ChevronDown, LoaderCircle, Mic, Paperclip, Send, Trash2, Type, X } from "@lucide/vue";
+import { computed, markRaw, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { isCapacitorAndroid, openNativeAppSettings, pickNativeFile } from "../../capacitor-platform.ts";
-import { t } from "../../i18n.js";
+import { getLocale, t } from "../../i18n.js";
 import { useVoiceRecorder } from "../../composables/useVoiceRecorder.ts";
 import { formatVoiceDuration } from "../../voice-message.js";
 import UiTextarea from "../ui/Textarea.vue";
@@ -39,6 +39,10 @@ const props = defineProps({
 		type: Object,
 		default: null,
 	},
+	contextKey: {
+		type: String,
+		default: "",
+	},
 });
 
 const emit = defineEmits([
@@ -59,6 +63,15 @@ const pickerError = ref("");
 const showPermissionSettings = ref(false);
 const finishingRecording = ref(false);
 const composing = ref(false);
+const richEditor = ref(null);
+const richEditorComponent = shallowRef(null);
+const richEditorRuntime = shallowRef(null);
+const richEditorOpen = ref(false);
+const richEditorReady = ref(false);
+const richEditorLoading = ref(false);
+const richEditorLoadError = ref("");
+let richEditorLoadGeneration = 0;
+let componentAlive = true;
 const { recording, starting, elapsedMs, liveWaveform, start, finish, cancel } = useVoiceRecorder();
 const filteredMentions = computed(() => {
 	const query = mentionQuery.value.toLocaleLowerCase();
@@ -114,12 +127,76 @@ function handleKeydown(event) {
 		if (sendDisabled.value) {
 			return;
 		}
-		emit("send");
+			void requestSend();
 	}
 	if (event.key === "Escape" && props.replyingTo) {
 		event.preventDefault();
 		emit("cancel-reply");
 	}
+}
+
+function cancelRichEditorLoad() {
+	richEditorLoadGeneration += 1;
+	richEditorLoading.value = false;
+}
+
+async function openRichEditor() {
+	if (richEditorOpen.value || richEditorLoading.value || props.disabled) return;
+	const generation = ++richEditorLoadGeneration;
+	richEditorLoading.value = true;
+	richEditorLoadError.value = "";
+	closeMentionMenu();
+
+	try {
+		const [runtimeModule, componentModule] = await Promise.all([
+			import("../../vditor-runtime.ts"),
+			import("./VditorComposerEditor.vue"),
+		]);
+		const runtime = await runtimeModule.loadVditorRuntime(getLocale());
+		if (!componentAlive || generation !== richEditorLoadGeneration) return;
+		richEditorRuntime.value = markRaw(runtime);
+		richEditorComponent.value = markRaw(componentModule.default);
+		richEditorReady.value = false;
+		richEditorOpen.value = true;
+	} catch {
+		if (!componentAlive || generation !== richEditorLoadGeneration) return;
+		richEditorLoadError.value = t("composer.richEditorLoadFailed");
+	} finally {
+		if (componentAlive && generation === richEditorLoadGeneration) {
+			richEditorLoading.value = false;
+		}
+	}
+}
+
+function collapseRichEditor({ restoreFocus = true } = {}) {
+	richEditorLoadGeneration += 1;
+	richEditorLoading.value = false;
+	richEditor.value?.syncValue();
+	richEditorOpen.value = false;
+	richEditorReady.value = false;
+	if (restoreFocus) nextTick(() => textarea.value?.focus());
+}
+
+function toggleRichEditor() {
+	if (richEditorLoading.value) {
+		cancelRichEditorLoad();
+		return;
+	}
+	if (richEditorOpen.value) collapseRichEditor();
+	else void openRichEditor();
+}
+
+function handleRichEditorInitializationError() {
+	collapseRichEditor({ restoreFocus: false });
+	richEditorLoadError.value = t("composer.richEditorLoadFailed");
+}
+
+async function requestSend() {
+	if (richEditorOpen.value) {
+		richEditor.value?.syncValue();
+		await nextTick();
+	}
+	if (!sendDisabled.value) emit("send");
 }
 
 function syncMentionQuery(event) {
@@ -184,6 +261,7 @@ async function startVoiceRecording() {
 	recordingError.value = "";
 	showPermissionSettings.value = false;
 	closeMentionMenu();
+	richEditor.value?.syncValue();
 	try {
 		await start();
 	} catch (error) {
@@ -237,8 +315,24 @@ async function sendVoiceRecording() {
 
 defineExpose({
 	focus() {
-		textarea.value?.focus();
+		if (richEditorOpen.value) richEditor.value?.focus();
+		else textarea.value?.focus();
 	},
+});
+
+watch(
+	() => props.contextKey,
+	() => {
+		richEditorLoadError.value = "";
+		if (richEditorOpen.value) collapseRichEditor({ restoreFocus: false });
+		else cancelRichEditorLoad();
+	},
+);
+
+onBeforeUnmount(() => {
+	componentAlive = false;
+	richEditorLoadGeneration += 1;
+	richEditor.value?.syncValue();
 });
 </script>
 
@@ -272,7 +366,7 @@ defineExpose({
 					<X :size="20" aria-hidden="true" />
 				</button>
 			</div>
-		<div v-if="mentionMenuOpen" class="mention-menu" role="listbox">
+			<div v-if="mentionMenuOpen && !richEditorOpen" class="mention-menu" role="listbox">
 			<button
 				v-for="(member, index) in filteredMentions"
 				:key="member.id"
@@ -295,7 +389,22 @@ defineExpose({
 				</span>
 			</button>
 		</div>
-				<div v-if="recording" class="composer-recording" :aria-label="t('voice.recording')">
+			<div v-if="richEditorLoading" class="composer-editor-status" role="status">
+				<LoaderCircle :size="16" class="composer-spinner" aria-hidden="true" />
+				<span>{{ t('composer.richEditorLoading') }}</span>
+				<button type="button" @click="cancelRichEditorLoad">{{ t('common.cancel') }}</button>
+			</div>
+			<div v-else-if="richEditorLoadError" class="composer-editor-status composer-editor-status--error" role="alert">
+				<span>{{ richEditorLoadError }}</span>
+				<button type="button" @click="openRichEditor">{{ t('common.retry') }}</button>
+			</div>
+			<input
+				ref="fileInput"
+				type="file"
+				class="composer-file-input"
+				@change="handleFileSelected"
+			/>
+			<div v-if="recording" class="composer-recording" :aria-label="t('voice.recording')">
 					<button type="button" class="composer-btn composer-recording__cancel" :disabled="finishingRecording" :title="t('voice.cancel')" :aria-label="t('voice.cancel')" @click="cancelVoiceRecording">
 					<Trash2 :size="20" aria-hidden="true" />
 				</button>
@@ -312,14 +421,70 @@ defineExpose({
 						<span>{{ t('chat.send') }}</span>
 				</button>
 			</div>
+			<div v-else-if="richEditorOpen" class="composer-rich-editor">
+				<component
+					:is="richEditorComponent"
+					ref="richEditor"
+					:model-value="modelValue"
+					:disabled="disabled || starting"
+					:mention-candidates="mentionCandidates"
+					:placeholder="t('chat.messagePlaceholder')"
+					:runtime="richEditorRuntime"
+					@update:model-value="emit('update:modelValue', $event)"
+					@ready="richEditorReady = true"
+					@initialization-error="handleRichEditorInitializationError"
+					@send="requestSend"
+				/>
+				<div v-if="!richEditorReady" class="composer-editor-initializing" role="status">
+					<LoaderCircle :size="17" class="composer-spinner" aria-hidden="true" />
+					{{ t('composer.richEditorInitializing') }}
+				</div>
+				<div class="composer-rich-editor__actions">
+					<button
+						type="button"
+						class="composer-btn composer-rich-editor__attachment"
+						:disabled="disabled || starting"
+						:title="t('chat.addAttachment')"
+						:aria-label="t('chat.addAttachment')"
+						@click="openPicker"
+					>
+						<Paperclip :size="20" aria-hidden="true" />
+					</button>
+					<button
+						type="button"
+						class="composer-btn composer-btn--active"
+						:title="t('composer.collapseRichEditor')"
+						:aria-label="t('composer.collapseRichEditor')"
+						@click="collapseRichEditor()"
+					>
+						<ChevronDown :size="21" aria-hidden="true" />
+					</button>
+					<button
+						type="button"
+						class="composer-btn composer-voice"
+						:disabled="disabled || sending || starting"
+						:title="t('voice.record')"
+						:aria-label="t('voice.record')"
+						@click="startVoiceRecording"
+					>
+						<Mic :size="21" aria-hidden="true" />
+					</button>
+					<button
+						type="button"
+						class="composer-send"
+						:disabled="sendDisabled"
+						:title="t('chat.sendMessage')"
+						:aria-label="t('chat.sendMessage')"
+						@click="requestSend"
+					>
+						<LoaderCircle v-if="sending" :size="20" class="composer-spinner" aria-hidden="true" />
+						<Send v-else :size="20" aria-hidden="true" />
+						<span>{{ t('chat.send') }}</span>
+					</button>
+				</div>
+			</div>
 			<div v-else class="composer-row">
-			<input
-				ref="fileInput"
-				type="file"
-				class="composer-file-input"
-				@change="handleFileSelected"
-			/>
-				<button
+					<button
 					type="button"
 				class="composer-btn"
 				:disabled="disabled || starting"
@@ -327,8 +492,21 @@ defineExpose({
 				:aria-label="t('chat.addAttachment')"
 				@click="openPicker"
 			>
-				<Paperclip :size="20" aria-hidden="true" />
-			</button>
+					<Paperclip :size="20" aria-hidden="true" />
+				</button>
+				<button
+					type="button"
+					class="composer-btn"
+					:class="{ 'composer-btn--active': richEditorLoading }"
+					:disabled="disabled || starting"
+					:aria-busy="richEditorLoading"
+					:title="richEditorLoading ? t('composer.cancelRichEditorLoading') : t('composer.openRichEditor')"
+					:aria-label="richEditorLoading ? t('composer.cancelRichEditorLoading') : t('composer.openRichEditor')"
+					@click="toggleRichEditor"
+				>
+					<LoaderCircle v-if="richEditorLoading" :size="20" class="composer-spinner" aria-hidden="true" />
+					<Type v-else :size="20" aria-hidden="true" />
+				</button>
 			<UiTextarea
 				ref="textarea"
 				:model-value="modelValue"
@@ -363,7 +541,7 @@ defineExpose({
 				:disabled="sendDisabled"
 				:title="t('chat.sendMessage')"
 				:aria-label="t('chat.sendMessage')"
-				@click="emit('send')"
+					@click="requestSend"
 			>
 				<LoaderCircle v-if="sending" :size="20" class="composer-spinner" aria-hidden="true" />
 				<Send v-else :size="20" aria-hidden="true" />
@@ -423,6 +601,33 @@ defineExpose({
 	color: #dc2626;
 	font-size: 12px;
 	text-align: center;
+}
+
+.composer-editor-status {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 28px;
+	margin-bottom: 8px;
+	color: #54656f;
+	font-size: 12px;
+}
+
+.composer-editor-status--error {
+	color: #c62828;
+}
+
+.composer-editor-status button {
+	min-height: 28px;
+	padding: 2px 8px;
+	border: 0;
+	border-radius: 4px;
+	background: rgba(0, 128, 105, 0.1);
+	color: #00735f;
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
 }
 
 .composer-settings {
@@ -510,6 +715,34 @@ defineExpose({
 	align-items: flex-end;
 	gap: 8px;
 	min-width: 0;
+}
+
+.composer-rich-editor {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+}
+
+.composer-editor-initializing {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 32px;
+	color: #54656f;
+	font-size: 12px;
+}
+
+.composer-rich-editor__actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	min-width: 0;
+}
+
+.composer-rich-editor__attachment {
+	margin-right: auto;
 }
 
 .composer-recording {
@@ -613,6 +846,11 @@ defineExpose({
 	transition: background 150ms, color 150ms;
 }
 
+.composer-btn--active {
+	background: rgba(0, 128, 105, 0.1);
+	color: #008069;
+}
+
 .composer-btn:hover:not(:disabled) {
 	background: rgba(0, 0, 0, 0.05);
 	color: #111b21;
@@ -709,6 +947,10 @@ defineExpose({
 		.composer-row {
 			gap: 4px;
 		}
+
+	.composer-rich-editor__actions {
+		gap: 4px;
+	}
 
 		.composer-recording {
 			gap: 4px 8px;

@@ -7,8 +7,8 @@ import {
 	tokenizeWebLinks,
 } from "../frontend/src/message-text.js";
 
-const mentionTextComponent = readFileSync(
-	new URL("../frontend/src/components/chat/MentionText.vue", import.meta.url),
+const messageMarkdownComponent = readFileSync(
+	new URL("../frontend/src/components/chat/MessageMarkdown.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
 
@@ -50,9 +50,13 @@ test("残缺网址保持为普通文本而不是站内相对链接", () => {
 });
 
 test("消息链接使用新标签页并保留浏览器原生右键菜单", () => {
-	assert.match(mentionTextComponent, /class="message-link"/);
-	assert.match(mentionTextComponent, /target="_blank"/);
-	assert.match(mentionTextComponent, /rel="noopener noreferrer"/);
-	assert.match(mentionTextComponent, /@pointerdown\.stop/);
-	assert.match(mentionTextComponent, /@contextmenu\.stop/);
+	const renderer = readFileSync(
+		new URL("../frontend/src/message-markdown.ts", import.meta.url),
+		"utf8",
+	);
+	assert.match(renderer, /class=\\?"message-link/);
+	assert.match(renderer, /target=\\?"_blank/);
+	assert.match(renderer, /rel=\\?"noopener noreferrer/);
+	assert.match(messageMarkdownComponent, /@pointerdown="stopLinkGesture"/);
+	assert.match(messageMarkdownComponent, /@contextmenu="stopLinkGesture"/);
 });

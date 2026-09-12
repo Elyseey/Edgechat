@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { t } from "../i18n.js";
+import { messageMarkdownToPlainText } from "../message-markdown.ts";
 
 export type NotificationRoom = {
 	id: number | string;
@@ -59,8 +60,8 @@ export function useInAppNotifications(options: {
 		const id = nextId++;
 		const senderName = event.sender?.displayName || event.sender?.username || "EdgeChat";
 		const roomName = event.room.name || "EdgeChat";
-		const preview =
-			String(event.contentPreview || "").trim() ||
+			const preview =
+				messageMarkdownToPlainText(event.contentPreview || "") ||
 			(event.room.kind === "dm"
 				? translate("notifications.directMessage")
 				: translate("notifications.groupMessage"));

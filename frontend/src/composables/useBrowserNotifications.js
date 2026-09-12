@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { getNativeNotificationBridge } from "../capacitor-platform.ts";
 import { t } from "../i18n.js";
+import { messageMarkdownToPlainText } from "../message-markdown.ts";
 
 const STORAGE_KEY_PREFIX = "edgechat:browser-notifications";
 
@@ -173,7 +174,10 @@ export function useBrowserNotifications(options = {}) {
 				: room.name || "EdgeChat";
 		const senderName =
 			event?.sender?.displayName || event?.sender?.username || "";
-		const attentionBody = [senderName, event?.contentPreview]
+			const attentionBody = [
+				senderName,
+				messageMarkdownToPlainText(event?.contentPreview || ""),
+			]
 			.filter(Boolean)
 			.join(": ");
 		const body = needsAttention
