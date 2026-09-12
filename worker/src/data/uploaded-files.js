@@ -1,3 +1,11 @@
+export function isR2ObjectUnavailableError(error) {
+	const message = String(error?.message || error);
+	return (
+		message.includes("r2_object_pending_delete") ||
+		message.includes("r2_local_object_unavailable")
+	);
+}
+
 export async function recordUploadedFile(
 	db,
 	{ key, ownerUserId, filename, contentType, size, clientUploadId = null },
@@ -116,10 +124,13 @@ export async function canAccessFile(db, key, userId = null) {
 	const publicRefs = await db
 		.prepare(
 			`SELECT 1 AS found
-			 WHERE EXISTS (SELECT 1 FROM users WHERE avatar_key = ? AND deleted_at IS NULL)
-			    OR EXISTS (SELECT 1 FROM channels WHERE avatar_key = ? AND deleted_at IS NULL)`,
+			 WHERE NOT EXISTS (SELECT 1 FROM pending_r2_delete WHERE object_key = ?)
+			   AND (
+			     EXISTS (SELECT 1 FROM users WHERE avatar_key = ? AND deleted_at IS NULL)
+			     OR EXISTS (SELECT 1 FROM channels WHERE avatar_key = ? AND deleted_at IS NULL)
+			   )`,
 		)
-		.bind(cleanKey, cleanKey)
+		.bind(cleanKey, cleanKey, cleanKey)
 		.all();
 	if (publicRefs.results[0]) return true;
 	if (!Number.isFinite(Number(userId))) return false;
@@ -128,7 +139,8 @@ export async function canAccessFile(db, key, userId = null) {
 	const { results } = await db
 		.prepare(
 			`SELECT 1 AS found
-			 WHERE EXISTS (
+			 WHERE NOT EXISTS (SELECT 1 FROM pending_r2_delete WHERE object_key = ?)
+			   AND (EXISTS (
 			   SELECT 1 FROM uploaded_files uf
 			   WHERE uf.object_key = ? AND uf.owner_user_id = ?
 			 ) OR EXISTS (
@@ -140,9 +152,9 @@ export async function canAccessFile(db, key, userId = null) {
 			       SELECT 1 FROM channel_members cm
 			       WHERE cm.channel_id = c.id AND cm.user_id = ?
 			     ))
-			 )`,
+			 ))`,
 		)
-		.bind(cleanKey, Number(userId), cleanKey, Number(userId))
+		.bind(cleanKey, cleanKey, Number(userId), cleanKey, Number(userId))
 		.all();
 	return Boolean(results[0]);
 }

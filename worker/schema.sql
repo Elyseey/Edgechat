@@ -74,9 +74,15 @@ BEFORE DELETE ON channel_members
 WHEN EXISTS (
   SELECT 1
   FROM channels
-  WHERE id = OLD.channel_id
-    AND name = 'general'
+	  WHERE id = OLD.channel_id
+	    AND name = 'general'
 )
+  AND EXISTS (
+    SELECT 1
+    FROM users
+    WHERE id = OLD.user_id
+      AND deleted_at IS NULL
+  )
 BEGIN
   SELECT RAISE(ABORT, 'GENERAL_MEMBERSHIP_REQUIRED');
 END;
@@ -323,71 +329,163 @@ CREATE INDEX IF NOT EXISTS idx_gc_channel_avatar
 ON channels(avatar_key)
 WHERE deleted_at IS NULL;
 
--- 待删除占位与资源引用写入必须由同一条数据库语句仲裁，避免校验后写入竞态。
+-- 本地引用必须在写入瞬间仍有上传登记且未进入清理；外部 Bridge 附件没有本地上传归属，仅拦截 pending。
 CREATE TRIGGER IF NOT EXISTS prevent_pending_message_attachment_insert
 BEFORE INSERT ON messages
 WHEN NEW.attachment_key IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM pending_r2_delete
-    WHERE object_key = NEW.attachment_key
+  AND (
+    (
+      NEW.sender_kind = 'local'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM uploaded_files
+        WHERE object_key = NEW.attachment_key
+          AND owner_user_id = NEW.sender_id
+          AND NOT EXISTS (
+            SELECT 1 FROM pending_r2_delete
+            WHERE pending_r2_delete.object_key = uploaded_files.object_key
+          )
+      )
+    )
+    OR (
+      NEW.sender_kind = 'external'
+      AND EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE object_key = NEW.attachment_key
+      )
+    )
   )
 BEGIN
-  SELECT RAISE(ABORT, 'r2_object_pending_delete');
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
 END;
 
 CREATE TRIGGER IF NOT EXISTS prevent_pending_message_attachment_update
 BEFORE UPDATE OF attachment_key ON messages
 WHEN NEW.attachment_key IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM pending_r2_delete
-    WHERE object_key = NEW.attachment_key
+  AND (
+    (
+      NEW.sender_kind = 'local'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM uploaded_files
+        WHERE object_key = NEW.attachment_key
+          AND owner_user_id = NEW.sender_id
+          AND NOT EXISTS (
+            SELECT 1 FROM pending_r2_delete
+            WHERE pending_r2_delete.object_key = uploaded_files.object_key
+          )
+      )
+    )
+    OR (
+      NEW.sender_kind = 'external'
+      AND EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE object_key = NEW.attachment_key
+      )
+    )
   )
 BEGIN
-  SELECT RAISE(ABORT, 'r2_object_pending_delete');
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
 END;
 
 CREATE TRIGGER IF NOT EXISTS prevent_pending_user_avatar_insert
 BEFORE INSERT ON users
 WHEN NEW.avatar_key IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM pending_r2_delete
+  AND NOT EXISTS (
+    SELECT 1
+    FROM uploaded_files
     WHERE object_key = NEW.avatar_key
+      AND owner_user_id = NEW.id
+      AND NOT EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE pending_r2_delete.object_key = uploaded_files.object_key
+      )
   )
 BEGIN
-  SELECT RAISE(ABORT, 'r2_object_pending_delete');
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
 END;
 
 CREATE TRIGGER IF NOT EXISTS prevent_pending_user_avatar_update
 BEFORE UPDATE OF avatar_key ON users
 WHEN NEW.avatar_key IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM pending_r2_delete
+  AND NOT EXISTS (
+    SELECT 1
+    FROM uploaded_files
     WHERE object_key = NEW.avatar_key
+      AND owner_user_id = NEW.id
+      AND NOT EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE pending_r2_delete.object_key = uploaded_files.object_key
+      )
   )
 BEGIN
-  SELECT RAISE(ABORT, 'r2_object_pending_delete');
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
 END;
 
 CREATE TRIGGER IF NOT EXISTS prevent_pending_channel_avatar_insert
 BEFORE INSERT ON channels
 WHEN NEW.avatar_key IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM pending_r2_delete
+  AND NOT EXISTS (
+    SELECT 1
+    FROM uploaded_files
     WHERE object_key = NEW.avatar_key
+      AND NOT EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE pending_r2_delete.object_key = uploaded_files.object_key
+      )
   )
 BEGIN
-  SELECT RAISE(ABORT, 'r2_object_pending_delete');
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
 END;
 
 CREATE TRIGGER IF NOT EXISTS prevent_pending_channel_avatar_update
 BEFORE UPDATE OF avatar_key ON channels
 WHEN NEW.avatar_key IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM pending_r2_delete
+  AND NOT EXISTS (
+    SELECT 1
+    FROM uploaded_files
     WHERE object_key = NEW.avatar_key
+      AND NOT EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE pending_r2_delete.object_key = uploaded_files.object_key
+      )
   )
 BEGIN
-  SELECT RAISE(ABORT, 'r2_object_pending_delete');
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_pending_site_icon_insert
+BEFORE INSERT ON site_settings
+WHEN NEW.setting_key = 'site_icon_url'
+  AND NEW.setting_value GLOB 'r2:*'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM uploaded_files
+    WHERE object_key = substr(NEW.setting_value, 4)
+      AND NOT EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE pending_r2_delete.object_key = uploaded_files.object_key
+      )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_pending_site_icon_update
+BEFORE UPDATE OF setting_value ON site_settings
+WHEN NEW.setting_key = 'site_icon_url'
+  AND NEW.setting_value GLOB 'r2:*'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM uploaded_files
+    WHERE object_key = substr(NEW.setting_value, 4)
+      AND NOT EXISTS (
+        SELECT 1 FROM pending_r2_delete
+        WHERE pending_r2_delete.object_key = uploaded_files.object_key
+      )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'r2_local_object_unavailable');
 END;
 
 CREATE TABLE IF NOT EXISTS telegram_bridge_config (

@@ -1,7 +1,7 @@
 import { decryptMessageContent, encryptMessageContent } from "../encryption.js";
 import { pickAttachment, publicFileUrl } from "../utils.js";
 import { normalizeMentionUserIds } from "./mentions.js";
-import { fileBelongsToUser } from "./uploaded-files.js";
+import { fileBelongsToUser, isR2ObjectUnavailableError } from "./uploaded-files.js";
 
 function toNullableNumber(value) {
 	const number = Number(value);
@@ -470,7 +470,7 @@ async function persistMessage(env, {
 			.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
 	} catch (error) {
-		if (String(error?.message || error).includes("r2_object_pending_delete")) {
+		if (isR2ObjectUnavailableError(error)) {
 			throw new Error("Attachment is not available");
 		}
 		if (sourceMessageId && String(error?.message || error).includes("UNIQUE")) {

@@ -20,7 +20,7 @@ import { getSiteSettings } from './data/site-settings.js';
 import { getUserByUsername, listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
 import {
-  isR2ObjectPendingDeleteError,
+  isR2ObjectUnavailableError,
   resolveAvatarKeyUpdate
 } from './avatar-policy.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
@@ -279,8 +279,8 @@ app.patch('/api/me/profile', async (c) => {
       .bind(...binds, session.userId)
       .run();
   } catch (currentError) {
-    if (isR2ObjectPendingDeleteError(currentError)) {
-      return errorResponse('头像文件正在清理，请重新上传');
+    if (isR2ObjectUnavailableError(currentError)) {
+      return errorResponse('头像文件不存在或正在清理，请重新上传');
     }
     throw currentError;
   }

@@ -16,7 +16,7 @@ import {
 } from '../room-access.js';
 import { ApiError } from '../errors.js';
 import {
-  isR2ObjectPendingDeleteError,
+  isR2ObjectUnavailableError,
   resolveAvatarKeyUpdate
 } from '../avatar-policy.js';
 import { errorResponse, parseJsonRequest, publicFileUrl } from '../utils.js';
@@ -247,8 +247,8 @@ export function registerChannelRoutes(app) {
         .bind(...binds, channelId)
         .run();
     } catch (error) {
-      if (isR2ObjectPendingDeleteError(error)) {
-        return errorResponse('头像文件正在清理，请重新上传');
+      if (isR2ObjectUnavailableError(error)) {
+        return errorResponse('头像文件不存在或正在清理，请重新上传');
       }
       if (String(error.message).includes('UNIQUE')) {
         return errorResponse('群组名称已存在');
