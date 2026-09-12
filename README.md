@@ -349,7 +349,8 @@ Edgechat/
 
 [![GitHub](https://img.shields.io/badge/GitHub-VenLac-181717?style=flat-square&logo=github)](https://github.com/VenLac)
 
-项目早期贡献了大量核心代码，为 EdgeChat 的整体架构奠定了基础；同时凭借自身在社区中的影响力，为项目推广做出了突出贡献。
+项目早期贡献了大量核心代码，为 EdgeChat 的整体架构奠定了基础；
+同时凭借自身在社区中的影响力，为项目推广做出了突出贡献。让更多开发者认识并使用了 EdgeChat。
 
 </td>
 </tr>
