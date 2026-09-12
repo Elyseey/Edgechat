@@ -184,6 +184,11 @@ export const D1_MIGRATIONS = [
 		],
 		rerunnable: true,
 	},
+	{
+		id: "2026-09-12-user-bio",
+		file: "worker/migrations/2026-09-12-user-bio.sql",
+		artifacts: ["column:users.bio"],
+	},
 ];
 
 // b3f6855 曾发布、0c13e8f 已撤回的迁移：仅识别历史 ledger，不要求新安装创建废弃表，也不删除旧数据。

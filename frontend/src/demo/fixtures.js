@@ -61,6 +61,7 @@ export function createDemoFixtures() {
       id: 1,
       username: 'admin',
       displayName: '演示管理员',
+      bio: '',
       avatarUrl: '',
       isAdmin: true,
       isDisabled: false,

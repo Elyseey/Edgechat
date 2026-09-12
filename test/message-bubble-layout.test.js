@@ -52,7 +52,9 @@ test("短文本消息为右下角时间戳预留末行空间", () => {
 });
 
 test("非本人消息在气泡前显示圆形发送者头像", () => {
-	assert.match(chatPage, /<UiAvatar\s+v-if="!isOwnMessage\(msg\)"/);
+	assert.match(chatPage, /<button\s+v-if="!isOwnMessage\(msg\)"/);
+	assert.match(chatPage, /class="profile-avatar-trigger message-avatar-trigger"/);
+	assert.match(chatPage, /<UiAvatar class="message-avatar"/);
 	assert.match(chatPage, /:src="msg\.sender\.avatarUrl"/);
 	assert.match(chatPage, /:fallback="msg\.sender\.displayName"/);
 

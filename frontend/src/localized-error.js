@@ -1,6 +1,10 @@
 import { ENGLISH_LOCALE, getLocale, t } from './i18n.js';
 
 const fixedErrorTranslations = new Map([
+  ['个人简介必须是文本', 'Bio must be text'],
+  ['个人简介不能超过 200 个字符', 'Bio cannot exceed 200 characters'],
+  ['用户 ID 无效', 'Invalid user ID'],
+  ['用户资料不可用', 'User profile is unavailable'],
   ['请求体过大', 'Request body is too large'],
   ['注册链接不存在', 'Registration link not found'],
   ['注册链接已失效', 'Registration link has expired'],

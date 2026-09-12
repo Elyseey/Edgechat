@@ -88,6 +88,9 @@ export default {
   getUsers() {
     return request('/users');
   },
+  getUserProfile(userId, options = {}) {
+    return request(`/users/${encodeURIComponent(userId)}/profile`, options);
+  },
   bootstrap() {
     return request('/bootstrap');
   },

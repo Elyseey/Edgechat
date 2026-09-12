@@ -10,6 +10,15 @@ function mapUserSummary(row) {
 	};
 }
 
+export async function getUserProfile(db, userId) {
+	const { results } = await db.prepare(
+		`SELECT id, username, display_name, avatar_key, bio
+		 FROM users WHERE id = ? AND deleted_at IS NULL AND ${activeUserSql()} LIMIT 1`,
+	).bind(userId).all();
+	const row = results[0];
+	return row ? { ...mapUserSummary(row), bio: row.bio } : null;
+}
+
 function mapAdminUser(row) {
 	return {
 		...mapUserSummary(row),

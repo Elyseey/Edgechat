@@ -39,6 +39,9 @@ import { useUnreadInbox } from '../composables/useUnreadInbox.js';
 import { useUserBlock } from '../composables/useUserBlock.ts';
 import { resolveMentionUserIds } from '../mentions.ts';
 import store from '../store.js';
+import api from '../api.js';
+import UserProfileDialog from '../components/chat/UserProfileDialog.vue';
+import { useUserProfile } from '../composables/useUserProfile.ts';
 import { useI18n } from '../i18n.js';
 
 const router = useRouter();
@@ -235,6 +238,38 @@ const mentionCandidates = computed(() =>
 		? []
 		: groupMembers.value.filter((member) => Number(member.id) !== Number(session.value?.userId))
 );
+const profileTargetHeader = ref(null);
+const {
+  identity: profileIdentity, profile: userProfile, show: showUserProfile,
+  loading: profileLoading, unavailable: profileUnavailable, error: profileError,
+  submitting: profileSubmitting, restoreFocus: profileRestoreFocus, isSelf: profileIsSelf,
+  openUserProfile, close: closeUserProfile, retry: retryUserProfile, sendMessage: sendProfileMessage
+} = useUserProfile({
+  currentUserId: computed(() => session.value?.userId),
+  getProfile: api.getUserProfile,
+  openDm,
+  onNavigate: () => {
+    closeMemberPanel();
+    messageComposer.value?.focus();
+    // 被拉黑会话的输入区不可聚焦时，仍把焦点移到目标会话而非旧头像。
+    if (!document.activeElement?.closest('.message-composer')) profileTargetHeader.value?.focus();
+  }
+});
+function openLocalUserProfile(user) {
+  if (user) openUserProfile({ ...user, kind: 'local' });
+}
+function openSenderProfile(sender) {
+  closeMessageMenu();
+  openUserProfile(sender.kind === 'external'
+    ? { kind: 'external', source: sender.source, id: String(sender.id), displayName: sender.displayName, avatarUrl: sender.avatarUrl }
+    : { ...sender, kind: 'local' });
+}
+function editProfile() {
+  profileRestoreFocus.value = false;
+  closeUserProfile();
+  void router.push('/settings');
+}
+watch(() => session.value?.userId, closeUserProfile);
 
 async function sendComposerMessage() {
 	const sent = await sendMessage(
@@ -403,6 +438,7 @@ function formatBubbleTime(value) {
 }
 
 onBeforeUnmount(() => {
+  closeUserProfile();
   cancelMessageLongPress();
   nativeRoomNavigationReady = false;
   window.removeEventListener('focus', syncNotificationPermission);
@@ -543,7 +579,18 @@ onBeforeUnmount(() => {
           >
             <ArrowLeft :size="24" aria-hidden="true" />
           </button>
+          <button
+            v-if="activeRoom.kind === 'dm'"
+            ref="profileTargetHeader"
+            type="button"
+            class="profile-avatar-trigger"
+            :aria-label="t('profile.view', { name: roomLabel(activeRoom) })"
+            @click="openLocalUserProfile(activeRoom.otherUser)"
+          >
+            <UiAvatar :src="activeRoomAvatar" :fallback="roomLabel(activeRoom)?.[0] || '?'" size="sm" />
+          </button>
           <UiAvatar
+            v-else
             class="chat-header__avatar"
             :src="activeRoomAvatar"
             :fallback="roomLabel(activeRoom)?.[0] || '?'"
@@ -636,14 +683,15 @@ onBeforeUnmount(() => {
 			  'message-row--actionable': true
 			}"
           >
-            <UiAvatar
+            <button
               v-if="!isOwnMessage(msg)"
-              class="message-avatar"
-              :src="msg.sender.avatarUrl"
-              :alt="msg.sender.displayName"
-              :fallback="msg.sender.displayName"
-              size="sm"
-            />
+              type="button"
+              class="profile-avatar-trigger message-avatar-trigger"
+              :aria-label="t('profile.view', { name: msg.sender.displayName })"
+              @click="openSenderProfile(msg.sender)"
+            >
+              <UiAvatar class="message-avatar" :src="msg.sender.avatarUrl" :alt="msg.sender.displayName" :fallback="msg.sender.displayName" size="sm" />
+            </button>
             <div
               class="message-bubble"
               :class="{
@@ -735,6 +783,7 @@ onBeforeUnmount(() => {
           @update:invite-user-id="inviteUserId = $event"
           @invite="inviteMember"
           @remove-member="removeMember"
+          @open-profile="openLocalUserProfile"
           @delete-group="deleteGroup"
         />
       </aside>
@@ -754,6 +803,21 @@ onBeforeUnmount(() => {
       @logout="navigateFromMobileDrawer(logout)"
     />
 
+    <UserProfileDialog
+      :show="showUserProfile"
+      :identity="profileIdentity"
+      :profile="userProfile"
+      :loading="profileLoading"
+      :unavailable="profileUnavailable"
+      :error="profileError"
+      :submitting="profileSubmitting"
+      :restore-focus="profileRestoreFocus"
+      :is-self="profileIsSelf"
+      @close="closeUserProfile"
+      @retry="retryUserProfile"
+      @send-message="sendProfileMessage"
+      @edit="editProfile"
+    />
     <AddConversationDialog
       :show="showAddConversation"
       :users="usersWithoutDm"
@@ -1215,6 +1279,18 @@ onBeforeUnmount(() => {
   transition: outline-color 180ms ease;
 }
 
+.message-avatar-trigger {
+  position: relative;
+  min-width: 34px;
+  min-height: 34px;
+}
+/* 扩大触摸命中区域，但保留原有 34px 头像与气泡排版。 */
+.message-avatar-trigger::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+}
 .message-avatar {
   width: 34px;
   height: 34px;
