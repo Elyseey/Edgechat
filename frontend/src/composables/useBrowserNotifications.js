@@ -152,11 +152,17 @@ export function useBrowserNotifications(options = {}) {
 		return nextMutedRooms.has(key);
 	}
 
+	function shouldNotifyRoom(event) {
+		const room = event?.room || event;
+		const needsAttention = Boolean(event?.mentionsMe || event?.replyToMe);
+		return !isRoomMuted(room) || needsAttention;
+	}
+
 	function notifyRoom(event) {
 		const room = event?.room || event;
 		const needsAttention = Boolean(event?.mentionsMe || event?.replyToMe);
 		void syncPermission();
-		if (!enabled.value || (isRoomMuted(room) && !needsAttention)) {
+		if (!enabled.value || !shouldNotifyRoom(event)) {
 			return false;
 		}
 
@@ -213,6 +219,7 @@ export function useBrowserNotifications(options = {}) {
 		toggleNotifications,
 		isRoomMuted,
 		toggleRoomMuted,
+		shouldNotifyRoom,
 		notifyRoom,
 	};
 }

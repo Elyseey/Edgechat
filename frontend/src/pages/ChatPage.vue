@@ -11,6 +11,7 @@ import AddConversationDialog from '../components/chat/AddConversationDialog.vue'
 import ConversationList from '../components/chat/ConversationList.vue';
 import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
 import GroupSettingsDialog from '../components/chat/GroupSettingsDialog.vue';
+import InAppNotificationStack from '../components/chat/InAppNotificationStack.vue';
 import MemberPanel from '../components/chat/MemberPanel.vue';
 import MessageAttachment from '../components/chat/MessageAttachment.vue';
 import MessageComposer from '../components/chat/MessageComposer.vue';
@@ -31,6 +32,7 @@ import { useChatSidebar } from '../composables/useChatSidebar.js';
 import { useChatViewport } from '../composables/useChatViewport.js';
 import { useConversationFlow } from '../composables/useConversationFlow.ts';
 import { useConversationCreation } from '../composables/useConversationCreation.js';
+import { useInAppNotifications } from '../composables/useInAppNotifications.ts';
 import { useMessageContextMenu } from '../composables/useMessageContextMenu.ts';
 import { useRoomManagement } from '../composables/useRoomManagement.js';
 import { useUnreadInbox } from '../composables/useUnreadInbox.js';
@@ -88,12 +90,30 @@ const {
   toggleNotifications,
   isRoomMuted,
   toggleRoomMuted,
+  shouldNotifyRoom,
   notifyRoom
 } = useBrowserNotifications({
   userId: session.value?.userId,
   onOpenRoom: openRoomFromNotification
 });
 const activeRoomMuted = computed(() => isRoomMuted(activeRoom.value));
+const {
+  inAppNotifications,
+  showInAppNotification,
+  dismissInAppNotification,
+  clearInAppNotifications
+} = useInAppNotifications();
+
+function notifyInAppRoom(event) {
+  if (!shouldNotifyRoom(event)) return false;
+  showInAppNotification(event);
+  return true;
+}
+
+function openInAppNotification(notification) {
+  dismissInAppNotification(notification.id);
+  void openRoomFromNotification(notification.room);
+}
 const {
   isBlockedByMe: activeDmBlockedByMe,
   saving: userBlockSaving,
@@ -140,7 +160,8 @@ const { connectUnreadInbox, disconnectUnreadInbox } = useUnreadInbox({
   activeRoom,
   markConversationRead,
   applyConversationActivity,
-  notifyRoom
+  notifyInApp: notifyInAppRoom,
+  notifySystem: notifyRoom
 });
 
 const wsConnected = computed(() => wsStatus.value === 'open');
@@ -368,14 +389,14 @@ function replyToSelectedMessage() {
 }
 
 onMounted(() => {
-	  startViewportSync();
-	  window.addEventListener('focus', syncNotificationPermission);
-	  window.addEventListener(NATIVE_ROOM_OPEN_EVENT, openNativeRoom);
-	  void bootstrap().then(() => {
-	    nativeRoomNavigationReady = true;
-	    connectUnreadInbox();
-	    openNativeRoom();
-	  });
+  startViewportSync();
+  window.addEventListener('focus', syncNotificationPermission);
+  window.addEventListener(NATIVE_ROOM_OPEN_EVENT, openNativeRoom);
+  void bootstrap().then(() => {
+    nativeRoomNavigationReady = true;
+    connectUnreadInbox();
+    openNativeRoom();
+  });
 });
 function formatBubbleTime(value) {
   return value ? formatLocaleTime(value) : '';
@@ -383,9 +404,10 @@ function formatBubbleTime(value) {
 
 onBeforeUnmount(() => {
   cancelMessageLongPress();
-	  nativeRoomNavigationReady = false;
-	  window.removeEventListener('focus', syncNotificationPermission);
-	  window.removeEventListener(NATIVE_ROOM_OPEN_EVENT, openNativeRoom);
+  nativeRoomNavigationReady = false;
+  window.removeEventListener('focus', syncNotificationPermission);
+  window.removeEventListener(NATIVE_ROOM_OPEN_EVENT, openNativeRoom);
+  clearInAppNotifications();
   disconnectUnreadInbox();
   disconnectSocket();
   stopViewportSync();
@@ -770,6 +792,11 @@ onBeforeUnmount(() => {
       @close="closeGroupEditor"
       @upload-avatar="uploadGroupAvatar"
       @save="saveGroupSettings"
+    />
+    <InAppNotificationStack
+      :notifications="inAppNotifications"
+      @open="openInAppNotification"
+      @dismiss="dismissInAppNotification"
     />
   </div>
 </template>

@@ -119,6 +119,7 @@ Admins can bind any group in EdgeChat to a Telegram group. Once bound, messages 
 - Real-time messaging, paginated history, Telegram-style voice messages, and file messages
 - Block or unblock contacts from the direct-message header; direct messages pause in both directions while blocked
 - The web client supports Telegram-style replies, quoted-message navigation, and reply-aware direct-attention alerts
+- The foreground web client shows Telegram Web-style bottom-right alerts for other conversations; the current conversation only alerts for mentions or replies, while background tabs continue to use browser system notifications
 - Web and Android recording, waveform seeking, playback speed controls, and two-way Telegram voice/audio sync
 - File uploads and avatar management
 - Scheduled hard deletion of expired messages
