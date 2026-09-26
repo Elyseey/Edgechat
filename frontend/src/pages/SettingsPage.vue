@@ -1,13 +1,13 @@
 ﻿<script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api.js';
 import store from '../store.js';
+import TelegramNotificationSettings from '../components/settings/TelegramNotificationSettings.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
 import { isCapacitorAndroid, pickNativeFile } from '../capacitor-platform.ts';
 import { useI18n } from '../i18n.js';
-import { isDemoMode } from '../runtime.js';
 import { BIO_MAX_LENGTH, bioLength, normalizeBio } from '../../../shared/user-profile.ts';
 
 const router = useRouter();
@@ -32,87 +32,6 @@ const savingProfile = ref(false);
 const savingPassword = ref(false);
 const uploadingAvatar = ref(false);
 const avatarInputEl = ref(null);
-const telegramNotifications = ref(null);
-const telegramLink = ref('');
-const telegramBusy = ref(false);
-let telegramPoll = null;
-let telegramPollCount = 0;
-
-async function loadTelegramNotifications() {
-  try {
-    telegramNotifications.value = await api.telegramNotifications();
-    if (telegramNotifications.value.connected) {
-      telegramLink.value = '';
-      if (telegramPoll) clearInterval(telegramPoll);
-      telegramPoll = null;
-    }
-  } catch (currentError) {
-    error.value = currentError.message;
-  }
-}
-
-onMounted(() => {
-  if (isDemoMode) {
-    telegramNotifications.value = { available: false };
-  } else {
-    void loadTelegramNotifications();
-  }
-});
-
-async function connectTelegram() {
-  clearMessage();
-  telegramBusy.value = true;
-  try {
-    telegramLink.value = (await api.createTelegramNotificationLink()).url;
-    if (telegramPoll) clearInterval(telegramPoll);
-    telegramPollCount = 0;
-    telegramPoll = setInterval(() => {
-      if (++telegramPollCount >= 120) {
-        clearInterval(telegramPoll);
-        telegramPoll = null;
-      }
-      void loadTelegramNotifications();
-    }, 5000);
-    info.value = t('settings.telegramOpenLink');
-  } catch (currentError) {
-    error.value = currentError.message;
-  } finally {
-    telegramBusy.value = false;
-  }
-}
-
-async function saveTelegramNotifications() {
-  if (!telegramNotifications.value || telegramBusy.value) return;
-  clearMessage();
-  telegramBusy.value = true;
-  try {
-    telegramNotifications.value = await api.updateTelegramNotifications({
-      dmEnabled: telegramNotifications.value.dmEnabled,
-      mentionEnabled: telegramNotifications.value.mentionEnabled
-    });
-    info.value = t('settings.telegramSaved');
-  } catch (currentError) {
-    error.value = currentError.message;
-  } finally {
-    telegramBusy.value = false;
-  }
-}
-
-async function disconnectTelegram() {
-  clearMessage();
-  telegramBusy.value = true;
-  try {
-    await api.disconnectTelegramNotifications();
-    telegramLink.value = '';
-    await loadTelegramNotifications();
-    info.value = t('settings.telegramDisconnected');
-  } catch (currentError) {
-    error.value = currentError.message;
-  } finally {
-    telegramBusy.value = false;
-  }
-}
-
 const showCropper = ref(false);
 const cropperCanvas = ref(null);
 const cropZoom = ref(1);
@@ -275,7 +194,6 @@ function onCropPointerUp() {
 
 onBeforeUnmount(() => {
   cropDragging.value = false;
-  if (telegramPoll) clearInterval(telegramPoll);
 });
 
 function getCroppedBlob() {
@@ -487,25 +405,7 @@ async function changePassword() {
             {{ savingPassword ? t('settings.updatingPassword') : t('settings.updatePassword') }}
           </button>
         </section>
-        <section class="settings-section">
-          <h2>{{ t('settings.telegramTitle') }}</h2>
-          <p>{{ t('settings.telegramDescription') }}</p>
-          <template v-if="telegramNotifications?.available">
-            <p v-if="telegramNotifications.connected">{{ t('settings.telegramConnected', { name: telegramNotifications.telegramName }) }}</p>
-            <div v-else>
-              <button type="button" class="save-btn" :disabled="telegramBusy" @click="connectTelegram">{{ t('settings.telegramConnect') }}</button>
-              <a v-if="telegramLink" :href="telegramLink" target="_blank" rel="noopener noreferrer">{{ t('settings.telegramOpen') }}</a>
-              <button v-if="telegramLink" type="button" @click="loadTelegramNotifications">{{ t('settings.telegramRefresh') }}</button>
-            </div>
-            <template v-if="telegramNotifications.connected">
-              <label class="field-compact"><input v-model="telegramNotifications.dmEnabled" type="checkbox" /> {{ t('settings.telegramDm') }}</label>
-              <label class="field-compact"><input v-model="telegramNotifications.mentionEnabled" type="checkbox" /> {{ t('settings.telegramMention') }}</label>
-              <button type="button" class="save-btn" :disabled="telegramBusy" @click="saveTelegramNotifications">{{ t('common.save') }}</button>
-              <button type="button" :disabled="telegramBusy" @click="disconnectTelegram">{{ t('settings.telegramDisconnect') }}</button>
-            </template>
-          </template>
-          <p v-else-if="telegramNotifications">{{ t(isDemoMode ? 'settings.telegramDemo' : 'settings.telegramUnavailable') }}</p>
-        </section>
+        <TelegramNotificationSettings class="settings-section" />
       </div>
 
       <nav class="settings-nav">
