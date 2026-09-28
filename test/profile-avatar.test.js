@@ -25,6 +25,7 @@ test("个人资料接口清除头像时同步数据库与会话", async () => {
 		},
 		DB: {
 			prepare(sql) {
+					if (sql.includes("FROM site_settings")) return { async all() { return { results: [] }; } };
 				return {
 					bind(...binds) {
 						return {

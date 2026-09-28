@@ -1,5 +1,16 @@
 import bridge from './instance-bridge/zh-TW.js';
 export default {
+  'stealth.title': '隱身模式',
+  'stealth.on': '已開啟',
+  'stealth.off': '未開啟',
+  'stealth.description': '未登入時，只顯示通用登入表單，減少網際網路掃描識別本站的機會。',
+  'stealth.scope': '正式頁面、腳本、圖示與介面均在登入驗證後開放。登入後的聊天、檔案、通知與 Telegram 互通照常使用。',
+  'stealth.compatibility': '開啟後請從網站首頁登入；公開註冊連結及用戶端首次登入入口將無法使用，舊網頁工作階段可能需要重新登入。關閉即可恢復。',
+  'stealth.boundary': '這不是匿名服務：無法隱藏網域歷史、網路服務商或已被下載的內容。所有網頁請求將經過 Worker 驗證，會增加請求與資料庫用量。',
+  'stealth.demo': '示範站只預覽開關，不會限制本站存取。',
+  'stealth.loadFailed': '無法讀取設定，請重試。',
+  'stealth.saveFailed': '儲存失敗，請重試。',
+  'stealth.saved': '設定已儲存',
   ...bridge,
   "maintenance.instanceBridge": "InstanceBridge DO",
   "maintenance.method.instanceBridge": "INSTANCE_BRIDGE binding + 內部 health 請求",

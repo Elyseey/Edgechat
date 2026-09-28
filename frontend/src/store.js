@@ -8,6 +8,7 @@ import {
 } from './capacitor-platform.ts';
 import { isDemoMode, runtimeSessionToken } from './runtime.js';
 import api from './api.js';
+import { hasDocumentSession, isGatewayMode } from './gateway.ts';
 import {
   addAuthInvalidListener,
   clearStoredToken,
@@ -72,9 +73,13 @@ async function initialize() {
     return;
   }
 
+  if (hasDocumentSession && !isDemoMode && !isCapacitorAndroid) {
+    // 网关登录可能切换了账号，不能让之前 localStorage 中的旧 token 覆盖刚验证的 Cookie。
+    clearAuthState();
+  }
   await loadSite();
 
-  if (!state.token) {
+  if (!state.token && !hasDocumentSession) {
     state.ready = true;
     return;
   }
@@ -82,6 +87,8 @@ async function initialize() {
   try {
     const payload = await api.session();
     state.session = payload.session;
+    state.token = payload.session.token;
+    setStoredToken(state.token);
   } catch {
     clearAuthState();
   } finally {
@@ -124,6 +131,7 @@ async function logout() {
     }
   } finally {
     clearAuthState();
+    if (!isDemoMode && !isCapacitorAndroid) window.location.replace('/');
   }
 }
 
@@ -142,6 +150,7 @@ function setSite(site) {
 if (typeof window !== 'undefined') {
   addAuthInvalidListener(() => {
     clearAuthState();
+    if (isGatewayMode) window.location.replace('/');
   });
 }
 

@@ -3,6 +3,7 @@ import { getEdgeChatServerOrigin, resolveServerUrl } from './capacitor-platform.
 import { t } from './i18n.js';
 import { localizedError, localizeErrorMessage } from './localized-error.js';
 import { getRuntimeFileUrl, isDemoMode, requestRuntime } from './runtime.js';
+import { apiPrefix, isGatewayMode } from './gateway.ts';
 
 function buildHeaders(extra = {}) {
   const headers = { ...extra };
@@ -22,7 +23,7 @@ async function request(path, options = {}) {
     }
   }
 
-  const response = await fetch(resolveServerUrl(`/api${path}`), {
+  const response = await fetch(resolveServerUrl(`${apiPrefix}${path}`), {
     ...options,
     headers: buildHeaders(options.headers),
     body:
@@ -45,7 +46,8 @@ async function request(path, options = {}) {
     error.payload = payload;
     error.rawMessage = rawMessage;
 
-    if (response.status === 401 && typeof window !== 'undefined') {
+    if ((response.status === 401 || (isGatewayMode && response.status === 404
+      && !contentType.includes('application/json'))) && typeof window !== 'undefined') {
       dispatchAuthInvalid(error.message);
     }
 
@@ -56,6 +58,14 @@ async function request(path, options = {}) {
 }
 
 export default {
+  adminStealth() {
+    return request('/admin/stealth');
+  },
+  saveAdminStealth(enabled) {
+    return request('/admin/stealth', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { enabled }
+    });
+  },
   instanceBridge(path = '', body) {
     return request(`/admin/instance-bridge${path}`, body ? {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body
@@ -203,14 +213,14 @@ export default {
   },
   getRoomWebSocketUrl(kind, roomId) {
     const token = getStoredToken();
-    const url = new URL(`/api/ws/${kind}/${roomId}`, getEdgeChatServerOrigin());
+    const url = new URL(`${apiPrefix}/ws/${kind}/${roomId}`, getEdgeChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');
     return url.toString();
   },
   getInboxWebSocketUrl() {
     const token = getStoredToken();
-    const url = new URL('/api/inbox/ws', getEdgeChatServerOrigin());
+    const url = new URL(`${apiPrefix}/inbox/ws`, getEdgeChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('token', token || '');
     return url.toString();

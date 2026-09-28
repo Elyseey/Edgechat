@@ -2,6 +2,17 @@ import maintenanceEn from './maintenance/en-US.js';
 import bridge from './instance-bridge/en-US.js';
 
 export default {
+  'stealth.title': 'Stealth mode',
+  'stealth.on': 'On',
+  'stealth.off': 'Off',
+  'stealth.description': 'Show only a generic sign-in form to signed-out visitors, reducing identification by internet scans.',
+  'stealth.scope': 'Pages, scripts, icons and endpoints require a valid session. Signed-in chat, files, notifications and Telegram integration work as usual.',
+  'stealth.compatibility': 'Sign in from the home page when enabled. Public registration links and first-time client sign-in are unavailable; older web sessions may need to sign in again. Turn off to restore them.',
+  'stealth.boundary': 'This is not an anonymity service: domain history, network providers and previously downloaded content cannot be hidden. All web requests pass through the Worker, increasing request and database usage.',
+  'stealth.demo': 'This demo only previews the switch; it does not restrict access.',
+  'stealth.loadFailed': 'Could not load settings. Please retry.',
+  'stealth.saveFailed': 'Could not save settings. Please retry.',
+  'stealth.saved': 'Settings saved',
   ...bridge,
   ...maintenanceEn,
   'profile.title': 'User profile',

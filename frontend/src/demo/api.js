@@ -238,6 +238,10 @@ export async function requestDemo(path, options = {}) {
   const url = new URL(path, 'https://edgechat.demo');
   const pathname = url.pathname;
   const body = parseBody(options);
+  if (pathname === '/admin/stealth') {
+    if (method === 'PUT') demoState.stealthEnabled = body.enabled === true;
+    return { enabled: demoState.stealthEnabled === true };
+  }
   if (pathname.includes('/instance-bridge')) {
     const result = demoInstanceBridge(pathname, method, body);
     if (result) return result;

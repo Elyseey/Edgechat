@@ -88,6 +88,12 @@ const router = createRouter({
           meta: { admin: true, adminTitleKey: 'bridge.title', adminIcon: 'instance-bridge', transition: 'page' }
         },
         {
+          path: 'stealth',
+          name: 'admin-stealth',
+          component: () => import('./pages/AdminStealthPage.vue'),
+          meta: { admin: true, adminTitleKey: 'stealth.title', adminIcon: 'stealth', transition: 'page' }
+        },
+        {
           path: 'maintenance',
           name: 'admin-maintenance',
           component: () => import('./pages/AdminMaintenancePage.vue'),

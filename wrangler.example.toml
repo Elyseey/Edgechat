@@ -70,7 +70,9 @@ new_sqlite_classes = ["InstanceBridge"]
 [assets]
 directory = "./frontend/dist"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/files/*"]
+binding = "ASSETS"
+# 全量先经过 Worker，隐身模式才能在资产命中与 SPA fallback 之前鉴权。
+run_worker_first = true
 
 [triggers]
 # 单一 15 分钟触发器救援实例桥接；Worker 在 UTC 19:00 的轮次同时执行每日 GC，节省账户级 cron 配额。

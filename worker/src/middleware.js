@@ -1,18 +1,10 @@
 import { errorResponse, errorCodeForStatus, v1ErrorResponse } from './utils.js';
 import { validateSession } from './session.js';
-
-function extractToken(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  if (authHeader.startsWith('Bearer ')) {
-    return authHeader.slice('Bearer '.length).trim();
-  }
-
-  const url = new URL(request.url);
-  return url.searchParams.get('token') || '';
-}
+import { cookieRequestAllowed, extractSessionToken } from './session-cookie.ts';
 
 export async function authMiddleware(c, next) {
-  const token = extractToken(c.req.raw);
+  if (!cookieRequestAllowed(c.req.raw)) return errorResponse('请求被拒绝', 403);
+  const token = extractSessionToken(c.req.raw);
   const result = await validateSession(c.env, token);
   if (!result.ok) {
     if (new URL(c.req.url).pathname.startsWith('/api/v1/')) {

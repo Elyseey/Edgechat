@@ -2,6 +2,17 @@ import maintenanceZh from './maintenance/zh-CN.js';
 import bridge from './instance-bridge/zh-CN.js';
 
 export default {
+  'stealth.title': '隐身模式',
+  'stealth.on': '已开启',
+  'stealth.off': '未开启',
+  'stealth.description': '未登录时，只显示一个通用登录表单，减少互联网扫描识别本站的机会。',
+  'stealth.scope': '正式页面、脚本、图标与接口均在登录验证后开放。登录后的聊天、文件、通知和 Telegram 互通照常使用。',
+  'stealth.compatibility': '开启后请从网站首页登录；公开注册链接和客户端首次登录入口将不可用，旧网页会话可能需要重新登录。关闭即可恢复。',
+  'stealth.boundary': '这不是匿名服务：无法隐藏域名历史、网络服务商或已被下载的内容。所有网页请求将经过 Worker 鉴权，会增加请求与数据库用量。',
+  'stealth.demo': '演示站只预览开关，不会限制本站访问。',
+  'stealth.loadFailed': '无法读取设置，请重试。',
+  'stealth.saveFailed': '保存失败，请重试。',
+  'stealth.saved': '设置已保存',
   ...bridge,
   ...maintenanceZh,
   'profile.title': '用户资料',

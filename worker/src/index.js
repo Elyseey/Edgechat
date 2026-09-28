@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import {
-  createSession,
   deleteSession,
   hashPassword,
   isConfiguredAdminUsername,
@@ -16,11 +15,15 @@ import {
   getAvailableRegistrationInvite
 } from './data/registration-invites.js';
 import { getSiteSettings } from './data/site-settings.js';
-import { getUserByUsername, listActiveUsers } from './data/users.js';
+import { listActiveUsers } from './data/users.js';
 import { ApiError } from './errors.js';
 import { adminMiddleware, authMiddleware } from './middleware.js';
 import { registerAdminRoutes } from './api/admin.js';
 import { registerMaintenanceRoutes } from './api/maintenance.ts';
+import { registerStealthRoutes } from './api/stealth.ts';
+import { createSiteEntry } from './stealth/entry.ts';
+import { loginWithPassword } from './login.ts';
+import { sessionCookie } from './session-cookie.ts';
 import { registerInstanceBridgePublicRoutes, registerInstanceBridgeRoutes } from './api/instance-bridge.ts';
 import { InstanceBridge } from './do/InstanceBridge.ts';
 import { rescueBridgeDeliveries } from './integrations/instance-bridge/delivery.ts';
@@ -149,17 +152,12 @@ app.post('/api/auth/login', async (c) => {
     return errorResponse('请输入用户名和密码');
   }
 
-  const user = await getUserByUsername(c.env.DB, username);
-  if (!user || isUserDisabled(user)) {
+  const session = await loginWithPassword(c.env, username, password);
+  if (!session) {
     return errorResponse('账号或密码错误', 401);
   }
 
-  const valid = await verifyPassword(password, user.password_hash, user.password_salt);
-  if (!valid) {
-    return errorResponse('账号或密码错误', 401);
-  }
-
-  const session = await createSession(c.env, user);
+  c.header('Set-Cookie', sessionCookie(c.req.raw, session.token));
   return c.json({
     token: session.token,
     session
@@ -194,13 +192,14 @@ app.get('/api/auth/session', async (c) => {
     avatarUrl: user.results[0].avatar_key ? `/files/${encodeURIComponent(user.results[0].avatar_key)}` : ''
   };
   await putSession(c.env, freshSession);
-
+  c.header('Set-Cookie', sessionCookie(c.req.raw, session.token));
   return c.json({ session: freshSession });
 });
 
 app.post('/api/auth/logout', async (c) => {
   const session = c.get('session');
   await deleteSession(c.env, session.token);
+  c.header('Set-Cookie', sessionCookie(c.req.raw, ''));
   return c.json({ ok: true });
 });
 
@@ -288,6 +287,7 @@ registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);
 registerMaintenanceRoutes(app);
+registerStealthRoutes(app);
 registerTelegramAdminRoutes(app);
 registerTelegramNotificationRoutes(app);
 registerInstanceBridgeRoutes(app);
@@ -341,7 +341,7 @@ app.onError((error, c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  fetch: createSiteEntry(app.fetch),
   async scheduled(controller, env, ctx) {
     const tasks = [rescueBridgeDeliveries(env), rescueTelegramNotifications(env)];
     // 免费账户的 cron 数量是账户级上限；复用 15 分钟触发器，在 UTC 19:00 的轮次追加每日 GC。
