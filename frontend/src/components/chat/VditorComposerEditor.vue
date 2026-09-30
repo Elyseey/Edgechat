@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import DOMPurify from "dompurify";
 import type Vditor from "vditor";
 import type { EdgeChatVditorRuntime } from "../../vditor-runtime.ts";
 import type { MentionUser } from "../../mentions.ts";
@@ -59,16 +60,20 @@ function syncValue() {
 
 function clipboardText(data: DataTransfer | null) {
 	if (!data) return "";
+	const plainText = data.getData("text/plain");
+	if (plainText) return plainText;
 	const html = data.getData("text/html");
-	if (!html) return data.getData("text/plain");
-	// template 内容不会挂载或执行，图片可在浏览器发起请求前安全转换为可见文字。
-	const template = document.createElement("template");
-	template.innerHTML = html;
-	for (const image of template.content.querySelectorAll("img")) {
-		// 图片节点不能进入编辑区，否则浏览器会在后续净化前先请求外链；保留可读来源即可回退到 Markdown。
-		image.replaceWith(document.createTextNode(image.alt || image.getAttribute("src") || ""));
+	if (!html) return "";
+	// 仅在剪贴板没有纯文本时处理 HTML；只保留文本和图片说明，不保留可加载的 src。
+	const fragment = DOMPurify.sanitize(html, {
+		ALLOWED_TAGS: ["img"],
+		ALLOWED_ATTR: ["alt"],
+		RETURN_DOM_FRAGMENT: true,
+	});
+	for (const image of fragment.querySelectorAll("img")) {
+		image.replaceWith(document.createTextNode(image.getAttribute("alt") || ""));
 	}
-	return template.content.textContent || "";
+	return fragment.textContent || "";
 }
 
 function insertTransferredText(event: ClipboardEvent | DragEvent) {
